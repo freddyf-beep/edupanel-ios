@@ -1,0 +1,10 @@
+PRODUCT_BUNDLE_IDENTIFIER = cl.edupanel.app
+MARKETING_VERSION = 0.1.0
+CURRENT_PROJECT_VERSION = 1
+IPHONEOS_DEPLOYMENT_TARGET = 17.0
+DEVELOPMENT_TEAM =
+
+// Xcode .xcconfig trata // como comentario. Para URLs usa https:/$()/dominio.
+EDUPANEL_API_BASE_URL = https:/$()/REPLACE_ME
+GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.REPLACE_ME
+

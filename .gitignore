@@ -1,0 +1,10 @@
+DerivedData/
+.build/
+.swiftpm/
+*.xcuserstate
+xcuserdata/
+GoogleService-Info.plist
+*.ipa
+*.app
+*.dSYM
+

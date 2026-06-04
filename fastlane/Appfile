@@ -1,0 +1,2 @@
+app_identifier("cl.edupanel.app")
+apple_team_id(ENV["APPLE_TEAM_ID"])
