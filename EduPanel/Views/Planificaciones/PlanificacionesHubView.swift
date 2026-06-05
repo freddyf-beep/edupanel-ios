@@ -11,6 +11,8 @@ struct PlanificacionesHubView: View {
     let planificacionRepository: PlanificacionRepository
 
     init(dashboardRepository: DashboardRepository, planificacionRepository: PlanificacionRepository) {
+        self.dashboardRepository = dashboardRepository
+        self.planificacionRepository = planificacionRepository
         self._viewModel = State(initialValue: PlanificacionesViewModel(
             dashboardRepository: dashboardRepository,
             planificacionRepository: planificacionRepository
