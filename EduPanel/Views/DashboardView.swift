@@ -63,20 +63,31 @@ struct DashboardView: View {
         let progress = currentOrNext.map { blockProgress($0, now: Date()) } ?? 0
 
         return VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 8) {
-                Label("\(greeting.greet), \(user.firstName)", systemImage: greeting.icon)
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.white.opacity(0.92))
+            HStack(alignment: .top, spacing: 14) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("\(greeting.greet), \(user.firstName)", systemImage: greeting.icon)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white.opacity(0.92))
 
-                Text(greeting.mood)
-                    .font(.system(size: 28, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.76)
+                    Text(greeting.mood)
+                        .font(.system(size: 28, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.76)
 
-                Text(formattedHeroDate)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.82))
+                    Text(formattedHeroDate)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.82))
+                }
+
+                Spacer(minLength: 0)
+
+                Image("Logo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 54, height: 54)
+                    .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                    .shadow(color: .black.opacity(0.16), radius: 12, y: 6)
             }
 
             VStack(alignment: .leading, spacing: 10) {
