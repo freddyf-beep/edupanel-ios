@@ -579,7 +579,7 @@ private struct GradientAction: View {
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .foregroundStyle(.white)
-        .frame(minHeight: 92, maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
         .padding(14)
         .background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
