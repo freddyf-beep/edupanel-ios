@@ -14,6 +14,8 @@ struct VerUnidadDashboardView: View {
         self.curso = curso
         self.unidadId = unidadId
         self.unidadNombre = unidadNombre
+        self.dashboardRepository = dashboardRepository
+        self.planificacionRepository = planificacionRepository
         self._selectedTab = State(initialValue: initialTab)
         self._viewModel = State(initialValue: VerUnidadViewModel(
             dashboardRepository: dashboardRepository,
