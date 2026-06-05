@@ -160,7 +160,11 @@ struct PlanificacionRepository {
     func cargarVerUnidadConFallback(asignatura: String, curso: String, unidadId: String) async throws -> VerUnidadGuardada? {
         for candidate in Self.unidadIdCandidates(raw: unidadId) {
             if let data = try await cargarVerUnidad(asignatura: asignatura, curso: curso, unidadId: candidate) {
-                return data
+                var resolved = data
+                if resolved.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    resolved.unidadId = candidate
+                }
+                return resolved
             }
         }
         return nil
@@ -189,7 +193,11 @@ struct PlanificacionRepository {
     func cargarCronogramaUnidadConFallback(asignatura: String, curso: String, unidadIds: [String]) async throws -> CronogramaUnidadData? {
         for candidate in Self.uniqueNonEmpty(unidadIds.flatMap { Self.unidadIdCandidates(raw: $0) }) {
             if let data = try await cargarCronogramaUnidad(asignatura: asignatura, curso: curso, unidadId: candidate) {
-                return data
+                var resolved = data
+                if resolved.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    resolved.unidadId = candidate
+                }
+                return resolved
             }
         }
         return nil
@@ -235,7 +243,11 @@ struct PlanificacionRepository {
     func cargarActividadClaseConFallback(curso: String, unidadId: String, numeroClase: Int, asignatura: String) async throws -> ActividadClase? {
         for candidate in Self.unidadIdCandidates(raw: unidadId) {
             if let data = try await cargarActividadClase(curso: curso, unidadId: candidate, numeroClase: numeroClase, asignatura: asignatura) {
-                return data
+                var resolved = data
+                if resolved.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    resolved.unidadId = candidate
+                }
+                return resolved
             }
         }
         return nil

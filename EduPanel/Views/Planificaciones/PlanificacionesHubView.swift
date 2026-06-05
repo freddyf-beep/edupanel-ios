@@ -490,6 +490,23 @@ enum UnitCoverage {
     }
 }
 
+enum UnitRouteID {
+    static func routeId(for unit: UnidadPlan, course: String, cronogramasByUnit: [String: CronogramaUnidadData]) -> String {
+        let key = PlanificacionRepository.cronogramaKey(curso: course, unidadId: String(unit.id))
+        if let savedId = cronogramasByUnit[key]?.unidadId.trimmingCharacters(in: .whitespacesAndNewlines),
+           !savedId.isEmpty {
+            return savedId
+        }
+
+        if let curricularId = unit.unidadCurricularId?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !curricularId.isEmpty {
+            return curricularId
+        }
+
+        return String(unit.id)
+    }
+}
+
 private struct PlanTimelineReplicaView: View {
     let planes: [PlanificacionCurso]
     let cronogramasByUnit: [String: CronogramaUnidadData]
@@ -555,8 +572,9 @@ private struct PlanTimelineReplicaView: View {
         let end = max(start + 0.08, offset(for: unit.end))
         let width = max(54, 580 * (end - start))
         let coverage = UnitCoverage.coverage(for: unit, course: plan.curso, cronogramasByUnit: cronogramasByUnit).percent
+        let routeId = UnitRouteID.routeId(for: unit, course: plan.curso, cronogramasByUnit: cronogramasByUnit)
 
-        return NavigationLink(value: AppRoute.verUnidad(curso: plan.curso, unidadId: String(unit.id), unidadNombre: unit.name, initialTab: "unidad")) {
+        return NavigationLink(value: AppRoute.verUnidad(curso: plan.curso, unidadId: routeId, unidadNombre: unit.name, initialTab: "unidad")) {
             HStack(spacing: 5) {
                 Text(unit.name)
                     .font(.system(size: 9, weight: .black))

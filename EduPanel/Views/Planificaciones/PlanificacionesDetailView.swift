@@ -196,6 +196,7 @@ struct PlanificacionesDetailView: View {
     private func unitRow(unit: UnidadPlan, index: Int) -> some View {
         let coverage = UnitCoverage.coverage(for: unit, course: curso, cronogramasByUnit: cronogramasByUnit)
         let state = UnitPlanningState.state(for: unit)
+        let routeId = UnitRouteID.routeId(for: unit, course: curso, cronogramasByUnit: cronogramasByUnit)
 
         return EPWebCard {
             VStack(alignment: .leading, spacing: 12) {
@@ -268,13 +269,13 @@ struct PlanificacionesDetailView: View {
                 }
 
                 HStack(spacing: 8) {
-                    NavigationLink(value: AppRoute.verUnidad(curso: curso, unidadId: String(unit.id), unidadNombre: unit.name, initialTab: "unidad")) {
+                    NavigationLink(value: AppRoute.verUnidad(curso: curso, unidadId: routeId, unidadNombre: unit.name, initialTab: "unidad")) {
                         actionLabel("Ver", icon: "text.alignleft")
                     }
-                    NavigationLink(value: AppRoute.verUnidad(curso: curso, unidadId: String(unit.id), unidadNombre: unit.name, initialTab: "cronograma")) {
+                    NavigationLink(value: AppRoute.verUnidad(curso: curso, unidadId: routeId, unidadNombre: unit.name, initialTab: "cronograma")) {
                         actionLabel("Crono", icon: "calendar")
                     }
-                    NavigationLink(value: AppRoute.verUnidad(curso: curso, unidadId: String(unit.id), unidadNombre: unit.name, initialTab: "clases")) {
+                    NavigationLink(value: AppRoute.verUnidad(curso: curso, unidadId: routeId, unidadNombre: unit.name, initialTab: "clases")) {
                         actionLabel("Clases", icon: "book.closed")
                     }
 
