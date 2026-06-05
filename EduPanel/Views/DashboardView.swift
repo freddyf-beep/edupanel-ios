@@ -35,6 +35,7 @@ struct DashboardView: View {
     @State private var viewModel: DashboardViewModel
     @State private var selectedTab: DashboardTabKey = .hoy
     @State private var selectedDay = DateHelpers.weekdayName(for: Date()) ?? "Lunes"
+    @State private var displayedMonthOffset = 0
     @State private var newReminder = ""
     @State private var reminderColor: ReminderColor = .amarillo
     @AppStorage("edupanel_dashboard_reminders") private var remindersData = "[]"
@@ -363,9 +364,32 @@ struct DashboardView: View {
                 Label("Vista mensual", systemImage: "calendar.badge.clock")
                     .font(.subheadline.weight(.black))
                 Spacer()
-                Text(currentMonthTitle)
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Button {
+                        displayedMonthOffset -= 1
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.caption.weight(.black))
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(.plain)
+
+                    Text(currentMonthTitle)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(minWidth: 104)
+
+                    Button {
+                        displayedMonthOffset += 1
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.black))
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
             LazyVGrid(columns: dashboardGrid, spacing: 10) {
@@ -395,6 +419,18 @@ struct DashboardView: View {
                         hasPending: isToday && !snapshot.pendingClasses.isEmpty
                     )
                 }
+            }
+
+            if displayedMonthOffset != 0 {
+                Button {
+                    displayedMonthOffset = 0
+                } label: {
+                    Label("Volver al mes actual", systemImage: "calendar")
+                        .font(.caption.weight(.black))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(.pink)
             }
 
             Label("El mes usa tu horario semanal como proyeccion hasta que conectemos calendario real.", systemImage: "info.circle.fill")
@@ -642,7 +678,11 @@ struct DashboardView: View {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "es_CL")
         formatter.dateFormat = "MMMM yyyy"
-        return formatter.string(from: Date()).capitalized
+        return formatter.string(from: displayedMonthDate).capitalized
+    }
+
+    private var displayedMonthDate: Date {
+        Calendar.current.date(byAdding: .month, value: displayedMonthOffset, to: Date()) ?? Date()
     }
 
     private var dashboardGrid: [GridItem] {
@@ -729,7 +769,7 @@ struct DashboardView: View {
 
     private func currentMonthGrid() -> [Date?] {
         let calendar = Calendar.current
-        var components = calendar.dateComponents([.year, .month], from: Date())
+        var components = calendar.dateComponents([.year, .month], from: displayedMonthDate)
         components.day = 1
         guard let firstDay = calendar.date(from: components),
               let dayRange = calendar.range(of: .day, in: .month, for: firstDay) else {
