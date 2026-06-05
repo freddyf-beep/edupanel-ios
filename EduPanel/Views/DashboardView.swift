@@ -205,6 +205,18 @@ struct DashboardView: View {
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(.white.opacity(0.78))
                     }
+
+                    if item.isAcademic {
+                        NavigationLink(value: AppRoute.classDetail(id: item.id, title: routeTitle(for: item))) {
+                            Label("Abrir", systemImage: "arrow.right")
+                                .font(.caption.weight(.black))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 7)
+                                .foregroundStyle(.white)
+                                .background(.white.opacity(0.2), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 } else {
                     Text(snapshot.academicTodayClasses.isEmpty ? "Hoy no tienes clases programadas." : "Jornada finalizada - todas las clases registradas.")
                         .font(.subheadline.weight(.semibold))
@@ -307,7 +319,8 @@ struct DashboardView: View {
                             item: item,
                             isToday: selectedDay == DateHelpers.weekdayName(for: Date()),
                             isCompleted: snapshot.classState[item.id] == true,
-                            studentCount: snapshot.studentCounts[item.resumen] ?? 0
+                            studentCount: snapshot.studentCounts[item.resumen] ?? 0,
+                            route: AppRoute.classDetail(id: item.id, title: routeTitle(for: item))
                         ) {
                             Task { await viewModel.toggleCompletion(for: item) }
                         }
@@ -991,6 +1004,7 @@ private struct TimelineClassRow: View {
     let isToday: Bool
     let isCompleted: Bool
     let studentCount: Int
+    let route: AppRoute
     let onToggle: () -> Void
 
     private var isCurrent: Bool {
@@ -1059,6 +1073,16 @@ private struct TimelineClassRow: View {
                             .foregroundStyle(.secondary)
 
                         Spacer()
+
+                        NavigationLink(value: route) {
+                            Text("Abrir")
+                                .font(.caption.weight(.black))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 7)
+                                .foregroundStyle(Color.pink)
+                                .background(Color.pink.opacity(0.12), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
 
                         Button(action: onToggle) {
                             Text(isCompleted ? "Hecha" : "Marcar")
