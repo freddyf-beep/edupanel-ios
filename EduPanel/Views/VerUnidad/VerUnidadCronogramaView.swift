@@ -329,3 +329,63 @@ private extension Color {
         self.init(red: red, green: green, blue: blue)
     }
 }
+
+// Border Modifier
+private struct BorderModifier: ViewModifier {
+    var width: CGFloat
+    var edges: [Edge]
+    var color: Color
+
+    func body(content: Content) -> some View {
+        content.overlay(
+            GeometryReader { geometry in
+                ZStack {
+                    ForEach(edges, id: \.self) { edge in
+                        self.border(edge: edge, geometry: geometry)
+                    }
+                }
+            }
+        )
+    }
+
+    private func border(edge: Edge, geometry: GeometryProxy) -> some View {
+        let x: CGFloat
+        let y: CGFloat
+        let w: CGFloat
+        let h: CGFloat
+
+        switch edge {
+        case .top:
+            x = 0
+            y = 0
+            w = geometry.size.width
+            h = width
+        case .bottom:
+            x = 0
+            y = geometry.size.height - width
+            w = geometry.size.width
+            h = width
+        case .leading:
+            x = 0
+            y = 0
+            w = width
+            h = geometry.size.height
+        case .trailing:
+            x = geometry.size.width - width
+            y = 0
+            w = width
+            h = geometry.size.height
+        }
+
+        return Rectangle()
+            .fill(color)
+            .frame(width: w, height: h)
+            .offset(x: x, y: y)
+    }
+}
+
+private extension View {
+    func border(width: CGFloat, edges: [Edge], color: Color) -> some View {
+        modifier(BorderModifier(width: width, edges: edges, color: color))
+    }
+}
