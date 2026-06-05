@@ -116,6 +116,15 @@ jobs:
             EDUPANEL_API_BASE_URL="$EDUPANEL_API_BASE_URL" \
             GOOGLE_REVERSED_CLIENT_ID="$GOOGLE_REVERSED_CLIENT_ID"
 
+      - name: Verify archived app executable metadata
+        run: |
+          APP_PATH="$ARCHIVE_PATH/Products/Applications/EduPanel.app"
+          test -d "$APP_PATH"
+          EXECUTABLE_NAME=$(/usr/libexec/PlistBuddy -c "Print CFBundleExecutable" "$APP_PATH/Info.plist")
+          test -n "$EXECUTABLE_NAME"
+          test -f "$APP_PATH/$EXECUTABLE_NAME"
+          echo "Verified executable: $APP_PATH/$EXECUTABLE_NAME"
+
       - name: Export IPA
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
