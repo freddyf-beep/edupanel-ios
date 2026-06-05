@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct VerUnidadClasesView: View {
-    @Bindable var viewModel: VerUnidadViewModel
+    var viewModel: VerUnidadViewModel
     @State private var selectedClassNum: Int = 1
     @State private var showingLiveMode = false
     

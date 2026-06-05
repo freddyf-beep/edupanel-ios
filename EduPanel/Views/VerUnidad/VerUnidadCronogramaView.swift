@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct VerUnidadCronogramaView: View {
-    @Bindable var viewModel: VerUnidadViewModel
+    var viewModel: VerUnidadViewModel
     @Binding var selectedTab: String // switches to "clases" when selecting a class
 
     @State private var isMatrixMode = false

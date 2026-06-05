@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct VerUnidadBaseView: View {
-    @Bindable var viewModel: VerUnidadViewModel
+    var viewModel: VerUnidadViewModel
     
     @State private var newHabilidad = ""
     @State private var newConocimiento = ""

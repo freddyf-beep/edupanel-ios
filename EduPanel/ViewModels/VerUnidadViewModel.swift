@@ -9,6 +9,7 @@ final class VerUnidadViewModel {
     var verUnidad: VerUnidadGuardada? = nil
     var cronograma: CronogramaUnidadData? = nil
     var clasesActividades: [Int: ActividadClase] = [:] // key: numeroClase
+    var snapshot: DashboardSnapshot? = nil
     
     var activeSubject = "Música"
     var curso = ""
@@ -34,6 +35,7 @@ final class VerUnidadViewModel {
         
         do {
             let snap = try await dashboardRepository.fetchDashboard()
+            self.snapshot = snap
             self.activeSubject = snap.preferences.asignaturasHabilitadas.first ?? "Música"
             
             // 1. Load Pedagogical info
