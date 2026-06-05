@@ -31,6 +31,17 @@
 		100000000000000000000053 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000064 /* FirebaseFirestore */; };
 		100000000000000000000054 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000065 /* GoogleSignIn */; };
 		100000000000000000000055 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000036 /* GoogleService-Info.plist */; };
+		200000000000000000000101 /* PlanificacionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000001 /* PlanificacionModels.swift */; };
+		200000000000000000000102 /* PlanificacionRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000002 /* PlanificacionRepository.swift */; };
+		200000000000000000000103 /* PlanificacionesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000003 /* PlanificacionesViewModel.swift */; };
+		200000000000000000000104 /* VerUnidadViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000004 /* VerUnidadViewModel.swift */; };
+		200000000000000000000105 /* PlanificacionesHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000005 /* PlanificacionesHubView.swift */; };
+		200000000000000000000106 /* PlanificacionesDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000006 /* PlanificacionesDetailView.swift */; };
+		200000000000000000000107 /* VerUnidadDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* VerUnidadDashboardView.swift */; };
+		200000000000000000000108 /* VerUnidadBaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000008 /* VerUnidadBaseView.swift */; };
+		200000000000000000000109 /* VerUnidadCronogramaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000009 /* VerUnidadCronogramaView.swift */; };
+		20000000000000000000010A /* VerUnidadClasesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000A /* VerUnidadClasesView.swift */; };
+		20000000000000000000010B /* LiveClassModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000B /* LiveClassModeView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -60,6 +71,17 @@
 		100000000000000000000034 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
 		100000000000000000000035 /* serve-sim.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = serve-sim.sh; sourceTree = "<group>"; };
 		100000000000000000000036 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		200000000000000000000001 /* PlanificacionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanificacionModels.swift; sourceTree = "<group>"; };
+		200000000000000000000002 /* PlanificacionRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanificacionRepository.swift; sourceTree = "<group>"; };
+		200000000000000000000003 /* PlanificacionesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanificacionesViewModel.swift; sourceTree = "<group>"; };
+		200000000000000000000004 /* VerUnidadViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerUnidadViewModel.swift; sourceTree = "<group>"; };
+		200000000000000000000005 /* PlanificacionesHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanificacionesHubView.swift; sourceTree = "<group>"; };
+		200000000000000000000006 /* PlanificacionesDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanificacionesDetailView.swift; sourceTree = "<group>"; };
+		200000000000000000000007 /* VerUnidadDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerUnidadDashboardView.swift; sourceTree = "<group>"; };
+		200000000000000000000008 /* VerUnidadBaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerUnidadBaseView.swift; sourceTree = "<group>"; };
+		200000000000000000000009 /* VerUnidadCronogramaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerUnidadCronogramaView.swift; sourceTree = "<group>"; };
+		20000000000000000000000A /* VerUnidadClasesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerUnidadClasesView.swift; sourceTree = "<group>"; };
+		20000000000000000000000B /* LiveClassModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveClassModeView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -120,6 +142,7 @@
 		100000000000000000000012 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				200000000000000000000001 /* PlanificacionModels.swift */,
 				100000000000000000000022 /* AppTab.swift */,
 				100000000000000000000023 /* DashboardModels.swift */,
 				100000000000000000000024 /* UserRole.swift */,
@@ -130,6 +153,7 @@
 		100000000000000000000013 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				200000000000000000000002 /* PlanificacionRepository.swift */,
 				100000000000000000000025 /* APIClient.swift */,
 				100000000000000000000026 /* AppConfig.swift */,
 				100000000000000000000027 /* DashboardRepository.swift */,
@@ -142,6 +166,8 @@
 		100000000000000000000014 /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				200000000000000000000003 /* PlanificacionesViewModel.swift */,
+				200000000000000000000004 /* VerUnidadViewModel.swift */,
 				10000000000000000000002A /* AuthSession.swift */,
 				10000000000000000000002B /* DashboardViewModel.swift */,
 			);
@@ -151,6 +177,8 @@
 		100000000000000000000015 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				200000000000000000000020 /* Planificaciones */,
+				200000000000000000000030 /* VerUnidad */,
 				10000000000000000000002C /* AppShell.swift */,
 				10000000000000000000002D /* DashboardView.swift */,
 				10000000000000000000002E /* LoginView.swift */,
@@ -187,6 +215,27 @@
 				100000000000000000000035 /* serve-sim.sh */,
 			);
 			path = scripts;
+			sourceTree = "<group>";
+		};
+		200000000000000000000020 /* Planificaciones */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000005 /* PlanificacionesHubView.swift */,
+				200000000000000000000006 /* PlanificacionesDetailView.swift */,
+			);
+			path = Planificaciones;
+			sourceTree = "<group>";
+		};
+		200000000000000000000030 /* VerUnidad */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000007 /* VerUnidadDashboardView.swift */,
+				200000000000000000000008 /* VerUnidadBaseView.swift */,
+				200000000000000000000009 /* VerUnidadCronogramaView.swift */,
+				20000000000000000000000A /* VerUnidadClasesView.swift */,
+				20000000000000000000000B /* LiveClassModeView.swift */,
+			);
+			path = VerUnidad;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -289,6 +338,17 @@
 				10000000000000000000004F /* PlaceholderModuleView.swift in Sources */,
 				100000000000000000000090 /* SidebarContainer.swift in Sources */,
 				100000000000000000000091 /* SidebarView.swift in Sources */,
+				200000000000000000000101 /* PlanificacionModels.swift in Sources */,
+				200000000000000000000102 /* PlanificacionRepository.swift in Sources */,
+				200000000000000000000103 /* PlanificacionesViewModel.swift in Sources */,
+				200000000000000000000104 /* VerUnidadViewModel.swift in Sources */,
+				200000000000000000000105 /* PlanificacionesHubView.swift in Sources */,
+				200000000000000000000106 /* PlanificacionesDetailView.swift in Sources */,
+				200000000000000000000107 /* VerUnidadDashboardView.swift in Sources */,
+				200000000000000000000108 /* VerUnidadBaseView.swift in Sources */,
+				200000000000000000000109 /* VerUnidadCronogramaView.swift in Sources */,
+				20000000000000000000010A /* VerUnidadClasesView.swift in Sources */,
+				20000000000000000000010B /* LiveClassModeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

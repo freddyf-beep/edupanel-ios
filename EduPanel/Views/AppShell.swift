@@ -18,6 +18,7 @@ enum AppRoute: Hashable {
     case perfilAction(String)
     case module(AppTab)
     case coursePlanificaciones(String)
+    case verUnidad(curso: String, unidadId: String, unidadNombre: String, initialTab: String)
 
     var title: String {
         switch self {
@@ -38,6 +39,7 @@ enum AppRoute: Hashable {
         case .perfilAction(let title): return title
         case .module(let tab): return tab.title
         case .coursePlanificaciones(let course): return "Planificaciones - \(course)"
+        case .verUnidad(_, _, let unidadNombre, _): return unidadNombre
         }
     }
 
@@ -60,6 +62,7 @@ enum AppRoute: Hashable {
         case .perfilAction: return "arrow.right.circle.fill"
         case .module(let tab): return tab.systemImage
         case .coursePlanificaciones: return "book.closed.fill"
+        case .verUnidad: return "book.closed.fill"
         }
     }
 
@@ -83,6 +86,8 @@ enum AppRoute: Hashable {
             return "Conexion a Google Drive pendiente de implementar."
         case .coursePlanificaciones(let course):
             return "Planificaciones filtradas para el curso \(course)."
+        case .verUnidad:
+            return "Detalle de Unidad"
         default:
             return "Sin contenido por ahora."
         }
@@ -173,13 +178,10 @@ struct AppShell: View {
 
                     // Planificaciones Tab
                     NavigationStack(path: $planificacionesPath) {
-                        Group {
-                            if case .coursePlanificaciones(let course) = selectedRoute {
-                                RoutePlaceholderView(route: .coursePlanificaciones(course))
-                            } else {
-                                PlaceholderModuleView(tab: .planificaciones)
-                            }
-                        }
+                        PlanificacionesHubView(
+                            dashboardRepository: dashboardRepository,
+                            planificacionRepository: PlanificacionRepository()
+                        )
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
                             ToolbarItem(placement: .navigationBarLeading) {
@@ -195,7 +197,25 @@ struct AppShell: View {
                             }
                         }
                         .navigationDestination(for: AppRoute.self) { route in
-                            RoutePlaceholderView(route: route)
+                            switch route {
+                            case .coursePlanificaciones(let course):
+                                PlanificacionesDetailView(
+                                    curso: course,
+                                    dashboardRepository: dashboardRepository,
+                                    planificacionRepository: PlanificacionRepository()
+                                )
+                            case .verUnidad(let curso, let unidadId, let unidadNombre, let initialTab):
+                                VerUnidadDashboardView(
+                                    curso: curso,
+                                    unidadId: unidadId,
+                                    unidadNombre: unidadNombre,
+                                    initialTab: initialTab,
+                                    dashboardRepository: dashboardRepository,
+                                    planificacionRepository: PlanificacionRepository()
+                                )
+                            default:
+                                RoutePlaceholderView(route: route)
+                            }
                         }
                     }
                     .tabItem { Label(AppTab.planificaciones.title, systemImage: AppTab.planificaciones.systemImage) }
@@ -279,6 +299,20 @@ struct AppShell: View {
                         if case .coursePlanificaciones = selectedRoute {
                             selectedRoute = .module(.inicio)
                         }
+                    }
+                }
+                .onChange(of: selectedRoute) { oldRoute, newRoute in
+                    switch newRoute {
+                    case .coursePlanificaciones(let course):
+                        selectedTab = .planificaciones
+                        planificacionesPath = NavigationPath([AppRoute.coursePlanificaciones(course)])
+                    case .module(let tab):
+                        selectedTab = tab
+                        if tab == .planificaciones {
+                            planificacionesPath = NavigationPath()
+                        }
+                    default:
+                        break
                     }
                 }
             }
