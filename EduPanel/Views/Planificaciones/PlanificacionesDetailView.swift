@@ -315,6 +315,20 @@ struct PlanificacionesDetailView: View {
         }
     }
 
+    private func savePlan() async {
+        saveStatus = "Guardando..."
+        do {
+            try await planificacionRepository.guardarPlanCurso(asignatura: activeSubject, curso: curso, units: units)
+            saveStatus = "Guardado"
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            if saveStatus == "Guardado" {
+                saveStatus = ""
+            }
+        } catch {
+            saveStatus = "Error"
+        }
+    }
+
     private func performDelete(unit: UnidadPlan) async {
         saveStatus = "Eliminando..."
         do {
