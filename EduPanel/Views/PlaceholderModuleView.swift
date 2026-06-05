@@ -17,7 +17,7 @@ struct PlaceholderModuleView: View {
                 Text(tab.title)
                     .font(.title2.bold())
 
-                Text("Este modulo quedo reservado para replicar la experiencia docente de la web en formato nativo.")
+                Text("Sin contenido por ahora.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -45,7 +45,7 @@ struct RoutePlaceholderView: View {
                 Text(route.title)
                     .font(.title2.bold())
 
-                Text("Pantalla reservada para replicar este flujo de la web en iOS nativo.")
+                Text("Sin contenido por ahora.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -171,6 +171,7 @@ final class ProfileViewModel {
 struct ProfileView: View {
     @State private var viewModel: ProfileViewModel
     @State private var selectedTab: ProfileTabKey = .resumen
+    @State private var showBannerPicker = false
 
     let user: AuthenticatedUser
 
@@ -204,19 +205,25 @@ struct ProfileView: View {
         .navigationTitle("Perfil")
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
+        .sheet(isPresented: $showBannerPicker) {
+            ProfileBannerSheet(viewModel: viewModel)
+                .presentationDetents([.medium])
+        }
     }
 
     private func profileHero(_ snapshot: DashboardSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             ZStack(alignment: .topTrailing) {
                 LinearGradient(
-                    colors: bannerColors(for: snapshot.preferences.bannerStyle),
+                    colors: bannerColors(for: viewModel.draftPreferences.bannerStyle),
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
                 .frame(height: 132)
 
-                NavigationLink(value: AppRoute.perfilAction("Cambiar fondo del perfil")) {
+                Button {
+                    showBannerPicker = true
+                } label: {
                     Image(systemName: "paintpalette.fill")
                         .font(.headline.weight(.bold))
                         .foregroundStyle(.white)
@@ -494,23 +501,55 @@ struct ProfileView: View {
     private func profileSubjects(_ snapshot: DashboardSnapshot) -> some View {
         VStack(spacing: 18) {
             ProfileSection(title: "Asignaturas que enseno", icon: "book.closed.fill", hint: "Selector web") {
-                let subjects = enabledSubjects(snapshot)
+                let subjects = subjectCandidates(snapshot)
 
                 if subjects.isEmpty {
-                    Text("No hay asignaturas configuradas. Se mostraran todas las disponibles en la web.")
+                    Text("No hay asignaturas detectadas en tu horario. Agrega bloques con asignatura en Mi Semana.")
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(.secondary)
                 } else {
-                    FlowChips(items: subjects, color: .pink)
-                }
+                    ProfileSaveBadge(status: viewModel.savePreferencesStatus)
 
-                NavigationLink(value: AppRoute.perfilAction("Gestionar asignaturas")) {
-                    Label("Gestionar asignaturas", systemImage: "slider.horizontal.3")
-                        .font(.footnote.weight(.black))
-                        .frame(maxWidth: .infinity)
+                    VStack(spacing: 8) {
+                        ForEach(subjects, id: \.self) { subject in
+                            Button {
+                                toggleSubject(subject, candidates: subjects)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: isSubjectEnabled(subject, candidates: subjects) ? "checkmark.square.fill" : "square")
+                                        .font(.headline.weight(.bold))
+                                        .foregroundStyle(isSubjectEnabled(subject, candidates: subjects) ? .pink : .secondary)
+                                    Text(subject)
+                                        .font(.footnote.weight(.semibold))
+                                    Spacer()
+                                }
+                                .padding(12)
+                                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    HStack(spacing: 10) {
+                        Button {
+                            viewModel.draftPreferences.asignaturasHabilitadas = []
+                        } label: {
+                            Label("Mostrar todas", systemImage: "checklist")
+                                .frame(maxWidth: .infinity)
+                        }
+
+                        Button {
+                            Task { await viewModel.savePreferences() }
+                        } label: {
+                            Label("Guardar", systemImage: viewModel.savePreferencesStatus == .saving ? "hourglass" : "square.and.arrow.down.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .disabled(viewModel.savePreferencesStatus == .saving)
+                    }
+                    .font(.footnote.weight(.black))
+                    .buttonStyle(.bordered)
+                    .tint(.pink)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.pink)
             }
 
             ProfileSection(title: "Mapeo de niveles curriculares", icon: "graduationcap.fill", hint: "Mineduc") {
@@ -608,11 +647,30 @@ struct ProfileView: View {
         }
     }
 
-    private func enabledSubjects(_ snapshot: DashboardSnapshot) -> [String] {
-        if !snapshot.preferences.asignaturasHabilitadas.isEmpty {
-            return snapshot.preferences.asignaturasHabilitadas.sorted()
+    private func subjectCandidates(_ snapshot: DashboardSnapshot) -> [String] {
+        Array(Set(snapshot.academicClasses.compactMap(\.asignatura) + viewModel.draftPreferences.asignaturasHabilitadas))
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .sorted()
+    }
+
+    private func isSubjectEnabled(_ subject: String, candidates: [String]) -> Bool {
+        let enabled = viewModel.draftPreferences.asignaturasHabilitadas
+        return enabled.isEmpty ? candidates.contains(subject) : enabled.contains(subject)
+    }
+
+    private func toggleSubject(_ subject: String, candidates: [String]) {
+        var enabled = viewModel.draftPreferences.asignaturasHabilitadas
+        if enabled.isEmpty {
+            enabled = candidates
         }
-        return Array(Set(snapshot.academicClasses.compactMap(\.asignatura))).sorted()
+
+        if enabled.contains(subject) {
+            enabled.removeAll { $0 == subject }
+        } else {
+            enabled.append(subject)
+        }
+
+        viewModel.draftPreferences.asignaturasHabilitadas = enabled.sorted()
     }
 
     private func formatMinutes(_ minutes: Int) -> String {
@@ -818,6 +876,72 @@ private struct ProfileCourseSummary: Identifiable {
             return type.label
         }
         return level ?? "Sin nivel"
+    }
+}
+
+private struct ProfileBannerPreset: Identifiable {
+    let id: String
+    let title: String
+    let colors: [Color]
+}
+
+private let profileBannerPresets: [ProfileBannerPreset] = [
+    ProfileBannerPreset(id: "rosa", title: "Rosa", colors: [.pink, .red]),
+    ProfileBannerPreset(id: "oceano", title: "Oceano", colors: [.cyan, .blue]),
+    ProfileBannerPreset(id: "atardecer", title: "Atardecer", colors: [.orange, .pink, .purple]),
+    ProfileBannerPreset(id: "esmeralda", title: "Esmeralda", colors: [.green, .teal]),
+    ProfileBannerPreset(id: "indigo", title: "Indigo", colors: [.indigo, .purple]),
+    ProfileBannerPreset(id: "grafito", title: "Grafito", colors: [.gray, .black]),
+    ProfileBannerPreset(id: "bosque", title: "Bosque", colors: [.green, .mint]),
+    ProfileBannerPreset(id: "lavanda", title: "Lavanda", colors: [.purple, .pink])
+]
+
+private struct ProfileBannerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var viewModel: ProfileViewModel
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                    ForEach(profileBannerPresets) { preset in
+                        Button {
+                            viewModel.draftPreferences.bannerStyle = preset.id
+                            Task {
+                                await viewModel.savePreferences()
+                                dismiss()
+                            }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 10) {
+                                LinearGradient(colors: preset.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+                                    .frame(height: 72)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                                HStack {
+                                    Text(preset.title)
+                                        .font(.footnote.weight(.black))
+                                    Spacer()
+                                    if viewModel.draftPreferences.bannerStyle == preset.id {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(.green)
+                                    }
+                                }
+                            }
+                            .padding(10)
+                            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(18)
+            }
+            .navigationTitle("Fondo del perfil")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                }
+            }
+        }
     }
 }
 
