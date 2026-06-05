@@ -19,8 +19,8 @@ final class VerUnidadViewModel {
     var isSaving = false
     var saveStatus = ""
     
-    private let dashboardRepository: DashboardRepository
-    private let planificacionRepository: PlanificacionRepository
+    let dashboardRepository: DashboardRepository
+    let planificacionRepository: PlanificacionRepository
 
     init(dashboardRepository: DashboardRepository, planificacionRepository: PlanificacionRepository) {
         self.dashboardRepository = dashboardRepository
