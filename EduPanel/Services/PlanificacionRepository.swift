@@ -51,6 +51,10 @@ struct PlanificacionRepository {
         return buildDocId(asignatura: asignatura, nivel: curso) + "_crono_" + unidadId
     }
 
+    static func cronogramaKey(curso: String, unidadId: String) -> String {
+        "\(curso)::\(unidadId)"
+    }
+
     static func buildActividadClaseId(curso: String, unidadId: String, numeroClase: Int, asignatura: String) -> String {
         return buildDocId(asignatura: asignatura, nivel: curso) + "_" + unidadId + "_clase\(numeroClase)"
     }
@@ -127,6 +131,21 @@ struct PlanificacionRepository {
         return CronogramaUnidadData.from(dictionary: dict)
     }
 
+    func cargarCronogramas(asignatura: String, planes: [PlanificacionCurso]) async -> [String: CronogramaUnidadData] {
+        var results: [String: CronogramaUnidadData] = [:]
+
+        for plan in planes {
+            for unit in plan.units {
+                let unidadId = String(unit.id)
+                if let crono = try? await cargarCronogramaUnidad(asignatura: asignatura, curso: plan.curso, unidadId: unidadId) {
+                    results[Self.cronogramaKey(curso: plan.curso, unidadId: unidadId)] = crono
+                }
+            }
+        }
+
+        return results
+    }
+
     func guardarCronogramaUnidad(asignatura: String, curso: String, unidadId: String, totalClases: Int, clases: [ClaseCronograma]) async throws {
         let docId = Self.buildCronogramaUnidadId(asignatura: asignatura, curso: curso, unidadId: unidadId)
         let docRef = try userDoc(col: "cronograma_unidad", id: docId)
@@ -157,7 +176,7 @@ struct PlanificacionRepository {
         // Filter out NSNull values to preserve Firestore schema cleanliness
         dict = dict.filter { !($1 is NSNull) }
         dict["updatedAt"] = FieldValue.serverTimestamp()
-        try await setData(dict, at: docRef, merge: false)
+        try await setData(dict, at: docRef, merge: true)
     }
 
     func eliminarUnidadCompleta(asignatura: String, curso: String, unidadId: String) async throws {

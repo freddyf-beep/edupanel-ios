@@ -282,7 +282,7 @@ struct ProfileView: View {
                 }
 
                 HStack(spacing: 10) {
-                    Text("Configuracion")
+                    Text("Configuración")
                         .font(.caption.weight(.black))
                         .foregroundStyle(.secondary)
                     ProgressView(value: Double(snapshot.setupProgress), total: 100)
@@ -351,7 +351,7 @@ struct ProfileView: View {
 
     private func profileSummary(_ snapshot: DashboardSnapshot) -> some View {
         VStack(spacing: 18) {
-            ProfileSection(title: "Mis cursos", icon: "folder.fill", hint: snapshot.courses.isEmpty ? "Aun no agregas ninguno" : "\(snapshot.courses.count) cursos") {
+            ProfileSection(title: "Mis cursos", icon: "folder.fill", hint: snapshot.courses.isEmpty ? "Aún no agregas ninguno" : "\(snapshot.courses.count) cursos") {
                 if courseSummaries(snapshot).isEmpty {
                     ProfileEmptyAction(
                         icon: "calendar",
@@ -375,7 +375,7 @@ struct ProfileView: View {
                 }
             }
 
-            ProfileSection(title: "Vista rapida de la semana", icon: "calendar", hint: nil) {
+            ProfileSection(title: "Vista rápida de la semana", icon: "calendar", hint: nil) {
                 MiniWeekView(snapshot: snapshot)
                 Button {
                     selectedTab = .semana
@@ -401,7 +401,7 @@ struct ProfileView: View {
                 }
             }
 
-            ProfileSection(title: "Atajos rapidos", icon: "bolt.fill", hint: nil) {
+            ProfileSection(title: "Atajos rápidos", icon: "bolt.fill", hint: nil) {
                 VStack(spacing: 8) {
                     ProfileShortcut(title: "Editar mi semana", icon: "calendar") { selectedTab = .semana }
                     ProfileShortcut(title: "Configurar mis cursos", icon: "folder.fill") { selectedTab = .cursos }
@@ -472,7 +472,7 @@ struct ProfileView: View {
                         ProfileCourseRow(course: course)
 
                         if course.studentsPreview.isEmpty {
-                            Text("Aun no hay estudiantes cargados para este curso.")
+                            Text("Aún no hay estudiantes cargados para este curso.")
                                 .font(.footnote.weight(.medium))
                                 .foregroundStyle(.secondary)
                         } else {
@@ -776,19 +776,19 @@ private struct ProfileIdentityTab: View {
                             .profileFieldLabel()
                         Picker("Tipo de docente", selection: $viewModel.draftProfile.tipoProfesor) {
                             Text("Selecciona tu rol").tag("")
-                            Text("Profesor(a) de Ed. General Basica").tag("General Basica")
-                            Text("Profesor(a) de Educacion Media").tag("Media")
+                            Text("Profesor(a) de Ed. General Básica").tag("General Basica")
+                            Text("Profesor(a) de Educación Media").tag("Media")
                             Text("Educador(a) Diferencial").tag("Diferencial")
                         }
                         .pickerStyle(.menu)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
-                    ProfileTextField(title: "Especialidad / Asignatura", placeholder: "Ej: Musica", text: $viewModel.draftProfile.especialidad)
-                    ProfileTextField(title: "Estudios y titulos", placeholder: "Profesor de...", text: $viewModel.draftProfile.estudios)
+                    ProfileTextField(title: "Especialidad / Asignatura", placeholder: "Ej: Música", text: $viewModel.draftProfile.especialidad)
+                    ProfileTextField(title: "Estudios y títulos", placeholder: "Profesor de...", text: $viewModel.draftProfile.estudios)
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Biografia")
+                        Text("Biografía")
                             .profileFieldLabel()
                         TextEditor(text: $viewModel.draftProfile.biografia)
                             .frame(minHeight: 96)
@@ -875,7 +875,7 @@ private struct ProfileConnectionsTab: View {
         VStack(spacing: 18) {
             ProfileSection(title: "Google Calendar", icon: "calendar", hint: "Sincroniza actividades") {
                 ConnectionStatusCard(
-                    title: "Estado de la conexion",
+                    title: "Estado de la conexión",
                     message: "Conecta tu cuenta de Google para enviar actividades y enlaces de apoyo.",
                     isConnected: false
                 )
@@ -897,15 +897,15 @@ private struct ProfileConnectionsTab: View {
 
             ProfileSection(title: "Google Drive personal", icon: "externaldrive.fill", hint: "Carpetas privadas") {
                 ConnectionStatusCard(
-                    title: "Estado de la conexion",
-                    message: "Tu Drive personal queda disponible para planificaciones, unidades, pruebas y guias cuando lo autorices.",
+                    title: "Estado de la conexión",
+                    message: "Tu Drive personal queda disponible para planificaciones, unidades, pruebas y guías cuando lo autorices.",
                     isConnected: false
                 )
 
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Privado por docente", systemImage: "checkmark.shield.fill")
                         .font(.footnote.weight(.black))
-                    Text("EduPanel crea carpetas solo en tu Drive personal cuando lo autorizas. Guarda enlaces e IDs minimos para volver rapido.")
+                    Text("EduPanel crea carpetas solo en tu Drive personal cuando lo autorizas. Guarda enlaces e IDs mínimos para volver rápido.")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
@@ -953,7 +953,7 @@ private struct ProfileBannerPreset: Identifiable {
 
 private let profileBannerPresets: [ProfileBannerPreset] = [
     ProfileBannerPreset(id: "rosa", title: "Rosa", colors: [.pink, .red]),
-    ProfileBannerPreset(id: "oceano", title: "Oceano", colors: [.cyan, .blue]),
+    ProfileBannerPreset(id: "oceano", title: "Océano", colors: [.cyan, .blue]),
     ProfileBannerPreset(id: "atardecer", title: "Atardecer", colors: [.orange, .pink, .purple]),
     ProfileBannerPreset(id: "esmeralda", title: "Esmeralda", colors: [.green, .teal]),
     ProfileBannerPreset(id: "indigo", title: "Indigo", colors: [.indigo, .purple]),

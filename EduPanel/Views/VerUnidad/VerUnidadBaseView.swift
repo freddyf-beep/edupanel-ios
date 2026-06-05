@@ -2,199 +2,317 @@ import SwiftUI
 
 struct VerUnidadBaseView: View {
     var viewModel: VerUnidadViewModel
-    
+
     @State private var newHabilidad = ""
     @State private var newConocimiento = ""
     @State private var newActitud = ""
+    @State private var newResource = ""
 
     var body: some View {
         if let verUnidad = viewModel.verUnidad {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    
-                    // SECTION 1: FOCO PEDAGOGICO
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("FOCO PEDAGÓGICO")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.secondary)
-                            .tracking(1.1)
-                        
-                        // Propósito
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Propósito de la Unidad")
-                                .font(.caption.bold())
-                            TextEditor(text: Binding(
-                                get: { verUnidad.descripcion },
-                                set: { viewModel.verUnidad?.descripcion = $0 }
-                            ))
-                            .frame(minHeight: 80)
-                            .padding(6)
-                            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
-                        }
-                        
-                        // Contexto Docente
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Contexto Docente (Particularidades del curso)")
-                                .font(.caption.bold())
-                            TextEditor(text: Binding(
-                                get: { verUnidad.contextoDocente },
-                                set: { viewModel.verUnidad?.contextoDocente = $0 }
-                            ))
-                            .frame(minHeight: 70)
-                            .padding(6)
-                            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
-                        }
-                        
-                        // Meta Docente
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Meta Docente (Objetivo del profesor)")
-                                .font(.caption.bold())
-                            TextEditor(text: Binding(
-                                get: { verUnidad.objetivoDocente },
-                                set: { viewModel.verUnidad?.objetivoDocente = $0 }
-                            ))
-                            .frame(minHeight: 70)
-                            .padding(6)
-                            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
-                        }
-                    }
-                    .padding(16)
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    
-                    // SECTION 2: OBJETIVOS DE APRENDIZAJE (OA)
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("OBJETIVOS DE APRENDIZAJE PRIORIZADOS")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.secondary)
-                            .tracking(1.1)
-                        
-                        ForEach(Array(verUnidad.oas.enumerated()), id: \.element.id) { oIdx, oa in
-                            VStack(alignment: .leading, spacing: 10) {
-                                // OA Header Checkbox
-                                Button {
-                                    viewModel.verUnidad?.oas[oIdx].seleccionado.toggle()
-                                } label: {
-                                    HStack(alignment: .top, spacing: 8) {
-                                        Image(systemName: oa.seleccionado ? "checkmark.square.fill" : "square")
-                                            .foregroundStyle(oa.seleccionado ? Color(hex: "#F03E6E") : .secondary)
-                                            .font(.body)
-                                        
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(oa.numero != nil ? "OA \(oa.numero!)" : "Objetivo Propio")
-                                                .font(.subheadline.bold())
-                                                .foregroundStyle(Color(.label))
-                                            Text(oa.descripcion)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                                .multilineTextAlignment(.leading)
-                                        }
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                
-                                if oa.seleccionado {
-                                    // Indicators list
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("Indicadores de Evaluación:")
-                                            .font(.system(size: 10, weight: .bold))
-                                            .foregroundStyle(.secondary)
-                                            .padding(.leading, 26)
-                                        
-                                        ForEach(Array(oa.indicadores.enumerated()), id: \.element.id) { iIdx, ind in
-                                            Button {
-                                                viewModel.verUnidad?.oas[oIdx].indicadores[iIdx].seleccionado.toggle()
-                                            } label: {
-                                                HStack(alignment: .top, spacing: 8) {
-                                                    Image(systemName: ind.seleccionado ? "checkmark.circle.fill" : "circle")
-                                                        .foregroundStyle(ind.seleccionado ? Color(hex: "#F03E6E").opacity(0.8) : .secondary)
-                                                        .font(.footnote)
-                                                    
-                                                    Text(ind.texto)
-                                                        .font(.caption)
-                                                        .foregroundStyle(ind.seleccionado ? Color(.label) : .secondary)
-                                                        .multilineTextAlignment(.leading)
-                                                }
-                                                .padding(.leading, 28)
-                                            }
-                                            .buttonStyle(.plain)
-                                        }
-                                    }
-                                    .padding(.top, 4)
-                                }
-                            }
-                            .padding(12)
-                            .background(Color(.systemGray6).opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
-                        }
-                    }
-                    .padding(16)
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    
-                    // SECTION 3: HABILIDADES, CONOCIMIENTOS, ACTITUDES
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("APRENDIZAJES ASOCIADOS")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.secondary)
-                            .tracking(1.1)
-                        
-                        // Habilidades
-                        curriculumCategorySection(
-                            title: "Habilidades",
-                            items: verUnidad.habilidades,
-                            newItemText: $newHabilidad,
-                            onAdd: {
-                                guard !newHabilidad.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-                                let newItem = ElementoCurricular(id: "hab_custom_\(Date().timeIntervalSince1970)", texto: newHabilidad, seleccionado: true, esPropio: true)
-                                viewModel.verUnidad?.habilidades.append(newItem)
-                                newHabilidad = ""
-                            },
-                            onToggle: { idx in
-                                viewModel.verUnidad?.habilidades[idx].seleccionado.toggle()
-                            }
-                        )
-                        
-                        // Conocimientos
-                        curriculumCategorySection(
-                            title: "Conocimientos",
-                            items: verUnidad.conocimientos,
-                            newItemText: $newConocimiento,
-                            onAdd: {
-                                guard !newConocimiento.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-                                let newItem = ElementoCurricular(id: "con_custom_\(Date().timeIntervalSince1970)", texto: newConocimiento, seleccionado: true, esPropio: true)
-                                viewModel.verUnidad?.conocimientos.append(newItem)
-                                newConocimiento = ""
-                            },
-                            onToggle: { idx in
-                                viewModel.verUnidad?.conocimientos[idx].seleccionado.toggle()
-                            }
-                        )
-                        
-                        // Actitudes
-                        curriculumCategorySection(
-                            title: "Actitudes",
-                            items: verUnidad.actitudes,
-                            newItemText: $newActitud,
-                            onAdd: {
-                                guard !newActitud.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-                                let newItem = ElementoCurricular(id: "act_custom_\(Date().timeIntervalSince1970)", texto: newActitud, seleccionado: true, esPropio: true)
-                                viewModel.verUnidad?.actitudes.append(newItem)
-                                newActitud = ""
-                            },
-                            onToggle: { idx in
-                                viewModel.verUnidad?.actitudes[idx].seleccionado.toggle()
-                            }
-                        )
-                    }
-                    .padding(16)
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                VStack(alignment: .leading, spacing: 16) {
+                    planUnidadCard(verUnidad)
+                    curriculoCard(verUnidad)
+                    rutaTrabajoCard(verUnidad)
+                    estadoUnidadCard(verUnidad)
+                    recursosEvaluacionCard(verUnidad)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)
             }
         } else {
             ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
-    
+
+    private func planUnidadCard(_ verUnidad: VerUnidadGuardada) -> some View {
+        EPWebCard {
+            VStack(alignment: .leading, spacing: 14) {
+                EPSectionHeader(title: "Plan de unidad", subtitle: "Propósito, contexto y meta docente compatibles con HTML web.", icon: "doc.text.fill")
+
+                RichTextEditor(
+                    title: "Propósito de la unidad",
+                    placeholder: "Describe qué aprenderán y producirán los estudiantes...",
+                    html: Binding(
+                        get: { viewModel.verUnidad?.descripcion ?? verUnidad.descripcion },
+                        set: { viewModel.verUnidad?.descripcion = $0 }
+                    ),
+                    minHeight: 112
+                )
+
+                RichTextEditor(
+                    title: "Contexto docente",
+                    placeholder: "Particularidades del curso, apoyos necesarios, clima, antecedentes...",
+                    html: Binding(
+                        get: { viewModel.verUnidad?.contextoDocente ?? verUnidad.contextoDocente },
+                        set: { viewModel.verUnidad?.contextoDocente = $0 }
+                    ),
+                    minHeight: 96
+                )
+
+                RichTextEditor(
+                    title: "Meta docente",
+                    placeholder: "Define qué evidencia esperas lograr al cierre de la unidad...",
+                    html: Binding(
+                        get: { viewModel.verUnidad?.objetivoDocente ?? verUnidad.objetivoDocente },
+                        set: { viewModel.verUnidad?.objetivoDocente = $0 }
+                    ),
+                    minHeight: 96
+                )
+            }
+        }
+    }
+
+    private func curriculoCard(_ verUnidad: VerUnidadGuardada) -> some View {
+        EPWebCard {
+            VStack(alignment: .leading, spacing: 14) {
+                EPSectionHeader(title: "Currículo seleccionado", subtitle: "\(verUnidad.oas.filter(\.seleccionado).count) objetivos priorizados.", icon: "checklist.checked")
+
+                if verUnidad.oas.isEmpty {
+                    Text("No hay objetivos asociados a esta unidad.")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(verUnidad.oas.enumerated()), id: \.element.id) { oIdx, oa in
+                        oaCard(oa: oa, oIdx: oIdx)
+                    }
+                }
+            }
+        }
+    }
+
+    private func oaCard(oa: OAEditado, oIdx: Int) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                viewModel.verUnidad?.oas[oIdx].seleccionado.toggle()
+            } label: {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: oa.seleccionado ? "checkmark.square.fill" : "square")
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(oa.seleccionado ? EPTheme.primary : .secondary)
+                        .padding(.top, 2)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 7) {
+                            Text(oa.numero != nil ? "OA \(oa.numero!)" : oa.id)
+                                .font(.subheadline.weight(.black))
+                                .foregroundStyle(.primary)
+                            if oa.esPropio == true {
+                                EPStatusPill(text: "Propio", icon: "pencil", tint: .purple)
+                            }
+                        }
+                        Text(oa.descripcion)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.leading)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+
+            if oa.seleccionado {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Indicadores de evaluación")
+                        .font(.caption.weight(.black))
+                        .foregroundStyle(.secondary)
+
+                    ForEach(Array(oa.indicadores.enumerated()), id: \.element.id) { iIdx, indicador in
+                        Button {
+                            viewModel.verUnidad?.oas[oIdx].indicadores[iIdx].seleccionado.toggle()
+                        } label: {
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: indicador.seleccionado ? "checkmark.circle.fill" : "circle")
+                                    .font(.footnote.weight(.bold))
+                                    .foregroundStyle(indicador.seleccionado ? EPTheme.primary : .secondary)
+                                Text(indicador.texto)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(indicador.seleccionado ? .primary : .secondary)
+                                    .multilineTextAlignment(.leading)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.leading, 28)
+            }
+        }
+        .padding(12)
+        .background(Color(.systemGray6).opacity(0.7), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func rutaTrabajoCard(_ verUnidad: VerUnidadGuardada) -> some View {
+        EPWebCard {
+            VStack(alignment: .leading, spacing: 14) {
+                EPSectionHeader(title: "Ruta de trabajo", subtitle: "Habilidades, conocimientos, actitudes y aprendizajes previos.", icon: "point.topleft.down.curvedto.point.bottomright.up")
+
+                curriculumCategorySection(
+                    title: "Habilidades",
+                    items: verUnidad.habilidades,
+                    newItemText: $newHabilidad,
+                    onAdd: {
+                        addCurriculumItem(text: newHabilidad, prefix: "hab") { item in
+                            viewModel.verUnidad?.habilidades.append(item)
+                            newHabilidad = ""
+                        }
+                    },
+                    onToggle: { idx in
+                        viewModel.verUnidad?.habilidades[idx].seleccionado.toggle()
+                    }
+                )
+
+                curriculumCategorySection(
+                    title: "Conocimientos",
+                    items: verUnidad.conocimientos,
+                    newItemText: $newConocimiento,
+                    onAdd: {
+                        addCurriculumItem(text: newConocimiento, prefix: "con") { item in
+                            viewModel.verUnidad?.conocimientos.append(item)
+                            newConocimiento = ""
+                        }
+                    },
+                    onToggle: { idx in
+                        viewModel.verUnidad?.conocimientos[idx].seleccionado.toggle()
+                    }
+                )
+
+                curriculumCategorySection(
+                    title: "Actitudes",
+                    items: verUnidad.actitudes,
+                    newItemText: $newActitud,
+                    onAdd: {
+                        addCurriculumItem(text: newActitud, prefix: "act") { item in
+                            viewModel.verUnidad?.actitudes.append(item)
+                            newActitud = ""
+                        }
+                    },
+                    onToggle: { idx in
+                        viewModel.verUnidad?.actitudes[idx].seleccionado.toggle()
+                    }
+                )
+
+                RichTextEditor(
+                    title: "Conocimientos previos",
+                    placeholder: "Registra antecedentes o aprendizajes previos del curso...",
+                    html: Binding(
+                        get: { viewModel.verUnidad?.conocimientosPrevios ?? "" },
+                        set: { viewModel.verUnidad?.conocimientosPrevios = $0 }
+                    ),
+                    minHeight: 86
+                )
+            }
+        }
+    }
+
+    private func estadoUnidadCard(_ verUnidad: VerUnidadGuardada) -> some View {
+        EPWebCard {
+            VStack(alignment: .leading, spacing: 12) {
+                EPSectionHeader(title: "Estado de unidad", subtitle: "Resumen de carga y selección curricular.", icon: "gauge.with.dots.needle.67percent")
+
+                let selectedOAs = verUnidad.oas.filter(\.seleccionado).count
+                let selectedIndicators = verUnidad.oas.flatMap(\.indicadores).filter(\.seleccionado).count
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    EPKPIBox(title: "Horas", value: "\(verUnidad.horas)", subtitle: "planificadas", icon: "clock.fill", tint: .blue)
+                    EPKPIBox(title: "Clases", value: "\(verUnidad.clases)", subtitle: "estimadas", icon: "calendar", tint: .purple)
+                    EPKPIBox(title: "OA", value: "\(selectedOAs)", subtitle: "seleccionados", icon: "checkmark.square.fill", tint: EPTheme.primary)
+                    EPKPIBox(title: "Indicadores", value: "\(selectedIndicators)", subtitle: "activos", icon: "list.bullet.clipboard", tint: .green)
+                }
+            }
+        }
+    }
+
+    private func recursosEvaluacionCard(_ verUnidad: VerUnidadGuardada) -> some View {
+        EPWebCard {
+            VStack(alignment: .leading, spacing: 16) {
+                EPSectionHeader(title: "Recursos y estrategias", subtitle: "Estructura nativa equivalente al sidebar web.", icon: "tray.full.fill")
+
+                VStack(alignment: .leading, spacing: 9) {
+                    Text("Recursos materiales")
+                        .font(.caption.weight(.black))
+                    ReplicaFlowLayout(spacing: 7) {
+                        ForEach(verUnidad.recursosMaterialesUnidad ?? [], id: \.self) { recurso in
+                            Text(recurso)
+                                .font(.caption.weight(.black))
+                                .foregroundStyle(.blue)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 6)
+                                .background(.blue.opacity(0.11), in: Capsule())
+                                .onLongPressGesture {
+                                    viewModel.verUnidad?.recursosMaterialesUnidad?.removeAll { $0 == recurso }
+                                }
+                        }
+                    }
+
+                    HStack(spacing: 8) {
+                        TextField("Agregar recurso...", text: $newResource)
+                            .font(.caption.weight(.semibold))
+                            .textFieldStyle(.roundedBorder)
+                        Button {
+                            let value = newResource.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !value.isEmpty else { return }
+                            if viewModel.verUnidad?.recursosMaterialesUnidad == nil {
+                                viewModel.verUnidad?.recursosMaterialesUnidad = []
+                            }
+                            viewModel.verUnidad?.recursosMaterialesUnidad?.append(value)
+                            newResource = ""
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.caption.weight(.black))
+                                .foregroundStyle(.white)
+                                .padding(7)
+                                .background(EPTheme.primary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 9) {
+                    Text("Estrategias de evaluación")
+                        .font(.caption.weight(.black))
+                    if let estrategias = verUnidad.estrategiasEvaluacion, !estrategias.isEmpty {
+                        ForEach(estrategias) { estrategia in
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .foregroundStyle(EPTheme.primary)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(estrategia.nombre)
+                                        .font(.footnote.weight(.black))
+                                    Text("\(estrategia.instrumento)\(estrategia.ponderacion != nil ? " · \(Int(estrategia.ponderacion!))%" : "")")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                            .padding(10)
+                            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                    } else {
+                        Text("Sin estrategias registradas todavía.")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let archivos = verUnidad.recursosMaterialesUnidadArchivos, !archivos.isEmpty {
+                    Divider()
+                    VStack(alignment: .leading, spacing: 9) {
+                        Text("Archivos adjuntos")
+                            .font(.caption.weight(.black))
+                        ForEach(archivos) { archivo in
+                            Label(archivo.nombre, systemImage: "paperclip")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private func curriculumCategorySection(
         title: String,
         items: [ElementoCurricular],
@@ -202,125 +320,61 @@ struct VerUnidadBaseView: View {
         onAdd: @escaping () -> Void,
         onToggle: @escaping (Int) -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 9) {
             Text(title)
-                .font(.caption.bold())
-            
-            // Flow/List of chips
-            FlowLayout(spacing: 8) {
+                .font(.caption.weight(.black))
+
+            ReplicaFlowLayout(spacing: 8) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
                     Button {
                         onToggle(idx)
                     } label: {
-                        HStack(spacing: 4) {
+                        HStack(spacing: 5) {
                             Text(item.texto)
-                                .font(.caption2)
+                                .font(.caption.weight(.black))
+                                .lineLimit(2)
                             if item.seleccionado {
                                 Image(systemName: "checkmark")
-                                    .font(.system(size: 8, weight: .bold))
+                                    .font(.system(size: 8, weight: .black))
                             }
                         }
+                        .foregroundStyle(item.seleccionado ? .white : EPTheme.ink)
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .foregroundStyle(item.seleccionado ? .white : Color(.label))
-                        .background(item.seleccionado ? Color(hex: "#F03E6E") : Color(.systemGray5), in: Capsule())
+                        .padding(.vertical, 7)
+                        .background(item.seleccionado ? EPTheme.primary : Color(.systemGray5), in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }
             }
-            
-            // Inline add field
+
             HStack(spacing: 8) {
                 TextField("Agregar propio...", text: newItemText)
-                    .font(.caption)
+                    .font(.caption.weight(.semibold))
                     .textFieldStyle(.roundedBorder)
-                
-                Button {
-                    onAdd()
-                } label: {
+
+                Button(action: onAdd) {
                     Image(systemName: "plus")
-                        .font(.caption.bold())
+                        .font(.caption.weight(.black))
                         .foregroundStyle(.white)
-                        .padding(6)
-                        .background(Color(hex: "#F03E6E"), in: RoundedRectangle(cornerRadius: 6))
+                        .padding(7)
+                        .background(EPTheme.primary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .disabled(newItemText.wrappedValue.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(newItemText.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            .padding(.top, 4)
         }
-        .padding(10)
-        .background(Color(.systemGray6).opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
-    }
-}
-
-// MARK: - FlowLayout Helper for wrapping chips
-struct FlowLayout: Layout {
-    var spacing: CGFloat
-
-    init(spacing: CGFloat = 8) {
-        self.spacing = spacing
+        .padding(12)
+        .background(Color(.systemGray6).opacity(0.55), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? 300
-        var height: CGFloat = 0
-        var currentX: CGFloat = 0
-        var currentY: CGFloat = 0
-        var maxHeightInRow: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if currentX + size.width > width {
-                currentX = 0
-                currentY += maxHeightInRow + spacing
-                maxHeightInRow = 0
-            }
-            maxHeightInRow = max(maxHeightInRow, size.height)
-            currentX += size.width + spacing
-        }
-        height = currentY + maxHeightInRow
-        return CGSize(width: width, height: height)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let width = bounds.width
-        var currentX: CGFloat = bounds.minX
-        var currentY: CGFloat = bounds.minY
-        var maxHeightInRow: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if currentX + size.width > bounds.maxX {
-                currentX = bounds.minX
-                currentY += maxHeightInRow + spacing
-                maxHeightInRow = 0
-            }
-            subview.place(at: CGPoint(x: currentX, y: currentY), proposal: ProposedViewSize(size))
-            maxHeightInRow = max(maxHeightInRow, size.height)
-            currentX += size.width + spacing
-        }
-    }
-}
-
-// Color Hex Helper (if not globally declared)
-private extension Color {
-    init(hex: String) {
-        let clean = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        guard clean.count == 6 else {
-            self = .pink
-            return
-        }
-
-        var value: UInt64 = 0
-        guard Scanner(string: clean).scanHexInt64(&value) else {
-            self = .pink
-            return
-        }
-
-        let red = Double((value >> 16) & 0xFF) / 255.0
-        let green = Double((value >> 8) & 0xFF) / 255.0
-        let blue = Double(value & 0xFF) / 255.0
-        self.init(red: red, green: green, blue: blue)
+    private func addCurriculumItem(text: String, prefix: String, append: (ElementoCurricular) -> Void) {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        append(ElementoCurricular(
+            id: "\(prefix)_custom_\(Int(Date().timeIntervalSince1970))",
+            texto: value,
+            seleccionado: true,
+            esPropio: true
+        ))
     }
 }

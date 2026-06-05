@@ -2,269 +2,272 @@ import SwiftUI
 
 struct VerUnidadCronogramaView: View {
     var viewModel: VerUnidadViewModel
-    @Binding var selectedTab: String // switches to "clases" when selecting a class
+    @Binding var selectedTab: String
 
-    @State private var isMatrixMode = false
+    @State private var isMatrixMode = true
     @State private var classToEditOas: ClaseCronograma? = nil
     @State private var showingOaSheet = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Control Header Bar
-            HStack {
-                Button {
-                    Task { await viewModel.calculateDatesFromSchedule() }
-                } label: {
-                    Label("Calcular Fechas", systemImage: "calendar.badge.clock")
-                        .font(.caption.bold())
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color(.systemGray6), in: Capsule())
+        if let crono = viewModel.cronograma {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    controlsCard(crono)
+                    coverageCard(crono)
+
+                    if isMatrixMode {
+                        matrixEditor(crono)
+                    } else {
+                        sequenceList(crono)
+                    }
                 }
-                
-                Spacer()
-                
-                // Matrix/List Toggle
-                Button {
-                    isMatrixMode.toggle()
-                } label: {
-                    Label(isMatrixMode ? "Vista Secuencia" : "Vista Matriz", systemImage: isMatrixMode ? "list.bullet" : "grid")
-                        .font(.caption.bold())
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color(.systemGray6), in: Capsule())
+                .padding(.horizontal, 16)
+                .padding(.vertical, 16)
+            }
+            .sheet(isPresented: $showingOaSheet) {
+                if let cl = classToEditOas {
+                    oaSelectorSheet(for: cl)
+                        .presentationDetents([.medium, .large])
                 }
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(Color(hex: "#F03E6E"))
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(Color(.secondarySystemGroupedBackground))
-            .border(width: 1, edges: [.bottom], color: Color(.separator).opacity(0.15))
-            
-            // Content List / Grid
-            if let crono = viewModel.cronograma {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        if isMatrixMode {
-                            matrixEditor(crono)
-                        } else {
-                            sequenceList(crono)
-                        }
+        } else {
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func controlsCard(_ crono: CronogramaUnidadData) -> some View {
+        EPWebCard {
+            VStack(alignment: .leading, spacing: 14) {
+                EPSectionHeader(title: "Cronograma de unidad", subtitle: "\(safeClassNumbers(crono).count) clases y \(selectedOAs.count) OA activos.", icon: "calendar")
+
+                HStack(spacing: 8) {
+                    Button {
+                        Task { await viewModel.calculateDatesFromSchedule() }
+                    } label: {
+                        Label("Calcular fechas", systemImage: "calendar.badge.clock")
+                            .font(.caption.weight(.black))
+                            .foregroundStyle(EPTheme.primary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(EPTheme.primary.opacity(0.1), in: Capsule())
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 16)
+
+                    Button {
+                        isMatrixMode.toggle()
+                    } label: {
+                        Label(isMatrixMode ? "Vista secuencia" : "Vista matriz", systemImage: isMatrixMode ? "list.bullet" : "grid")
+                            .font(.caption.weight(.black))
+                            .foregroundStyle(EPTheme.primary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(EPTheme.primary.opacity(0.1), in: Capsule())
+                    }
+
+                    Spacer(minLength: 0)
                 }
-            } else {
-                ProgressView()
+                .buttonStyle(.plain)
             }
         }
-        .sheet(isPresented: $showingOaSheet, content: {
-            if let cl = classToEditOas {
-                oaSelectorSheet(for: cl)
-            }
-        })
     }
-    
-    // MARK: - Sequence List View
-    
+
+    private func coverageCard(_ crono: CronogramaUnidadData) -> some View {
+        let total = safeClassNumbers(crono).count
+        let withOAs = crono.clases.filter { !$0.oaIds.isEmpty }.count
+        let percent = total > 0 ? Int((Double(withOAs) / Double(total)) * 100) : 0
+        let unassigned = max(0, total - withOAs)
+
+        return EPWebCard {
+            VStack(alignment: .leading, spacing: 12) {
+                EPSectionHeader(title: "Resumen de cobertura", subtitle: "Asignación de OA por clase.", icon: "checkmark.seal.fill")
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    EPKPIBox(title: "Clases", value: "\(total)", subtitle: "en secuencia", icon: "number.square.fill", tint: .blue)
+                    EPKPIBox(title: "Con OA", value: "\(withOAs)", subtitle: "clases cubiertas", icon: "checkmark.circle.fill", tint: .green)
+                    EPKPIBox(title: "Sin OA", value: "\(unassigned)", subtitle: "por asignar", icon: "exclamationmark.triangle.fill", tint: .orange)
+                    EPKPIBox(title: "Cobertura", value: "\(percent)%", subtitle: "avance matriz", icon: "chart.bar.fill", tint: percent >= 80 ? .green : EPTheme.primary)
+                }
+
+                if unassigned > 0 {
+                    Label("\(unassigned) clases aún no tienen OA asignados.", systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.orange)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+            }
+        }
+    }
+
     private func sequenceList(_ crono: CronogramaUnidadData) -> some View {
         VStack(spacing: 12) {
-            ForEach(Array(crono.clases.enumerated()), id: \.element.numero) { idx, clase in
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Clase \(clase.numero)")
-                                .font(.headline)
-                            
-                            // Date field
-                            HStack(spacing: 4) {
-                                Image(systemName: "calendar")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                
-                                TextField("DD/MM/YYYY", text: Binding(
-                                    get: { clase.fecha },
-                                    set: { val in
-                                        if viewModel.cronograma != nil {
-                                            viewModel.cronograma!.clases[idx].fecha = val
-                                        }
-                                    }
-                                ))
-                                .font(.caption)
-                                .frame(width: 90)
-                                .textFieldStyle(.plain)
-                            }
-                        }
-                        
-                        Spacer()
-                        
-                        // Action buttons
-                        HStack(spacing: 8) {
-                            Button {
-                                classToEditOas = clase
-                                showingOaSheet = true
-                            } label: {
-                                Label("OAs", systemImage: "tag")
-                                    .font(.caption.bold())
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(Color(.systemGray6), in: Capsule())
-                            }
-                            
-                            Button {
-                                // Switch tab to Clases editor
-                                selectedTab = "clases"
-                            } label: {
-                                Label("Planificar", systemImage: "chevron.right")
-                                    .font(.caption.bold())
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(Color(hex: "#F03E6E").opacity(0.1), in: Capsule())
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(Color(hex: "#F03E6E"))
-                    }
-                    
-                    // Display current assigned OAs
-                    if !clase.oaIds.isEmpty {
-                        Divider()
-                        HStack(spacing: 6) {
-                            Text("OAs:")
-                                .font(.caption2.bold())
-                                .foregroundStyle(.secondary)
-                            
-                            ForEach(clase.oaIds, id: \.self) { oaId in
-                                Text(oaId)
-                                    .font(.system(size: 9, weight: .bold))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Color.pink.opacity(0.1), in: Capsule())
-                                    .foregroundStyle(Color(hex: "#F03E6E"))
-                            }
-                        }
-                    }
-                }
-                .padding(14)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            ForEach(Array(crono.clases.sorted { $0.numero < $1.numero }.enumerated()), id: \.element.numero) { _, clase in
+                claseRow(clase)
             }
         }
     }
-    
-    // MARK: - Matrix Grid Editor
-    
+
+    private func claseRow(_ clase: ClaseCronograma) -> some View {
+        EPWebCard {
+            VStack(alignment: .leading, spacing: 11) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Clase \(clase.numero)")
+                            .font(.headline.weight(.black))
+                        HStack(spacing: 6) {
+                            Image(systemName: "calendar")
+                                .font(.caption2.weight(.black))
+                                .foregroundStyle(.secondary)
+                            TextField("DD/MM/YYYY", text: Binding(
+                                get: { viewModel.cronograma?.clases.first(where: { $0.numero == clase.numero })?.fecha ?? clase.fecha },
+                                set: { value in
+                                    if let idx = viewModel.cronograma?.clases.firstIndex(where: { $0.numero == clase.numero }) {
+                                        viewModel.cronograma?.clases[idx].fecha = value
+                                    }
+                                }
+                            ))
+                            .font(.caption.weight(.semibold))
+                            .textFieldStyle(.plain)
+                        }
+                    }
+
+                    Spacer()
+
+                    HStack(spacing: 8) {
+                        Button {
+                            classToEditOas = clase
+                            showingOaSheet = true
+                        } label: {
+                            actionLabel("OAs", icon: "tag")
+                        }
+
+                        Button {
+                            selectedTab = "clases"
+                        } label: {
+                            actionLabel("Planificar", icon: "chevron.right")
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if clase.oaIds.isEmpty {
+                    EPStatusPill(text: "Sin OA asignado", icon: "exclamationmark.triangle.fill", tint: .orange)
+                } else {
+                    ReplicaFlowLayout(spacing: 6) {
+                        ForEach(clase.oaIds, id: \.self) { oaId in
+                            EPStatusPill(text: oaId, icon: "checkmark", tint: EPTheme.primary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private func matrixEditor(_ crono: CronogramaUnidadData) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("MATRIZ DE DISTRIBUCIÓN CURRICULAR")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.secondary)
-            
-            if let verUnidad = viewModel.verUnidad {
-                let oas = verUnidad.oas.filter(\.seleccionado)
-                
-                if oas.isEmpty {
+        EPWebCard {
+            VStack(alignment: .leading, spacing: 14) {
+                EPSectionHeader(title: "Matriz de distribución curricular", subtitle: "Toca una celda para asignar o quitar OA.", icon: "grid")
+
+                if selectedOAs.isEmpty {
                     Text("Habilita objetivos de aprendizaje en la pestaña Unidad primero.")
-                        .font(.caption.italic())
+                        .font(.footnote.weight(.semibold))
                         .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 18)
                 } else {
                     ScrollView(.horizontal, showsIndicators: true) {
                         VStack(alignment: .leading, spacing: 10) {
-                            // Column Headers: Clases
                             HStack(spacing: 0) {
                                 Text("Objetivo")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .frame(width: 80, alignment: .leading)
-                                
-                                ForEach(1...crono.totalClases, id: \.self) { cNum in
+                                    .font(.system(size: 10, weight: .black))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 116, alignment: .leading)
+
+                                ForEach(safeClassNumbers(crono), id: \.self) { cNum in
                                     Text("C\(cNum)")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .frame(width: 34, alignment: .center)
+                                        .font(.system(size: 10, weight: .black))
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 42)
                                 }
                             }
-                            .padding(.bottom, 4)
-                            
-                            // Rows: OAs
-                            ForEach(oas, id: \.id) { oa in
+
+                            ForEach(selectedOAs, id: \.id) { oa in
                                 HStack(spacing: 0) {
-                                    Text(oa.numero != nil ? "OA \(oa.numero!)" : oa.id)
-                                        .font(.system(size: 11, weight: .bold))
-                                        .frame(width: 80, alignment: .leading)
-                                    
-                                    ForEach(1...crono.totalClases, id: \.self) { cNum in
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(oa.numero != nil ? "OA \(oa.numero!)" : oa.id)
+                                            .font(.caption.weight(.black))
+                                        Text(oa.descripcion)
+                                            .font(.system(size: 9, weight: .medium))
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(2)
+                                    }
+                                    .frame(width: 116, alignment: .leading)
+
+                                    ForEach(safeClassNumbers(crono), id: \.self) { cNum in
                                         let isAssigned = isOaAssigned(oaId: oa.id, classNum: cNum)
-                                        
                                         Button {
                                             toggleOaAssignment(oaId: oa.id, classNum: cNum)
                                         } label: {
                                             Image(systemName: isAssigned ? "checkmark.circle.fill" : "circle")
-                                                .foregroundStyle(isAssigned ? Color(hex: "#F03E6E") : Color(.separator))
-                                                .font(.body)
-                                                .frame(width: 34, height: 26)
+                                                .font(.body.weight(.bold))
+                                                .foregroundStyle(isAssigned ? EPTheme.primary : Color(.separator))
+                                                .frame(width: 42, height: 34)
                                         }
                                         .buttonStyle(.plain)
                                     }
                                 }
+                                .padding(.vertical, 6)
+                                .background(Color(.systemGray6).opacity(0.45), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                             }
                         }
-                        .padding(10)
+                        .padding(.bottom, 4)
                     }
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
                 }
             }
         }
     }
-    
-    // MARK: - OA Selector Sheet
-    
+
     private func oaSelectorSheet(for clase: ClaseCronograma) -> some View {
         NavigationStack {
             List {
-                if let verUnidad = viewModel.verUnidad {
-                    let oas = verUnidad.oas.filter(\.seleccionado)
-                    
-                    if oas.isEmpty {
-                        Text("No hay OAs seleccionados en esta unidad.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(oas, id: \.id) { oa in
-                            let isChecked = (classToEditOas?.oaIds.contains(oa.id)) ?? false
-                            
-                            Button {
-                                toggleSheetOa(oaId: oa.id)
-                            } label: {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(oa.numero != nil ? "OA \(oa.numero!)" : oa.id)
-                                            .font(.subheadline.bold())
-                                        Text(oa.descripcion)
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(2)
-                                    }
-                                    Spacer()
-                                    Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
-                                        .foregroundStyle(isChecked ? Color(hex: "#F03E6E") : .secondary)
+                if selectedOAs.isEmpty {
+                    Text("No hay OAs seleccionados en esta unidad.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(selectedOAs, id: \.id) { oa in
+                        let isChecked = classToEditOas?.oaIds.contains(oa.id) ?? false
+                        Button {
+                            toggleSheetOa(oaId: oa.id)
+                        } label: {
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(oa.numero != nil ? "OA \(oa.numero!)" : oa.id)
+                                        .font(.subheadline.weight(.black))
+                                    Text(oa.descripcion)
+                                        .font(.caption.weight(.medium))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(3)
                                 }
+                                Spacer()
+                                Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(isChecked ? EPTheme.primary : .secondary)
                             }
-                            .buttonStyle(.plain)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
             }
-            .navigationTitle("Asignar OAs a Clase \(clase.numero)")
+            .navigationTitle("Asignar OAs a clase \(clase.numero)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Listo") {
-                        // Save sheet edits back to viewModel
                         if let updated = classToEditOas,
                            let idx = viewModel.cronograma?.clases.firstIndex(where: { $0.numero == updated.numero }) {
-                            viewModel.cronograma!.clases[idx].oaIds = updated.oaIds
-                            Task {
-                                await viewModel.saveAll()
-                            }
+                            viewModel.cronograma?.clases[idx].oaIds = updated.oaIds
+                            Task { await viewModel.saveAll() }
                         }
                         showingOaSheet = false
                     }
@@ -272,120 +275,55 @@ struct VerUnidadCronogramaView: View {
             }
         }
     }
-    
-    // MARK: - Helpers
+
+    private var selectedOAs: [OAEditado] {
+        viewModel.verUnidad?.oas.filter(\.seleccionado) ?? []
+    }
+
+    private func actionLabel(_ title: String, icon: String) -> some View {
+        Label(title, systemImage: icon)
+            .font(.caption.weight(.black))
+            .foregroundStyle(EPTheme.primary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(EPTheme.primary.opacity(0.1), in: Capsule())
+    }
+
+    private func safeClassNumbers(_ crono: CronogramaUnidadData) -> [Int] {
+        let maxNumber = max(crono.totalClases, crono.clases.map(\.numero).max() ?? 0)
+        guard maxNumber > 0 else { return [] }
+        return Array(1...maxNumber)
+    }
 
     private func isOaAssigned(oaId: String, classNum: Int) -> Bool {
-        guard let crono = viewModel.cronograma else { return false }
-        return crono.clases.first(where: { $0.numero == classNum })?.oaIds.contains(oaId) ?? false
+        viewModel.cronograma?.clases.first(where: { $0.numero == classNum })?.oaIds.contains(oaId) ?? false
     }
 
     private func toggleOaAssignment(oaId: String, classNum: Int) {
         guard var crono = viewModel.cronograma else { return }
+
         if let idx = crono.clases.firstIndex(where: { $0.numero == classNum }) {
             if crono.clases[idx].oaIds.contains(oaId) {
                 crono.clases[idx].oaIds.removeAll { $0 == oaId }
             } else {
                 crono.clases[idx].oaIds.append(oaId)
             }
-            viewModel.cronograma = crono
-            
-            // Trigger autosave
-            Task {
-                await viewModel.saveAll()
-            }
+        } else {
+            crono.clases.append(ClaseCronograma(numero: classNum, fecha: "", oaIds: [oaId]))
+            crono.totalClases = max(crono.totalClases, classNum)
         }
+
+        viewModel.cronograma = crono
+        Task { await viewModel.saveAll() }
     }
 
     private func toggleSheetOa(oaId: String) {
-        guard var cl = classToEditOas else { return }
-        if cl.oaIds.contains(oaId) {
-            cl.oaIds.removeAll { $0 == oaId }
+        guard var clase = classToEditOas else { return }
+        if clase.oaIds.contains(oaId) {
+            clase.oaIds.removeAll { $0 == oaId }
         } else {
-            cl.oaIds.append(oaId)
+            clase.oaIds.append(oaId)
         }
-        classToEditOas = cl
-    }
-}
-
-// Color Hex Helper (if not globally declared)
-private extension Color {
-    init(hex: String) {
-        let clean = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        guard clean.count == 6 else {
-            self = .pink
-            return
-        }
-
-        var value: UInt64 = 0
-        guard Scanner(string: clean).scanHexInt64(&value) else {
-            self = .pink
-            return
-        }
-
-        let red = Double((value >> 16) & 0xFF) / 255.0
-        let green = Double((value >> 8) & 0xFF) / 255.0
-        let blue = Double(value & 0xFF) / 255.0
-        self.init(red: red, green: green, blue: blue)
-    }
-}
-
-// Border Modifier
-private struct BorderModifier: ViewModifier {
-    var width: CGFloat
-    var edges: [Edge]
-    var color: Color
-
-    func body(content: Content) -> some View {
-        content.overlay(
-            GeometryReader { geometry in
-                ZStack {
-                    ForEach(edges, id: \.self) { edge in
-                        self.border(edge: edge, geometry: geometry)
-                    }
-                }
-            }
-        )
-    }
-
-    private func border(edge: Edge, geometry: GeometryProxy) -> some View {
-        let x: CGFloat
-        let y: CGFloat
-        let w: CGFloat
-        let h: CGFloat
-
-        switch edge {
-        case .top:
-            x = 0
-            y = 0
-            w = geometry.size.width
-            h = width
-        case .bottom:
-            x = 0
-            y = geometry.size.height - width
-            w = geometry.size.width
-            h = width
-        case .leading:
-            x = 0
-            y = 0
-            w = width
-            h = geometry.size.height
-        case .trailing:
-            x = geometry.size.width - width
-            y = 0
-            w = width
-            h = geometry.size.height
-        }
-
-        return Rectangle()
-            .fill(color)
-            .frame(width: w, height: h)
-            .offset(x: x, y: y)
-    }
-}
-
-private extension View {
-    func border(width: CGFloat, edges: [Edge], color: Color) -> some View {
-        modifier(BorderModifier(width: width, edges: edges, color: color))
+        classToEditOas = clase
     }
 }

@@ -6,6 +6,7 @@ import Observation
 final class PlanificacionesViewModel {
     var snapshot: DashboardSnapshot?
     var planes: [PlanificacionCurso] = []
+    var cronogramasByUnit: [String: CronogramaUnidadData] = [:]
     var isLoading = false
     var errorMessage: String? = nil
     
@@ -29,14 +30,18 @@ final class PlanificacionesViewModel {
 
             do {
                 let subject = subject(from: snap)
-                self.planes = try await planificacionRepository.listarPlanesCurso(asignatura: subject)
+                let loadedPlanes = try await planificacionRepository.listarPlanesCurso(asignatura: subject)
+                self.planes = loadedPlanes
+                self.cronogramasByUnit = await planificacionRepository.cargarCronogramas(asignatura: subject, planes: loadedPlanes)
             } catch {
                 self.planes = []
+                self.cronogramasByUnit = [:]
                 self.errorMessage = "No se pudieron cargar las planificaciones guardadas. Puedes seguir viendo tus cursos."
             }
         } catch {
             self.snapshot = nil
             self.planes = []
+            self.cronogramasByUnit = [:]
             self.errorMessage = error.localizedDescription
         }
     }

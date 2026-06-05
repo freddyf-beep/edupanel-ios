@@ -138,6 +138,178 @@ struct EstrategiaEvaluacionUnidad: Codable, Hashable, Identifiable {
     var ponderacion: Double?
 }
 
+struct ArchivoAdjunto: Codable, Hashable, Identifiable {
+    var id: String
+    var nombre: String
+    var url: String
+    var storagePath: String? = nil
+    var tipo: String? = nil
+    var tamano: Double? = nil
+    var subidoEn: String? = nil
+    var provider: String? = nil
+    var driveFileId: String? = nil
+    var driveFolderId: String? = nil
+    var webViewLink: String? = nil
+    var previewUrl: String? = nil
+    var syncedAt: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case nombre
+        case url
+        case storagePath
+        case tipo
+        case tamano = "tama\u{00F1}o"
+        case subidoEn
+        case provider
+        case driveFileId
+        case driveFolderId
+        case webViewLink
+        case previewUrl
+        case syncedAt
+    }
+
+    init(
+        id: String,
+        nombre: String,
+        url: String,
+        storagePath: String? = nil,
+        tipo: String? = nil,
+        tamano: Double? = nil,
+        subidoEn: String? = nil,
+        provider: String? = nil,
+        driveFileId: String? = nil,
+        driveFolderId: String? = nil,
+        webViewLink: String? = nil,
+        previewUrl: String? = nil,
+        syncedAt: String? = nil
+    ) {
+        self.id = id
+        self.nombre = nombre
+        self.url = url
+        self.storagePath = storagePath
+        self.tipo = tipo
+        self.tamano = tamano
+        self.subidoEn = subidoEn
+        self.provider = provider
+        self.driveFileId = driveFileId
+        self.driveFolderId = driveFolderId
+        self.webViewLink = webViewLink
+        self.previewUrl = previewUrl
+        self.syncedAt = syncedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? container.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        nombre = (try? container.decode(String.self, forKey: .nombre)) ?? "Archivo"
+        url = (try? container.decode(String.self, forKey: .url)) ?? ""
+        storagePath = try? container.decode(String.self, forKey: .storagePath)
+        tipo = try? container.decode(String.self, forKey: .tipo)
+        tamano = (try? container.decode(Double.self, forKey: .tamano)) ?? (try? Double(container.decode(Int.self, forKey: .tamano)))
+        subidoEn = try? container.decode(String.self, forKey: .subidoEn)
+        provider = try? container.decode(String.self, forKey: .provider)
+        driveFileId = try? container.decode(String.self, forKey: .driveFileId)
+        driveFolderId = try? container.decode(String.self, forKey: .driveFolderId)
+        webViewLink = try? container.decode(String.self, forKey: .webViewLink)
+        previewUrl = try? container.decode(String.self, forKey: .previewUrl)
+        syncedAt = try? container.decode(String.self, forKey: .syncedAt)
+    }
+}
+
+struct ActividadDocente: Codable, Hashable, Identifiable {
+    var id: String
+    var titulo: String
+    var descripcion: String? = nil
+    var tipo: String? = nil
+    var duracion: Int? = nil
+    var momento: String? = nil
+    var recursos: [String]? = nil
+
+    init(id: String, titulo: String, descripcion: String? = nil, tipo: String? = nil, duracion: Int? = nil, momento: String? = nil, recursos: [String]? = nil) {
+        self.id = id
+        self.titulo = titulo
+        self.descripcion = descripcion
+        self.tipo = tipo
+        self.duracion = duracion
+        self.momento = momento
+        self.recursos = recursos
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? container.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        titulo = (try? container.decode(String.self, forKey: .titulo)) ?? "Actividad"
+        descripcion = try? container.decode(String.self, forKey: .descripcion)
+        tipo = try? container.decode(String.self, forKey: .tipo)
+        duracion = try? container.decode(Int.self, forKey: .duracion)
+        momento = try? container.decode(String.self, forKey: .momento)
+        recursos = try? container.decode([String].self, forKey: .recursos)
+    }
+}
+
+struct AnalisisBloom: Codable, Hashable, Identifiable {
+    var id: String
+    var nivel: String? = nil
+    var evidencia: String? = nil
+    var sugerencia: String? = nil
+
+    init(id: String, nivel: String? = nil, evidencia: String? = nil, sugerencia: String? = nil) {
+        self.id = id
+        self.nivel = nivel
+        self.evidencia = evidencia
+        self.sugerencia = sugerencia
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? container.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        nivel = try? container.decode(String.self, forKey: .nivel)
+        evidencia = try? container.decode(String.self, forKey: .evidencia)
+        sugerencia = try? container.decode(String.self, forKey: .sugerencia)
+    }
+}
+
+struct ObjetivoMultinivel: Codable, Hashable {
+    var basico: String? = nil
+    var intermedio: String? = nil
+    var avanzado: String? = nil
+}
+
+struct IndicadorEvaluacion: Codable, Hashable, Identifiable {
+    var id: String
+    var texto: String
+    var oaId: String? = nil
+    var seleccionado: Bool? = nil
+
+    init(id: String, texto: String, oaId: String? = nil, seleccionado: Bool? = nil) {
+        self.id = id
+        self.texto = texto
+        self.oaId = oaId
+        self.seleccionado = seleccionado
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? container.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        texto = (try? container.decode(String.self, forKey: .texto)) ?? ""
+        oaId = try? container.decode(String.self, forKey: .oaId)
+        seleccionado = try? container.decode(Bool.self, forKey: .seleccionado)
+    }
+}
+
+struct ActividadEvaluacion: Codable, Hashable {
+    var tipo: String? = nil
+    var descripcion: String? = nil
+    var instrumento: String? = nil
+}
+
+struct DesarrolloFormal: Codable, Hashable {
+    var inicio: String? = nil
+    var desarrollo: String? = nil
+    var cierre: String? = nil
+}
+
 struct VerUnidadGuardada: Codable, Hashable {
     var asignatura: String
     var curso: String
@@ -153,7 +325,9 @@ struct VerUnidadGuardada: Codable, Hashable {
     var actitudes: [ElementoCurricular]
     var conocimientosPrevios: String?
     var recursosMaterialesUnidad: [String]?
+    var recursosMaterialesUnidadArchivos: [ArchivoAdjunto]? = nil
     var estrategiasEvaluacion: [EstrategiaEvaluacionUnidad]?
+    var actividades: [ActividadDocente]? = nil
 }
 
 // MARK: - Cronograma
@@ -191,8 +365,14 @@ struct ActividadClase: Codable, Hashable, Identifiable {
     var actitudes: [String]
     var materiales: [String]
     var tics: [String]
+    var archivos: [ArchivoAdjunto]? = nil
     var estado: String // "no_planificada", "planificada", "realizada"
     var sincronizada: Bool
     var contextoProfesor: String?
+    var analisisBloom: [AnalisisBloom]? = nil
+    var objetivoMultinivel: ObjetivoMultinivel? = nil
+    var indicadoresEvaluacion: [IndicadorEvaluacion]? = nil
+    var actividadEvaluacion: ActividadEvaluacion? = nil
+    var desarrolloFormal: DesarrolloFormal? = nil
     var indicadoresPorOa: [String: [String]]?
 }

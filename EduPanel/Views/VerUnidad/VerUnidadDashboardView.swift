@@ -6,9 +6,15 @@ struct VerUnidadDashboardView: View {
     let unidadNombre: String
     let dashboardRepository: DashboardRepository
     let planificacionRepository: PlanificacionRepository
-    
+
     @State private var viewModel: VerUnidadViewModel
-    @State private var selectedTab: String // "unidad", "cronograma", "clases"
+    @State private var selectedTab: String
+
+    private let tabs = [
+        EPWebTab(id: "unidad", title: "Unidad", icon: "text.alignleft"),
+        EPWebTab(id: "cronograma", title: "Cronograma", icon: "calendar"),
+        EPWebTab(id: "clases", title: "Clases", icon: "book.closed")
+    ]
 
     init(curso: String, unidadId: String, unidadNombre: String, initialTab: String, dashboardRepository: DashboardRepository, planificacionRepository: PlanificacionRepository) {
         self.curso = curso
@@ -25,22 +31,16 @@ struct VerUnidadDashboardView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Segments tab bar
-            Picker("Sección", selection: $selectedTab) {
-                Text("Unidad").tag("unidad")
-                Text("Cronograma").tag("cronograma")
-                Text("Clases").tag("clases")
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(Color(.secondarySystemGroupedBackground))
-            .border(width: 1, edges: [.bottom], color: Color(.separator).opacity(0.15))
-            
-            // Content
+            header
+
             if viewModel.isLoading {
-                ProgressView("Cargando detalles...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text("Cargando detalles...")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 Group {
                     switch selectedTab {
@@ -62,111 +62,78 @@ struct VerUnidadDashboardView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                HStack(spacing: 8) {
-                    if !viewModel.saveStatus.isEmpty {
-                        Text(viewModel.saveStatus)
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(viewModel.saveStatus.contains("Error") ? .red : .gray, in: Capsule())
+                Button {
+                    Task { await viewModel.saveAll() }
+                } label: {
+                    if viewModel.isSaving {
+                        ProgressView()
+                    } else {
+                        Label("Guardar", systemImage: "square.and.arrow.down.fill")
+                            .labelStyle(.iconOnly)
+                            .foregroundStyle(EPTheme.primary)
                     }
-                    
-                    Button {
-                        Task { await viewModel.saveAll() }
-                    } label: {
-                        Text("Guardar")
-                            .font(.subheadline.bold())
-                            .foregroundStyle(Color(hex: "#F03E6E"))
-                    }
-                    .disabled(viewModel.isSaving)
                 }
+                .disabled(viewModel.isSaving)
+                .accessibilityLabel("Guardar unidad")
             }
         }
         .task {
             await viewModel.load(curso: curso, unidadId: unidadId)
         }
     }
-}
 
-// Private separator helper
-private struct BorderModifier: ViewModifier {
-    var width: CGFloat
-    var edges: [Edge]
-    var color: Color
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Circle()
+                    .fill(EPTheme.primary)
+                    .frame(width: 12, height: 12)
+                    .padding(.top, 5)
 
-    func body(content: Content) -> some View {
-        content.overlay(
-            GeometryReader { geometry in
-                ZStack {
-                    ForEach(edges, id: \.self) { edge in
-                        self.border(edge: edge, geometry: geometry)
-                    }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(viewModel.activeSubject.uppercased()) · \(curso.uppercased())")
+                        .font(.system(size: 10, weight: .black))
+                        .tracking(1.0)
+                        .foregroundStyle(EPTheme.primary)
+                    Text(unidadNombre)
+                        .font(.headline.weight(.black))
+                        .lineLimit(2)
+                    Text(headerSubtitle)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 8)
+
+                if !viewModel.saveStatus.isEmpty {
+                    EPStatusPill(
+                        text: viewModel.saveStatus,
+                        icon: viewModel.saveStatus.contains("Error") ? "xmark.octagon.fill" : "checkmark.circle.fill",
+                        tint: viewModel.saveStatus.contains("Error") ? .red : .green
+                    )
+                } else {
+                    EPStatusPill(text: "V3", icon: "sparkles", tint: EPTheme.primary)
                 }
             }
-        )
+
+            EPWebTabBar(tabs: tabs, selected: $selectedTab)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
+        .background(EPTheme.card)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color(.separator).opacity(0.16))
+                .frame(height: 1)
+        }
     }
 
-    private func border(edge: Edge, geometry: GeometryProxy) -> some View {
-        let x: CGFloat
-        let y: CGFloat
-        let w: CGFloat
-        let h: CGFloat
-
-        switch edge {
-        case .top:
-            x = 0
-            y = 0
-            w = geometry.size.width
-            h = width
-        case .bottom:
-            x = 0
-            y = geometry.size.height - width
-            w = geometry.size.width
-            h = width
-        case .leading:
-            x = 0
-            y = 0
-            w = width
-            h = geometry.size.height
-        case .trailing:
-            x = geometry.size.width - width
-            y = 0
-            w = width
-            h = geometry.size.height
+    private var headerSubtitle: String {
+        guard let verUnidad = viewModel.verUnidad, let crono = viewModel.cronograma else {
+            return "Plan de unidad, cronograma y clases"
         }
-
-        return Rectangle()
-            .fill(color)
-            .frame(width: w, height: h)
-            .offset(x: x, y: y)
-    }
-}
-
-private extension View {
-    func border(width: CGFloat, edges: [Edge], color: Color) -> some View {
-        modifier(BorderModifier(width: width, edges: edges, color: color))
-    }
-}
-
-// Color Hex Helper (if not globally declared)
-private extension Color {
-    init(hex: String) {
-        let clean = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        guard clean.count == 6 else {
-            self = .pink
-            return
-        }
-
-        var value: UInt64 = 0
-        guard Scanner(string: clean).scanHexInt64(&value) else {
-            self = .pink
-            return
-        }
-
-        let red = Double((value >> 16) & 0xFF) / 255.0
-        let green = Double((value >> 8) & 0xFF) / 255.0
-        let blue = Double(value & 0xFF) / 255.0
-        self.init(red: red, green: green, blue: blue)
+        let selectedOAs = verUnidad.oas.filter(\.seleccionado).count
+        return "\(verUnidad.horas) horas · \(crono.totalClases) clases · \(selectedOAs) OA seleccionados"
     }
 }

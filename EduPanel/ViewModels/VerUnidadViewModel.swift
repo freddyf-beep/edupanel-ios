@@ -11,7 +11,7 @@ final class VerUnidadViewModel {
     var clasesActividades: [Int: ActividadClase] = [:] // key: numeroClase
     var snapshot: DashboardSnapshot? = nil
     
-    var activeSubject = "Música"
+    var activeSubject = "M\u{00FA}sica"
     var curso = ""
     var unidadId = ""
     
@@ -36,7 +36,9 @@ final class VerUnidadViewModel {
         do {
             let snap = try await dashboardRepository.fetchDashboard()
             self.snapshot = snap
-            self.activeSubject = snap.preferences.asignaturasHabilitadas.first ?? "Música"
+            self.activeSubject = snap.preferences.asignaturasHabilitadas
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .first(where: { !$0.isEmpty }) ?? "M\u{00FA}sica"
             
             // 1. Load Pedagogical info
             if let saved = try await planificacionRepository.cargarVerUnidad(asignatura: activeSubject, curso: curso, unidadId: unidadId) {
@@ -68,7 +70,7 @@ final class VerUnidadViewModel {
     }
     
     func loadAllClasses() async {
-        guard let total = cronograma?.totalClases else { return }
+        guard let total = cronograma?.totalClases, total > 0 else { return }
         clasesActividades.removeAll()
         
         for n in 1...total {
@@ -154,7 +156,7 @@ final class VerUnidadViewModel {
         do {
             let snap = try await dashboardRepository.fetchDashboard()
             let academicClasses = snap.horario.filter(\.isAcademic)
-            let weekdays = Array(Set(academicClasses.map(\.dia))) // e.g. ["Lunes", "Miércoles"]
+            let weekdays = Array(Set(academicClasses.map(\.dia)))
             
             if weekdays.isEmpty {
                 return
@@ -166,10 +168,18 @@ final class VerUnidadViewModel {
             var checkDate = Date()
             
             let weekdayMap = [
-                "Domingo": 1, "Lunes": 2, "Martes": 3, "Miércoles": 4, "Jueves": 5, "Viernes": 6, "Sábado": 7
+                "domingo": 1,
+                "lunes": 2,
+                "martes": 3,
+                "miercoles": 4,
+                "jueves": 5,
+                "viernes": 6,
+                "sabado": 7
             ]
             
-            let targetWeekdayInts = weekdays.compactMap { weekdayMap[$0] }
+            let targetWeekdayInts = weekdays.compactMap { day in
+                weekdayMap[day.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL")).lowercased()]
+            }
             
             let formatter = DateFormatter()
             formatter.dateFormat = "dd/MM/yyyy"
@@ -256,16 +266,16 @@ final class VerUnidadViewModel {
             asignatura: activeSubject,
             curso: curso,
             unidadId: unidadId,
-            descripcion: "Explorar las cualidades del sonido en el entorno y crear paisajes sonoros y patrones rítmicos...",
-            contextoDocente: "Se requiere enfoque activo con dinámicas corporales y material lúdico.",
-            objetivoDocente: "Lograr que los estudiantes identifiquen y combinen al menos 3 fuentes sonoras.",
+            descripcion: "<p>Explorar las cualidades del sonido en el entorno y crear paisajes sonoros y patrones rítmicos.</p>",
+            contextoDocente: "<p>Se requiere enfoque activo con dinámicas corporales y material lúdico.</p>",
+            objetivoDocente: "<p>Lograr que los estudiantes identifiquen y combinen al menos 3 fuentes sonoras.</p>",
             horas: 16,
             clases: 8,
             oas: defaultOAs,
             habilidades: defaultHabilidades,
             conocimientos: defaultConocimientos,
             actitudes: defaultActitudes,
-            conocimientosPrevios: "Sonidos del entorno familiar, figuras musicales simples.",
+            conocimientosPrevios: "<p>Sonidos del entorno familiar, figuras musicales simples.</p>",
             recursosMaterialesUnidad: ["Celular para grabar", "Instrumentos de percusión", "Tarjetas visuales"],
             estrategiasEvaluacion: [
                 EstrategiaEvaluacionUnidad(id: "eval_1", nombre: "Entrega de boceto sonoro", instrumento: "Rúbrica", ponderacion: 40.0),
