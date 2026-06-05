@@ -90,11 +90,14 @@ final class ProfileViewModel {
     var draftProfile = PerfilUsuario.empty
     var draftSchool = InfoColegio.empty
     var draftPreferences = PreferenciasUsuario.empty
+    var draftNivelMapping: [String: String] = [:]
+    var draftCursoTipos: [String: TipoCurricular] = [:]
     var isLoading = false
     var errorMessage: String?
     var saveProfileStatus: ProfileSaveStatus = .idle
     var saveSchoolStatus: ProfileSaveStatus = .idle
     var savePreferencesStatus: ProfileSaveStatus = .idle
+    var saveMappingStatus: ProfileSaveStatus = .idle
 
     private let repository: DashboardRepository
 
@@ -116,6 +119,8 @@ final class ProfileViewModel {
             draftProfile = next.profile
             draftSchool = next.school
             draftPreferences = next.preferences
+            draftNivelMapping = next.nivelMapping
+            draftCursoTipos = next.cursoTipos
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -164,6 +169,22 @@ final class ProfileViewModel {
         } catch {
             errorMessage = error.localizedDescription
             savePreferencesStatus = .error
+        }
+    }
+
+    func saveLevelMapping() async {
+        saveMappingStatus = .saving
+        do {
+            try await repository.saveLevelMapping(draftNivelMapping, cursoTipos: draftCursoTipos)
+            if var snapshot {
+                snapshot.nivelMapping = draftNivelMapping
+                snapshot.cursoTipos = draftCursoTipos
+                self.snapshot = snapshot
+            }
+            saveMappingStatus = .saved
+        } catch {
+            errorMessage = error.localizedDescription
+            saveMappingStatus = .error
         }
     }
 }
@@ -558,27 +579,47 @@ struct ProfileView: View {
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(.secondary)
                 } else {
+                    ProfileSaveBadge(status: viewModel.saveMappingStatus)
+
                     VStack(spacing: 10) {
                         ForEach(snapshot.courses, id: \.self) { course in
-                            let tipo = snapshot.cursoTipos[course] ?? .oficial
-                            HStack(alignment: .center, spacing: 10) {
+                            let tipo = viewModel.draftCursoTipos[course] ?? .oficial
+                            VStack(alignment: .leading, spacing: 10) {
                                 VStack(alignment: .leading, spacing: 5) {
                                     Text(course)
                                         .font(.footnote.weight(.black))
-                                    Text(tipo.label)
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.secondary)
+                                    if tipo == .oficial && (viewModel.draftNivelMapping[course] ?? "").isEmpty {
+                                        Text("Falta seleccionar nivel curricular.")
+                                            .font(.caption.weight(.black))
+                                            .foregroundStyle(.orange)
+                                    }
                                 }
 
-                                Spacer()
+                                Picker("Tipo curricular", selection: Binding(
+                                    get: { viewModel.draftCursoTipos[course] ?? .oficial },
+                                    set: { next in setCourseType(next, for: course) }
+                                )) {
+                                    Text(TipoCurricular.oficial.label).tag(TipoCurricular.oficial)
+                                    Text(TipoCurricular.taller.label).tag(TipoCurricular.taller)
+                                    Text(TipoCurricular.libre.label).tag(TipoCurricular.libre)
+                                }
+                                .pickerStyle(.segmented)
 
                                 if tipo == .oficial {
-                                    Text(snapshot.nivelMapping[course] ?? "Sin nivel")
-                                        .font(.caption.weight(.black))
-                                        .foregroundStyle((snapshot.nivelMapping[course] ?? "").isEmpty ? .orange : .pink)
+                                    Picker("Nivel curricular", selection: Binding(
+                                        get: { viewModel.draftNivelMapping[course] ?? "" },
+                                        set: { viewModel.draftNivelMapping[course] = $0 }
+                                    )) {
+                                        Text("Sin configurar").tag("")
+                                        ForEach(CurriculumLevels.all, id: \.self) { level in
+                                            Text(level).tag(level)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 } else {
-                                    Text("Sin nivel")
-                                        .font(.caption.weight(.black))
+                                    Label(tipo == .taller ? "Sin nivel curricular para taller/electivo." : "Sin curriculum oficial para uso libre.", systemImage: "info.circle.fill")
+                                        .font(.caption.weight(.semibold))
                                         .foregroundStyle(.secondary)
                                 }
                             }
@@ -586,6 +627,17 @@ struct ProfileView: View {
                             .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
                     }
+
+                    Button {
+                        Task { await viewModel.saveLevelMapping() }
+                    } label: {
+                        Label("Guardar niveles", systemImage: viewModel.saveMappingStatus == .saving ? "hourglass" : "square.and.arrow.down.fill")
+                            .font(.footnote.weight(.black))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.pink)
+                    .disabled(viewModel.saveMappingStatus == .saving)
                 }
             }
         }
@@ -671,6 +723,15 @@ struct ProfileView: View {
         }
 
         viewModel.draftPreferences.asignaturasHabilitadas = enabled.sorted()
+    }
+
+    private func setCourseType(_ type: TipoCurricular, for course: String) {
+        if type == .oficial {
+            viewModel.draftCursoTipos.removeValue(forKey: course)
+        } else {
+            viewModel.draftCursoTipos[course] = type
+            viewModel.draftNivelMapping.removeValue(forKey: course)
+        }
     }
 
     private func formatMinutes(_ minutes: Int) -> String {

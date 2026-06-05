@@ -214,6 +214,24 @@ enum TipoCurricular: String, Codable, Hashable {
     }
 }
 
+enum CurriculumLevels {
+    static let all = [
+        "P\u{00E1}rvulos",
+        "1ro B\u{00E1}sico",
+        "2do B\u{00E1}sico",
+        "3ro B\u{00E1}sico",
+        "4to B\u{00E1}sico",
+        "5to B\u{00E1}sico",
+        "6to B\u{00E1}sico",
+        "7mo B\u{00E1}sico",
+        "8vo B\u{00E1}sico",
+        "1ro Medio",
+        "2do Medio",
+        "3ro Medio",
+        "4to Medio"
+    ]
+}
+
 struct EstudiantePerfil: Identifiable, Equatable, Hashable {
     let id: String
     let nombre: String
@@ -251,8 +269,8 @@ struct DashboardSnapshot: Equatable {
     var classState: [String: Bool]
     let studentCounts: [String: Int]
     let studentsByCourse: [String: [EstudiantePerfil]]
-    let nivelMapping: [String: String]
-    let cursoTipos: [String: TipoCurricular]
+    var nivelMapping: [String: String]
+    var cursoTipos: [String: TipoCurricular]
 
     var todayName: String? {
         DateHelpers.weekdayName(for: date)

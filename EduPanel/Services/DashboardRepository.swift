@@ -132,6 +132,26 @@ struct DashboardRepository {
         )
     }
 
+    func saveLevelMapping(_ mapping: [String: String], cursoTipos: [String: TipoCurricular]) async throws {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            throw DashboardRepositoryError.missingUser
+        }
+
+        let rawTypes = cursoTipos
+            .filter { $0.value != .oficial }
+            .mapValues(\.rawValue)
+
+        try await setData(
+            [
+                "mapping": mapping,
+                "cursoTipos": rawTypes,
+                "updatedAt": FieldValue.serverTimestamp()
+            ],
+            at: db.collection("users").document(uid).collection("configuracion").document("nivel_mapping"),
+            merge: true
+        )
+    }
+
     private func loadStudentsByCourse(for horario: [ClaseHorario], uid: String) async -> [String: [EstudiantePerfil]] {
         let cursos = Array(Set(horario.filter(\.isAcademic).map(\.resumen))).sorted()
         var result: [String: [EstudiantePerfil]] = [:]
