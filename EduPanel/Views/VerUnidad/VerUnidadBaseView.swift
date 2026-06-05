@@ -15,6 +15,7 @@ struct VerUnidadBaseView: View {
                     planUnidadCard(verUnidad)
                     curriculoCard(verUnidad)
                     rutaTrabajoCard(verUnidad)
+                    actividadesUnidadCard(verUnidad)
                     estadoUnidadCard(verUnidad)
                     recursosEvaluacionCard(verUnidad)
                 }
@@ -218,6 +219,65 @@ struct VerUnidadBaseView: View {
                     EPKPIBox(title: "Clases", value: "\(verUnidad.clases)", subtitle: "estimadas", icon: "calendar", tint: .purple)
                     EPKPIBox(title: "OA", value: "\(selectedOAs)", subtitle: "seleccionados", icon: "checkmark.square.fill", tint: EPTheme.primary)
                     EPKPIBox(title: "Indicadores", value: "\(selectedIndicators)", subtitle: "activos", icon: "list.bullet.clipboard", tint: .green)
+                }
+            }
+        }
+    }
+
+    private func actividadesUnidadCard(_ verUnidad: VerUnidadGuardada) -> some View {
+        EPWebCard {
+            VStack(alignment: .leading, spacing: 12) {
+                EPSectionHeader(title: "Actividades de la unidad", subtitle: "Datos guardados en la web para la ruta de trabajo.", icon: "figure.walk.motion")
+
+                let actividades = verUnidad.actividades ?? []
+                if actividades.isEmpty {
+                    Text("Sin actividades de unidad registradas.")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                } else {
+                    ForEach(actividades) { actividad in
+                        VStack(alignment: .leading, spacing: 7) {
+                            HStack(spacing: 7) {
+                                Text(actividad.titulo)
+                                    .font(.footnote.weight(.black))
+                                Spacer()
+                                if let estado = actividad.estado, !estado.isEmpty {
+                                    EPStatusPill(text: estado, icon: "circle.fill", tint: estado == "completada" ? .green : .orange)
+                                }
+                                if let fecha = actividad.fecha, !fecha.isEmpty {
+                                    EPStatusPill(text: fecha, icon: "calendar", tint: .blue)
+                                }
+                                if let momento = actividad.momento, !momento.isEmpty {
+                                    EPStatusPill(text: momento, icon: "clock", tint: .blue)
+                                }
+                                if let duracion = actividad.duracion {
+                                    EPStatusPill(text: "\(duracion) min", icon: "timer", tint: .purple)
+                                } else if let duracionTexto = actividad.duracionTexto, !duracionTexto.isEmpty {
+                                    EPStatusPill(text: duracionTexto, icon: "timer", tint: .purple)
+                                }
+                            }
+                            if let descripcion = actividad.descripcion, !descripcion.isEmpty {
+                                RichTextRenderer(html: descripcion)
+                            }
+                            if let recursos = actividad.recursos, !recursos.isEmpty {
+                                ReplicaFlowLayout(spacing: 6) {
+                                    ForEach(recursos, id: \.self) { recurso in
+                                        Text(recurso)
+                                            .font(.caption2.weight(.black))
+                                            .foregroundStyle(.blue)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 5)
+                                            .background(.blue.opacity(0.1), in: Capsule())
+                                    }
+                                }
+                            }
+                        }
+                        .padding(10)
+                        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
                 }
             }
         }

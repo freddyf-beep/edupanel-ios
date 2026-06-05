@@ -510,6 +510,15 @@ struct PlanificacionesDetailView: View {
 
             let plan = PlanificacionCurso(curso: curso, asignatura: activeSubject, units: units)
             cronogramasByUnit = await planificacionRepository.cargarCronogramas(asignatura: activeSubject, planes: [plan])
+            units = units.map { unit in
+                guard !unit.hasDates else { return unit }
+                let key = PlanificacionRepository.cronogramaKey(curso: curso, unidadId: String(unit.id))
+                guard let range = dateRange(from: cronogramasByUnit[key]?.clases ?? []) else { return unit }
+                var next = unit
+                next.start = range.start
+                next.end = range.end
+                return next
+            }
         } catch {
             units = []
             cronogramasByUnit = [:]
@@ -545,5 +554,25 @@ struct PlanificacionesDetailView: View {
         case "proyecto": return "target"
         default: return "book.closed.fill"
         }
+    }
+
+    private func dateRange(from clases: [ClaseCronograma]) -> (start: String, end: String)? {
+        let dates = clases.compactMap { parseDDMMYYYY($0.fecha) }.sorted()
+        guard let first = dates.first, let last = dates.last else { return nil }
+        return (toISODate(first), toISODate(last))
+    }
+
+    private func parseDDMMYYYY(_ value: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "es_CL")
+        formatter.dateFormat = "dd/MM/yyyy"
+        return formatter.date(from: value.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private func toISODate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "es_CL")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
     }
 }

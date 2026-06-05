@@ -31,8 +31,9 @@ final class PlanificacionesViewModel {
             do {
                 let subject = subject(from: snap)
                 let loadedPlanes = try await planificacionRepository.listarPlanesCurso(asignatura: subject)
-                self.planes = loadedPlanes
-                self.cronogramasByUnit = await planificacionRepository.cargarCronogramas(asignatura: subject, planes: loadedPlanes)
+                let cronogramas = await planificacionRepository.cargarCronogramas(asignatura: subject, planes: loadedPlanes)
+                self.cronogramasByUnit = cronogramas
+                self.planes = Self.enrichPlansWithCronogramaDates(loadedPlanes, cronogramasByUnit: cronogramas)
             } catch {
                 self.planes = []
                 self.cronogramasByUnit = [:]
@@ -63,5 +64,47 @@ final class PlanificacionesViewModel {
 
         let specialty = snapshot?.profile.especialidad.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return specialty.isEmpty ? Self.defaultSubject : specialty
+    }
+
+    private static func enrichPlansWithCronogramaDates(
+        _ planes: [PlanificacionCurso],
+        cronogramasByUnit: [String: CronogramaUnidadData]
+    ) -> [PlanificacionCurso] {
+        planes.map { plan in
+            var nextPlan = plan
+            nextPlan.units = plan.units.map { unit in
+                guard !unit.hasDates else { return unit }
+                let key = PlanificacionRepository.cronogramaKey(curso: plan.curso, unidadId: String(unit.id))
+                guard let crono = cronogramasByUnit[key],
+                      let range = dateRange(from: crono.clases) else {
+                    return unit
+                }
+                var nextUnit = unit
+                nextUnit.start = range.start
+                nextUnit.end = range.end
+                return nextUnit
+            }
+            return nextPlan
+        }
+    }
+
+    private static func dateRange(from clases: [ClaseCronograma]) -> (start: String, end: String)? {
+        let dates = clases.compactMap { parseDDMMYYYY($0.fecha) }.sorted()
+        guard let first = dates.first, let last = dates.last else { return nil }
+        return (toISODate(first), toISODate(last))
+    }
+
+    private static func parseDDMMYYYY(_ value: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "es_CL")
+        formatter.dateFormat = "dd/MM/yyyy"
+        return formatter.date(from: value.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private static func toISODate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "es_CL")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
     }
 }

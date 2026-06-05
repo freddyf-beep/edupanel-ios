@@ -55,6 +55,52 @@ struct PlanificacionRepository {
         "\(curso)::\(unidadId)"
     }
 
+    static func unidadIdFromIndex(_ index: Int) -> String {
+        "unidad_\(index + 1)"
+    }
+
+    static func unidadIdCandidates(unit: UnidadPlan, index: Int? = nil) -> [String] {
+        var ids: [String] = [
+            String(unit.id),
+            "unidad_\(unit.id)"
+        ]
+
+        if let unidadCurricularId = unit.unidadCurricularId?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !unidadCurricularId.isEmpty {
+            ids.append(unidadCurricularId)
+        }
+
+        if let index {
+            ids.append(unidadIdFromIndex(index))
+        }
+
+        return uniqueNonEmpty(ids)
+    }
+
+    static func unidadIdCandidates(raw unidadId: String) -> [String] {
+        let clean = unidadId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return [] }
+        let numeric = clean.replacingOccurrences(of: "\\D", with: "", options: .regularExpression)
+        var ids = [clean]
+        if !numeric.isEmpty {
+            ids.append(numeric)
+            ids.append("unidad_\(numeric)")
+        }
+        return uniqueNonEmpty(ids)
+    }
+
+    private static func uniqueNonEmpty(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for value in values {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, !seen.contains(trimmed) else { continue }
+            seen.insert(trimmed)
+            result.append(trimmed)
+        }
+        return result
+    }
+
     static func buildActividadClaseId(curso: String, unidadId: String, numeroClase: Int, asignatura: String) -> String {
         return buildDocId(asignatura: asignatura, nivel: curso) + "_" + unidadId + "_clase\(numeroClase)"
     }
@@ -111,6 +157,15 @@ struct PlanificacionRepository {
         return VerUnidadGuardada.from(dictionary: dict)
     }
 
+    func cargarVerUnidadConFallback(asignatura: String, curso: String, unidadId: String) async throws -> VerUnidadGuardada? {
+        for candidate in Self.unidadIdCandidates(raw: unidadId) {
+            if let data = try await cargarVerUnidad(asignatura: asignatura, curso: curso, unidadId: candidate) {
+                return data
+            }
+        }
+        return nil
+    }
+
     func guardarVerUnidad(asignatura: String, curso: String, unidadId: String, data: VerUnidadGuardada) async throws {
         let docId = Self.buildVerUnidadId(asignatura: asignatura, curso: curso, unidadId: unidadId)
         let docRef = try userDoc(col: "ver_unidad", id: docId)
@@ -131,14 +186,24 @@ struct PlanificacionRepository {
         return CronogramaUnidadData.from(dictionary: dict)
     }
 
+    func cargarCronogramaUnidadConFallback(asignatura: String, curso: String, unidadIds: [String]) async throws -> CronogramaUnidadData? {
+        for candidate in Self.uniqueNonEmpty(unidadIds.flatMap { Self.unidadIdCandidates(raw: $0) }) {
+            if let data = try await cargarCronogramaUnidad(asignatura: asignatura, curso: curso, unidadId: candidate) {
+                return data
+            }
+        }
+        return nil
+    }
+
     func cargarCronogramas(asignatura: String, planes: [PlanificacionCurso]) async -> [String: CronogramaUnidadData] {
         var results: [String: CronogramaUnidadData] = [:]
 
         for plan in planes {
-            for unit in plan.units {
-                let unidadId = String(unit.id)
-                if let crono = try? await cargarCronogramaUnidad(asignatura: asignatura, curso: plan.curso, unidadId: unidadId) {
-                    results[Self.cronogramaKey(curso: plan.curso, unidadId: unidadId)] = crono
+            for (index, unit) in plan.units.enumerated() {
+                let canonicalId = String(unit.id)
+                let candidates = Self.unidadIdCandidates(unit: unit, index: index)
+                if let crono = try? await cargarCronogramaUnidadConFallback(asignatura: asignatura, curso: plan.curso, unidadIds: candidates) {
+                    results[Self.cronogramaKey(curso: plan.curso, unidadId: canonicalId)] = crono
                 }
             }
         }
@@ -165,6 +230,15 @@ struct PlanificacionRepository {
             return nil
         }
         return ActividadClase.from(dictionary: dict)
+    }
+
+    func cargarActividadClaseConFallback(curso: String, unidadId: String, numeroClase: Int, asignatura: String) async throws -> ActividadClase? {
+        for candidate in Self.unidadIdCandidates(raw: unidadId) {
+            if let data = try await cargarActividadClase(curso: curso, unidadId: candidate, numeroClase: numeroClase, asignatura: asignatura) {
+                return data
+            }
+        }
+        return nil
     }
 
     func guardarActividadClase(data: ActividadClase) async throws {

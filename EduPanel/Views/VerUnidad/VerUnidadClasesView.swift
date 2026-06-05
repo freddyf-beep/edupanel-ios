@@ -17,6 +17,7 @@ struct VerUnidadClasesView: View {
                     classHeaderCard
                     objectivesCard
                     editorFields
+                    externalPedagogyCard
                     resourcesSection
                     placeholdersCard
                 }
@@ -277,6 +278,133 @@ struct VerUnidadClasesView: View {
         }
     }
 
+    private var externalPedagogyCard: some View {
+        let act = activeActivity
+
+        return EPWebCard {
+            VStack(alignment: .leading, spacing: 14) {
+                EPSectionHeader(title: "Datos pedagógicos avanzados", subtitle: "Campos creados desde la web, IA o planificación avanzada.", icon: "brain.head.profile")
+
+                if !hasExternalPedagogyData(act) {
+                    Text("Sin datos avanzados registrados para esta clase.")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                } else {
+                    if let objetivoMultinivel = act.objetivoMultinivel {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Objetivo multinivel")
+                                .font(.caption.weight(.black))
+                            externalTextRow("Básico", objetivoMultinivel.basico, tint: .green)
+                            externalTextRow("Intermedio", objetivoMultinivel.intermedio, tint: .blue)
+                            externalTextRow("Avanzado", objetivoMultinivel.avanzado, tint: .purple)
+                            externalTextRow("Recomendado", objetivoMultinivel.recomendado, tint: EPTheme.primary)
+                        }
+                    }
+
+                    if let analisisBloom = act.analisisBloom, !analisisBloom.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Análisis Bloom")
+                                .font(.caption.weight(.black))
+                            ForEach(analisisBloom) { item in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack(spacing: 6) {
+                                        EPStatusPill(text: item.oaId ?? "OA", icon: "tag.fill", tint: .blue)
+                                        EPStatusPill(text: item.categoria ?? "Categoría", icon: "chart.bar.fill", tint: EPTheme.primary)
+                                        EPStatusPill(text: item.nivel ?? "Nivel", icon: "gauge.with.dots.needle.67percent", tint: .purple)
+                                    }
+                                    if let justificacion = item.justificacion, !justificacion.isEmpty {
+                                        Text(justificacion)
+                                            .font(.caption.weight(.medium))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    if let verbos = item.verbosSugeridos, !verbos.isEmpty {
+                                        ReplicaFlowLayout(spacing: 6) {
+                                            ForEach(verbos, id: \.self) { verbo in
+                                                Text(verbo)
+                                                    .font(.caption2.weight(.black))
+                                                    .foregroundStyle(.green)
+                                                    .padding(.horizontal, 8)
+                                                    .padding(.vertical, 5)
+                                                    .background(.green.opacity(0.1), in: Capsule())
+                                            }
+                                        }
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(10)
+                                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                        }
+                    }
+
+                    if let indicadores = act.indicadoresEvaluacion, !indicadores.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Indicadores de evaluación")
+                                .font(.caption.weight(.black))
+                            ForEach(indicadores) { indicador in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: indicador.seleccionado == false ? "circle" : "checkmark.circle.fill")
+                                        .foregroundStyle(indicador.seleccionado == false ? .secondary : EPTheme.primary)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(indicador.texto)
+                                            .font(.caption.weight(.medium))
+                                            .foregroundStyle(.secondary)
+                                        HStack(spacing: 6) {
+                                            if let dimension = indicador.dimension, !dimension.isEmpty {
+                                                EPStatusPill(text: dimension, tint: .blue)
+                                            }
+                                            if let nivelBloom = indicador.nivelBloom, !nivelBloom.isEmpty {
+                                                EPStatusPill(text: nivelBloom, tint: .purple)
+                                            }
+                                        }
+                                    }
+                                    Spacer()
+                                }
+                                .padding(10)
+                                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                        }
+                    }
+
+                    if let actividadEvaluacion = act.actividadEvaluacion,
+                       [actividadEvaluacion.tipo, actividadEvaluacion.descripcion, actividadEvaluacion.instrumento].contains(where: { ($0 ?? "").isEmpty == false }) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Actividad de evaluación")
+                                .font(.caption.weight(.black))
+                            externalTextRow("Tipo", actividadEvaluacion.tipo, tint: .orange)
+                            externalTextRow("Instrumento", actividadEvaluacion.instrumento, tint: .purple)
+                            if let descripcion = actividadEvaluacion.descripcion, !descripcion.isEmpty {
+                                RichTextRenderer(html: descripcion)
+                                    .padding(10)
+                                    .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                            if let criterios = actividadEvaluacion.criterios, !criterios.isEmpty {
+                                labeledChipList("Criterios", criterios, tint: .green)
+                            }
+                            if let alineacion = actividadEvaluacion.alineacionMBE, !alineacion.isEmpty {
+                                labeledChipList("Alineación MBE", alineacion, tint: .blue)
+                            }
+                        }
+                    }
+
+                    if let desarrolloFormal = act.desarrolloFormal,
+                       [desarrolloFormal.inicio, desarrolloFormal.desarrollo, desarrolloFormal.cierre].contains(where: { ($0 ?? "").isEmpty == false }) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Desarrollo formal")
+                                .font(.caption.weight(.black))
+                            externalTextRow("Inicio", desarrolloFormal.inicio, tint: .blue)
+                            externalTextRow("Desarrollo", desarrolloFormal.desarrollo, tint: .green)
+                            externalTextRow("Cierre", desarrolloFormal.cierre, tint: .purple)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private var placeholdersCard: some View {
         EPWebCard {
             VStack(alignment: .leading, spacing: 12) {
@@ -412,6 +540,50 @@ struct VerUnidadClasesView: View {
 
     private func getStudents() -> [EstudiantePerfil] {
         viewModel.snapshot?.studentsByCourse[viewModel.curso] ?? []
+    }
+
+    private func hasExternalPedagogyData(_ act: ActividadClase) -> Bool {
+        if act.objetivoMultinivel != nil { return true }
+        if let bloom = act.analisisBloom, !bloom.isEmpty { return true }
+        if let indicadores = act.indicadoresEvaluacion, !indicadores.isEmpty { return true }
+        if act.actividadEvaluacion != nil { return true }
+        if act.desarrolloFormal != nil { return true }
+        return false
+    }
+
+    private func externalTextRow(_ label: String, _ value: String?, tint: Color) -> some View {
+        Group {
+            if let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                VStack(alignment: .leading, spacing: 5) {
+                    EPStatusPill(text: label, tint: tint)
+                    Text(RichTextHTML.plainText(from: value))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(10)
+                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+        }
+    }
+
+    private func labeledChipList(_ label: String, _ values: [String], tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.caption.weight(.black))
+            ReplicaFlowLayout(spacing: 6) {
+                ForEach(values, id: \.self) { value in
+                    Text(value)
+                        .font(.caption2.weight(.black))
+                        .foregroundStyle(tint)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(tint.opacity(0.1), in: Capsule())
+                }
+            }
+        }
+        .padding(10)
+        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 

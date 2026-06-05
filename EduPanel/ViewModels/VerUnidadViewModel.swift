@@ -41,23 +41,35 @@ final class VerUnidadViewModel {
                 .first(where: { !$0.isEmpty }) ?? "M\u{00FA}sica"
             
             // 1. Load Pedagogical info
-            if let saved = try await planificacionRepository.cargarVerUnidad(asignatura: activeSubject, curso: curso, unidadId: unidadId) {
+            if let saved = try await planificacionRepository.cargarVerUnidadConFallback(asignatura: activeSubject, curso: curso, unidadId: unidadId) {
                 self.verUnidad = saved
+                if !saved.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    self.unidadId = saved.unidadId
+                }
             } else {
                 // Initialize default unit
                 self.verUnidad = await initDefaultUnit()
             }
             
             // 2. Load Cronograma (Class list and dates)
-            if let savedCrono = try await planificacionRepository.cargarCronogramaUnidad(asignatura: activeSubject, curso: curso, unidadId: unidadId) {
+            let candidates = PlanificacionRepository.unidadIdCandidates(raw: self.unidadId)
+            if let savedCrono = try await planificacionRepository.cargarCronogramaUnidadConFallback(asignatura: activeSubject, curso: curso, unidadIds: candidates) {
                 self.cronograma = savedCrono
+                if (self.verUnidad?.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true),
+                   !savedCrono.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    self.unidadId = savedCrono.unidadId
+                }
             } else {
                 // Initialize default 8-class cronograma
-                let defaultClases = (1...8).map { n in
+                let total = max(self.verUnidad?.clases ?? 8, 1)
+                let defaultClases = (1...total).map { n in
                     ClaseCronograma(numero: n, fecha: "", oaIds: n == 1 ? ["OA1"] : n == 4 ? ["OA4"] : [])
                 }
-                self.cronograma = CronogramaUnidadData(asignatura: activeSubject, curso: curso, unidadId: unidadId, totalClases: 8, clases: defaultClases)
+                self.cronograma = CronogramaUnidadData(asignatura: activeSubject, curso: curso, unidadId: self.unidadId, totalClases: total, clases: defaultClases)
             }
+
+            self.verUnidad?.unidadId = self.unidadId
+            self.cronograma?.unidadId = self.unidadId
             
             // 3. Load all class detail plans
             await loadAllClasses()
@@ -70,11 +82,13 @@ final class VerUnidadViewModel {
     }
     
     func loadAllClasses() async {
-        guard let total = cronograma?.totalClases, total > 0 else { return }
+        guard let cronograma else { return }
+        let total = max(cronograma.totalClases, cronograma.clases.map(\.numero).max() ?? 0)
+        guard total > 0 else { return }
         clasesActividades.removeAll()
         
         for n in 1...total {
-            if let act = try? await planificacionRepository.cargarActividadClase(curso: curso, unidadId: unidadId, numeroClase: n, asignatura: activeSubject) {
+            if let act = try? await planificacionRepository.cargarActividadClaseConFallback(curso: curso, unidadId: unidadId, numeroClase: n, asignatura: activeSubject) {
                 clasesActividades[n] = act
             } else {
                 // Initialize default empty activity
@@ -129,6 +143,9 @@ final class VerUnidadViewModel {
             for (_, act) in clasesActividades {
                 // Update dates / OAs to match cronograma if changed
                 var cleanAct = act
+                cleanAct.unidadId = unidadId
+                cleanAct.curso = curso
+                cleanAct.asignatura = activeSubject
                 if let cronoClase = cronograma.clases.first(where: { $0.numero == act.numeroClase }) {
                     cleanAct.fecha = cronoClase.fecha
                     cleanAct.oaIds = cronoClase.oaIds

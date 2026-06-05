@@ -251,12 +251,7 @@ enum RichTextHTML {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }
 
-        if trimmed.range(of: "<[^>]+>", options: .regularExpression) != nil,
-           let attributed = attributedString(from: trimmed) {
-            return attributed.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-
-        return trimmed
+        return stripHTML(trimmed)
     }
 
     static func html(fromPlainText text: String) -> String {
@@ -306,6 +301,23 @@ enum RichTextHTML {
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\"", with: "&quot;")
     }
+
+    private static func stripHTML(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "<br\\s*/?>", with: "\n", options: .regularExpression)
+            .replacingOccurrences(of: "</(p|div|li|h[1-6]|section)>", with: "\n", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: "<li[^>]*>", with: "- ", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "\r", with: "")
+            .replacingOccurrences(of: "[ \\t]+\\n", with: "\n", options: .regularExpression)
+            .replacingOccurrences(of: "\\n{3,}", with: "\n\n", options: .regularExpression)
+            .replacingOccurrences(of: "[ \\t]{2,}", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }
 
 struct RichTextRenderer: UIViewRepresentable {
@@ -323,13 +335,9 @@ struct RichTextRenderer: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UITextView, context: Context) {
-        if let attributed = RichTextHTML.attributedString(from: html), html.contains("<") {
-            uiView.attributedText = attributed
-        } else {
-            uiView.text = RichTextHTML.plainText(from: html)
-            uiView.font = .preferredFont(forTextStyle: .subheadline)
-            uiView.textColor = .secondaryLabel
-        }
+        uiView.text = RichTextHTML.plainText(from: html)
+        uiView.font = .preferredFont(forTextStyle: .subheadline)
+        uiView.textColor = .secondaryLabel
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
