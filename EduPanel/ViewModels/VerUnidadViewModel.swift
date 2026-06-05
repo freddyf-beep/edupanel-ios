@@ -93,8 +93,8 @@ final class VerUnidadViewModel {
             } else {
                 // Initialize default empty activity
                 let actId = PlanificacionRepository.buildActividadClaseId(curso: curso, unidadId: unidadId, numeroClase: n, asignatura: activeSubject)
-                let dateStr = cronograma?.clases.first(where: { $0.numero == n })?.fecha ?? ""
-                let oas = cronograma?.clases.first(where: { $0.numero == n })?.oaIds ?? []
+                let dateStr = cronograma.clases.first(where: { $0.numero == n })?.fecha ?? ""
+                let oas = cronograma.clases.first(where: { $0.numero == n })?.oaIds ?? []
                 
                 clasesActividades[n] = ActividadClase(
                     id: actId,
