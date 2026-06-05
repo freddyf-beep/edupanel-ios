@@ -7,7 +7,14 @@ enum AppRoute: Hashable {
     case perfil360
     case planificacionNueva
     case evaluacionNueva
-    case claseDetalle(String)
+    case classDetail(id: String, title: String)
+    case newScheduleBlock
+    case courseStudents(String)
+    case editCourse(String)
+    case schoolLogo
+    case calendarConnect
+    case calendarSync
+    case driveConnect
     case perfilAction(String)
     case module(AppTab)
 
@@ -19,7 +26,14 @@ enum AppRoute: Hashable {
         case .perfil360: return "Perfil 360"
         case .planificacionNueva: return "Nueva planificacion"
         case .evaluacionNueva: return "Nueva evaluacion"
-        case .claseDetalle: return "Detalle de clase"
+        case .classDetail(id: _, title: let title): return title.isEmpty ? "Detalle de clase" : title
+        case .newScheduleBlock: return "Nuevo bloque"
+        case .courseStudents(let course): return "Estudiantes - \(course)"
+        case .editCourse(let course): return "Editar curso - \(course)"
+        case .schoolLogo: return "Logo del colegio"
+        case .calendarConnect: return "Conectar Google Calendar"
+        case .calendarSync: return "Sincronizar Calendar"
+        case .driveConnect: return "Conectar Google Drive"
         case .perfilAction(let title): return title
         case .module(let tab): return tab.title
         }
@@ -33,9 +47,39 @@ enum AppRoute: Hashable {
         case .perfil360: return "person.crop.circle.fill"
         case .planificacionNueva: return "book.closed.fill"
         case .evaluacionNueva: return "checklist.checked"
-        case .claseDetalle: return "calendar"
+        case .classDetail: return "calendar"
+        case .newScheduleBlock: return "plus.rectangle.on.rectangle"
+        case .courseStudents: return "person.2.fill"
+        case .editCourse: return "pencil"
+        case .schoolLogo: return "photo.badge.plus"
+        case .calendarConnect: return "calendar.badge.plus"
+        case .calendarSync: return "arrow.triangle.2.circlepath"
+        case .driveConnect: return "externaldrive.badge.plus"
         case .perfilAction: return "arrow.right.circle.fill"
         case .module(let tab): return tab.systemImage
+        }
+    }
+
+    var placeholderText: String {
+        switch self {
+        case .classDetail:
+            return "Pantalla preparada para revisar y editar este bloque."
+        case .newScheduleBlock:
+            return "Aqui construiremos el formulario nativo para crear bloques de clase o libres."
+        case .courseStudents(let course):
+            return "Lista de estudiantes preparada para \(course)."
+        case .editCourse(let course):
+            return "Configuracion del curso preparada para \(course)."
+        case .schoolLogo:
+            return "Subida del logo del colegio reservada para el siguiente paso."
+        case .calendarConnect:
+            return "Conexion OAuth de Google Calendar pendiente de implementar."
+        case .calendarSync:
+            return "Sincronizacion de Calendar pendiente de conectar."
+        case .driveConnect:
+            return "Conexion a Google Drive pendiente de implementar."
+        default:
+            return "Sin contenido por ahora."
         }
     }
 }

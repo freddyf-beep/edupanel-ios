@@ -45,7 +45,7 @@ struct RoutePlaceholderView: View {
                 Text(route.title)
                     .font(.title2.bold())
 
-                Text("Sin contenido por ahora.")
+                Text(route.placeholderText)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -420,7 +420,7 @@ struct ProfileView: View {
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(.secondary)
 
-                NavigationLink(value: AppRoute.perfilAction("Nuevo bloque")) {
+                NavigationLink(value: AppRoute.newScheduleBlock) {
                     Label("Nuevo bloque", systemImage: "plus")
                         .font(.footnote.weight(.black))
                         .frame(maxWidth: .infinity)
@@ -443,7 +443,7 @@ struct ProfileView: View {
                     } else {
                         VStack(spacing: 10) {
                             ForEach(items) { item in
-                                NavigationLink(value: AppRoute.claseDetalle(item.id)) {
+                                NavigationLink(value: AppRoute.classDetail(id: item.id, title: routeTitle(for: item))) {
                                     ProfileScheduleRow(item: item)
                                 }
                                 .buttonStyle(.plain)
@@ -501,11 +501,11 @@ struct ProfileView: View {
                         }
 
                         HStack(spacing: 10) {
-                            NavigationLink(value: AppRoute.perfilAction("Gestionar estudiantes")) {
+                            NavigationLink(value: AppRoute.courseStudents(course.name)) {
                                 Label("Estudiantes", systemImage: "person.2.fill")
                                     .frame(maxWidth: .infinity)
                             }
-                            NavigationLink(value: AppRoute.perfilAction("Editar curso")) {
+                            NavigationLink(value: AppRoute.editCourse(course.name)) {
                                 Label("Editar", systemImage: "pencil")
                                     .frame(maxWidth: .infinity)
                             }
@@ -743,6 +743,11 @@ struct ProfileView: View {
         return String(format: "%.1f h", hours)
     }
 
+    private func routeTitle(for item: ClaseHorario) -> String {
+        let title = item.resumen.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? item.tipo.label : title
+    }
+
     private func bannerColors(for style: String) -> [Color] {
         switch style {
         case "oceano": return [.cyan, .blue]
@@ -819,7 +824,7 @@ private struct ProfileIdentityTab: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        NavigationLink(value: AppRoute.perfilAction("Subir logo del colegio")) {
+                        NavigationLink(value: AppRoute.schoolLogo) {
                             Image(systemName: "square.and.arrow.up")
                                 .font(.headline.weight(.bold))
                         }
@@ -876,11 +881,11 @@ private struct ProfileConnectionsTab: View {
                 )
 
                 HStack(spacing: 10) {
-                    NavigationLink(value: AppRoute.perfilAction("Conectar Google Calendar")) {
+                    NavigationLink(value: AppRoute.calendarConnect) {
                         Label("Conectar", systemImage: "link")
                             .frame(maxWidth: .infinity)
                     }
-                    NavigationLink(value: AppRoute.perfilAction("Sincronizar Calendar")) {
+                    NavigationLink(value: AppRoute.calendarSync) {
                         Label("Sincronizar", systemImage: "arrow.triangle.2.circlepath")
                             .frame(maxWidth: .infinity)
                     }
@@ -907,7 +912,7 @@ private struct ProfileConnectionsTab: View {
                 .padding(12)
                 .background(.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-                NavigationLink(value: AppRoute.perfilAction("Conectar Google Drive")) {
+                NavigationLink(value: AppRoute.driveConnect) {
                     Label("Conectar Drive", systemImage: "link")
                         .font(.footnote.weight(.black))
                         .frame(maxWidth: .infinity)

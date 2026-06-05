@@ -277,7 +277,7 @@ struct DashboardView: View {
             } else {
                 VStack(spacing: 8) {
                     ForEach(snapshot.pendingClasses) { item in
-                        NavigationLink(value: AppRoute.claseDetalle(item.id)) {
+                        NavigationLink(value: AppRoute.classDetail(id: item.id, title: routeTitle(for: item))) {
                             HStack(spacing: 10) {
                                 Image(systemName: "bell.fill")
                                     .foregroundStyle(.orange)
@@ -504,6 +504,11 @@ struct DashboardView: View {
             return String(snapshot.profile.especialidad.prefix(8))
         }
         return String(snapshot.profile.tipoProfesor.prefix(8))
+    }
+
+    private func routeTitle(for item: ClaseHorario) -> String {
+        let title = item.resumen.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? item.tipo.label : title
     }
 
     private func totalStudents(_ snapshot: DashboardSnapshot) -> Int {
