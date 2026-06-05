@@ -51,6 +51,7 @@ jobs:
           EDUPANEL_API_BASE_URL: ${{ secrets.EDUPANEL_API_BASE_URL }}
           GOOGLE_REVERSED_CLIENT_ID: ${{ secrets.GOOGLE_REVERSED_CLIENT_ID }}
         run: |
+          set -o pipefail
           test -n "$EDUPANEL_API_BASE_URL"
           test -n "$GOOGLE_REVERSED_CLIENT_ID"
 
@@ -73,7 +74,7 @@ jobs:
         if: failure()
         run: |
           if [ -f build-xcode.log ]; then
-            grep -nE "error:|BUILD FAILED|The following build commands failed" build-xcode.log | tail -80
+            grep -n -C 3 -E "error:|BUILD FAILED|The following build commands failed" build-xcode.log | tail -160
           fi
 
       - name: Verify app executable metadata
