@@ -1,8 +1,39 @@
 import Foundation
 import SwiftUI
 
+private enum DashboardTabKey: String, CaseIterable, Identifiable {
+    case hoy
+    case semana
+    case mes
+    case insights
+    case pendientes
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .hoy: return "Hoy"
+        case .semana: return "Semana"
+        case .mes: return "Mes"
+        case .insights: return "Insights"
+        case .pendientes: return "Pendientes"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .hoy: return "clock.fill"
+        case .semana: return "calendar"
+        case .mes: return "calendar.badge.clock"
+        case .insights: return "chart.bar.fill"
+        case .pendientes: return "bell.fill"
+        }
+    }
+}
+
 struct DashboardView: View {
     @State private var viewModel: DashboardViewModel
+    @State private var selectedTab: DashboardTabKey = .hoy
     @State private var selectedDay = DateHelpers.weekdayName(for: Date()) ?? "Lunes"
     @State private var newReminder = ""
     @State private var reminderColor: ReminderColor = .amarillo
@@ -49,11 +80,68 @@ struct DashboardView: View {
             if snapshot.horario.isEmpty {
                 noScheduleCard
             } else {
+                dashboardTabs(snapshot)
+                dashboardTabContent(snapshot)
+            }
+        }
+    }
+
+    private func dashboardTabs(_ snapshot: DashboardSnapshot) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(DashboardTabKey.allCases) { tab in
+                    Button {
+                        selectedTab = tab
+                    } label: {
+                        HStack(spacing: 7) {
+                            Image(systemName: tab.systemImage)
+                                .font(.caption.weight(.black))
+                            Text(tab.title)
+                                .font(.caption.weight(.black))
+                            if tab == .pendientes && !snapshot.pendingClasses.isEmpty {
+                                Text("\(snapshot.pendingClasses.count)")
+                                    .font(.system(size: 9, weight: .black))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(.red, in: Capsule())
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .foregroundStyle(selectedTab == tab ? .white : .primary)
+                        .background(selectedTab == tab ? Color.pink : Color(.secondarySystemGroupedBackground), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func dashboardTabContent(_ snapshot: DashboardSnapshot) -> some View {
+        switch selectedTab {
+        case .hoy:
+            VStack(alignment: .leading, spacing: 18) {
                 quickActions(snapshot)
                 courseStats(snapshot)
                 todayTimeline(snapshot)
+                remindersPanel
+                InsightsPanel(snapshot: snapshot, courses: courseSummaries(snapshot))
+            }
+        case .semana:
+            weekOverview(snapshot)
+        case .mes:
+            monthOverview(snapshot)
+        case .insights:
+            VStack(alignment: .leading, spacing: 18) {
+                InsightsPanel(snapshot: snapshot, courses: courseSummaries(snapshot))
+                courseStats(snapshot)
+            }
+        case .pendientes:
+            VStack(alignment: .leading, spacing: 18) {
                 pendingPanel(snapshot)
-                remindersAndInsights(snapshot)
+                remindersPanel
             }
         }
     }
@@ -227,6 +315,80 @@ struct DashboardView: View {
                 }
             }
         }
+    }
+
+    private func weekOverview(_ snapshot: DashboardSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Resumen semanal", systemImage: "calendar")
+                    .font(.subheadline.weight(.black))
+                Spacer()
+                Text("\(snapshot.academicClasses.count) bloques")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+
+            LazyVGrid(columns: dashboardGrid, spacing: 10) {
+                DashboardMetricTile(label: "Horas lectivas", value: formatDuration(snapshot.totalAcademicMinutes), icon: "clock.fill", color: .blue)
+                DashboardMetricTile(label: "Bloques libres", value: "\(snapshot.nonTeachingBlocks.count)", icon: "cup.and.saucer.fill", color: .purple)
+                DashboardMetricTile(label: "Cursos activos", value: "\(snapshot.courses.count)", icon: "folder.fill", color: .pink)
+                DashboardMetricTile(label: "Estudiantes", value: "\(snapshot.totalStudents)", icon: "person.2.fill", color: .green)
+            }
+
+            VStack(spacing: 10) {
+                ForEach(DateHelpers.workdays, id: \.self) { day in
+                    DashboardWeekDayRow(day: day, items: classes(for: day, in: snapshot))
+                }
+            }
+        }
+        .webCard()
+    }
+
+    private func monthOverview(_ snapshot: DashboardSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Vista mensual", systemImage: "calendar.badge.clock")
+                    .font(.subheadline.weight(.black))
+                Spacer()
+                Text(currentMonthTitle)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+
+            LazyVGrid(columns: dashboardGrid, spacing: 10) {
+                DashboardMetricTile(label: "Proyeccion clases", value: "\(snapshot.academicClasses.count * 4)", icon: "chart.line.uptrend.xyaxis", color: .pink)
+                DashboardMetricTile(label: "Horas aprox.", value: formatDuration(snapshot.totalAcademicMinutes * 4), icon: "clock.badge.checkmark.fill", color: .green)
+                DashboardMetricTile(label: "Pendientes hoy", value: "\(snapshot.pendingClasses.count)", icon: "bell.fill", color: .orange)
+                DashboardMetricTile(label: "Avance de hoy", value: "\(Int(snapshot.progress * 100))%", icon: "target", color: .blue)
+            }
+
+            HStack {
+                ForEach(Array(["D", "L", "M", "M", "J", "V", "S"].enumerated()), id: \.offset) { item in
+                    Text(item.element)
+                        .font(.caption2.weight(.black))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+
+            LazyVGrid(columns: monthGrid, spacing: 7) {
+                ForEach(Array(currentMonthGrid().enumerated()), id: \.offset) { item in
+                    let date = item.element
+                    let isToday = date.map { Calendar.current.isDate($0, inSameDayAs: Date()) } ?? false
+                    DashboardMonthDayCell(
+                        day: dayNumber(for: date),
+                        hasClasses: hasScheduledClasses(on: date, snapshot: snapshot),
+                        isToday: isToday,
+                        hasPending: isToday && !snapshot.pendingClasses.isEmpty
+                    )
+                }
+            }
+
+            Label("El mes usa tu horario semanal como proyeccion hasta que conectemos calendario real.", systemImage: "info.circle.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .webCard()
     }
 
     private var daySelector: some View {
@@ -463,8 +625,19 @@ struct DashboardView: View {
         return formatter.string(from: Date())
     }
 
+    private var currentMonthTitle: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "es_CL")
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.string(from: Date()).capitalized
+    }
+
     private var dashboardGrid: [GridItem] {
         [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+    }
+
+    private var monthGrid: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 7), count: 7)
     }
 
     private var decodedReminders: [ReminderNote] {
@@ -511,6 +684,15 @@ struct DashboardView: View {
         return title.isEmpty ? item.tipo.label : title
     }
 
+    private func formatDuration(_ minutes: Int) -> String {
+        guard minutes > 0 else { return "0 h" }
+        let hours = Double(minutes) / 60
+        if minutes % 60 == 0 {
+            return "\(minutes / 60) h"
+        }
+        return String(format: "%.1f h", hours)
+    }
+
     private func totalStudents(_ snapshot: DashboardSnapshot) -> Int {
         snapshot.studentCounts.values.reduce(0, +)
     }
@@ -530,6 +712,37 @@ struct DashboardView: View {
             let todayBlocks = snapshot.academicTodayClasses.filter { $0.resumen == name }.count
             return CourseSummary(course: name, colorHex: color, students: snapshot.studentCounts[name] ?? 0, todayBlocks: todayBlocks)
         }
+    }
+
+    private func currentMonthGrid() -> [Date?] {
+        let calendar = Calendar.current
+        var components = calendar.dateComponents([.year, .month], from: Date())
+        components.day = 1
+        guard let firstDay = calendar.date(from: components),
+              let dayRange = calendar.range(of: .day, in: .month, for: firstDay) else {
+            return []
+        }
+
+        let leadingSpaces = calendar.component(.weekday, from: firstDay) - 1
+        var result: [Date?] = Array(repeating: nil, count: leadingSpaces)
+        for day in dayRange {
+            components.day = day
+            result.append(calendar.date(from: components))
+        }
+        while result.count % 7 != 0 {
+            result.append(nil)
+        }
+        return result
+    }
+
+    private func dayNumber(for date: Date?) -> String {
+        guard let date else { return "" }
+        return "\(Calendar.current.component(.day, from: date))"
+    }
+
+    private func hasScheduledClasses(on date: Date?, snapshot: DashboardSnapshot) -> Bool {
+        guard let date, let weekday = DateHelpers.weekdayName(for: date) else { return false }
+        return classes(for: weekday, in: snapshot).contains { $0.isAcademic }
     }
 
     private func isClassCurrent(_ item: ClaseHorario, now: Date) -> Bool {
@@ -652,6 +865,124 @@ private struct CourseMiniCard: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(Color(.separator).opacity(0.32), lineWidth: 1)
         )
+    }
+}
+
+private struct DashboardMetricTile: View {
+    let label: String
+    let value: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.caption.weight(.black))
+                .foregroundStyle(color)
+                .frame(width: 32, height: 32)
+                .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label.uppercased())
+                    .font(.system(size: 9, weight: .black))
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.subheadline.weight(.black))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+private struct DashboardWeekDayRow: View {
+    let day: String
+    let items: [ClaseHorario]
+
+    private var academicItems: [ClaseHorario] {
+        items.filter(\.isAcademic)
+    }
+
+    private var freeItems: [ClaseHorario] {
+        items.filter { $0.tipo.isFreeBlock }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(day)
+                    .font(.footnote.weight(.black))
+                Spacer()
+                Text(items.isEmpty ? "Sin bloques" : "\(academicItems.count) clases - \(freeItems.count) libres")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            if items.isEmpty {
+                Text("No hay bloques programados.")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(spacing: 7) {
+                    ForEach(Array(items.prefix(3))) { item in
+                        HStack(spacing: 9) {
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .fill(Color(hex: item.colorHex))
+                                .frame(width: 5, height: 34)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.resumen.isEmpty ? item.tipo.label : item.resumen)
+                                    .font(.caption.weight(.black))
+                                    .lineLimit(1)
+                                Text(item.timeRange)
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if item.tipo.isFreeBlock {
+                                BadgeLabel(text: "Libre", color: .secondary)
+                            }
+                        }
+                    }
+
+                    if items.count > 3 {
+                        Text("+\(items.count - 3) bloques mas")
+                            .font(.caption2.weight(.black))
+                            .foregroundStyle(.pink)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+private struct DashboardMonthDayCell: View {
+    let day: String
+    let hasClasses: Bool
+    let isToday: Bool
+    let hasPending: Bool
+
+    var body: some View {
+        VStack(spacing: 3) {
+            Text(day.isEmpty ? "0" : day)
+                .font(.caption.weight(.black))
+                .foregroundStyle(day.isEmpty ? Color.clear : (isToday ? Color.white : Color.primary))
+                .frame(maxWidth: .infinity)
+
+            Circle()
+                .fill(hasPending ? Color.orange : (hasClasses ? Color.pink : Color.clear))
+                .frame(width: 5, height: 5)
+        }
+        .frame(maxWidth: .infinity)
+        .aspectRatio(1, contentMode: .fit)
+        .padding(4)
+        .background(isToday ? Color.pink : Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .opacity(day.isEmpty ? 0.35 : 1)
     }
 }
 
