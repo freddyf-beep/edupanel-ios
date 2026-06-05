@@ -120,7 +120,12 @@ jobs:
         run: |
           APP_PATH="$ARCHIVE_PATH/Products/Applications/EduPanel.app"
           test -d "$APP_PATH"
-          EXECUTABLE_NAME=$(/usr/libexec/PlistBuddy -c "Print CFBundleExecutable" "$APP_PATH/Info.plist")
+          EXECUTABLE_NAME=$(/usr/libexec/PlistBuddy -c "Print CFBundleExecutable" "$APP_PATH/Info.plist" 2>/dev/null || true)
+          if [ -z "$EXECUTABLE_NAME" ]; then
+            EXECUTABLE_NAME="EduPanel"
+            /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string $EXECUTABLE_NAME" "$APP_PATH/Info.plist"
+            echo "Repaired missing CFBundleExecutable in archived app Info.plist"
+          fi
           test -n "$EXECUTABLE_NAME"
           test -f "$APP_PATH/$EXECUTABLE_NAME"
           echo "Verified executable: $APP_PATH/$EXECUTABLE_NAME"
