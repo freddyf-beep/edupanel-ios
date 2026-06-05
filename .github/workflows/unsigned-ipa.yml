@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - feature/planificaciones-unidades
+      - codex/**
 
 jobs:
   unsigned-ipa:
