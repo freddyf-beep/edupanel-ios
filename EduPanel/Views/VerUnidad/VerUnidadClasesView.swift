@@ -332,16 +332,6 @@ struct VerUnidadClasesView: View {
     }
 }
 
-// Optional binding helper
-private extension Binding whereValue: Optional<String> {
-    func toNonOptional() -> Binding<String> {
-        Binding<String>(
-            get: { self.wrappedValue ?? "" },
-            set: { self.wrappedValue = $0 }
-        )
-    }
-}
-
 private extension Binding where Value == Optional<String> {
     func toNonOptional() -> Binding<String> {
         Binding<String>(
