@@ -11,6 +11,7 @@ final class PlanificacionesViewModel {
     
     private let dashboardRepository: DashboardRepository
     private let planificacionRepository: PlanificacionRepository
+    private static let defaultSubject = "M\u{00FA}sica"
     
     init(dashboardRepository: DashboardRepository, planificacionRepository: PlanificacionRepository) {
         self.dashboardRepository = dashboardRepository
@@ -20,16 +21,24 @@ final class PlanificacionesViewModel {
     func load() async {
         isLoading = true
         errorMessage = nil
+        defer { isLoading = false }
+
         do {
             let snap = try await dashboardRepository.fetchDashboard()
             self.snapshot = snap
-            
-            let subject = snap.preferences.asignaturasHabilitadas.first ?? "Música"
-            self.planes = try await planificacionRepository.listarPlanesCurso(asignatura: subject)
+
+            do {
+                let subject = subject(from: snap)
+                self.planes = try await planificacionRepository.listarPlanesCurso(asignatura: subject)
+            } catch {
+                self.planes = []
+                self.errorMessage = "No se pudieron cargar las planificaciones guardadas. Puedes seguir viendo tus cursos."
+            }
         } catch {
+            self.snapshot = nil
+            self.planes = []
             self.errorMessage = error.localizedDescription
         }
-        isLoading = false
     }
     
     func refresh() async {
@@ -37,6 +46,17 @@ final class PlanificacionesViewModel {
     }
     
     var activeSubject: String {
-        snapshot?.preferences.asignaturasHabilitadas.first ?? "Música"
+        subject(from: snapshot)
+    }
+
+    private func subject(from snapshot: DashboardSnapshot?) -> String {
+        if let subject = snapshot?.preferences.asignaturasHabilitadas
+            .map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) })
+            .first(where: { !$0.isEmpty }) {
+            return subject
+        }
+
+        let specialty = snapshot?.profile.especialidad.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return specialty.isEmpty ? Self.defaultSubject : specialty
     }
 }

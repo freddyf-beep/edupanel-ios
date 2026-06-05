@@ -72,6 +72,10 @@ struct PlanificacionesHubView: View {
 
     private var hubContent: some View {
         VStack(alignment: .leading, spacing: 18) {
+            if let errorMessage = viewModel.errorMessage {
+                errorBanner(message: errorMessage)
+            }
+
             // Hero Card
             heroCard
             
@@ -188,6 +192,39 @@ struct PlanificacionesHubView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func errorBanner(message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Planificaciones sin sincronizar")
+                    .font(.subheadline.bold())
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button {
+                Task {
+                    await viewModel.refresh()
+                }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .font(.callout.weight(.semibold))
+                    .padding(8)
+                    .background(Color(.systemGray6), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Reintentar carga")
+        }
+        .padding(12)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     // MARK: - Calculations & Filtering

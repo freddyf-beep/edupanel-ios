@@ -66,7 +66,7 @@ struct PlanificacionRepository {
                 } else if let snapshot {
                     let results = snapshot.documents.compactMap { doc -> PlanificacionCurso? in
                         let dict = doc.data()
-                        return PlanificacionCurso.from(dictionary: dict)
+                        return PlanificacionCurso.fromFirestore(dict, fallbackAsignatura: asignatura)
                     }
                     continuation.resume(returning: results)
                 } else {
@@ -83,7 +83,7 @@ struct PlanificacionRepository {
         guard snapshot.exists, let dict = snapshot.data() else {
             return nil
         }
-        return PlanificacionCurso.from(dictionary: dict)
+        return PlanificacionCurso.fromFirestore(dict, fallbackCurso: curso, fallbackAsignatura: asignatura)
     }
 
     func guardarPlanCurso(asignatura: String, curso: String, units: [UnidadPlan]) async throws {
@@ -227,11 +227,51 @@ struct PlanificacionRepository {
 extension Decodable {
     static func from(dictionary: [String: Any]) -> Self? {
         do {
-            let data = try JSONSerialization.data(withJSONObject: dictionary, options: [])
+            let sanitized = FirestoreJSON.sanitize(dictionary)
+            let data = try JSONSerialization.data(withJSONObject: sanitized, options: [])
             let decoder = JSONDecoder()
             return try decoder.decode(Self.self, from: data)
         } catch {
             print("Firestore Decodable Error on \(Self.self): \(error)")
+            return nil
+        }
+    }
+}
+
+private enum FirestoreJSON {
+    static func sanitize(_ dictionary: [String: Any]) -> [String: Any] {
+        dictionary.reduce(into: [:]) { partialResult, element in
+            if let value = sanitize(element.value) {
+                partialResult[element.key] = value
+            }
+        }
+    }
+
+    private static func sanitize(_ value: Any) -> Any? {
+        switch value {
+        case let value as String:
+            return value
+        case let value as Bool:
+            return value
+        case let value as Int:
+            return value
+        case let value as Int64:
+            return value
+        case let value as Int32:
+            return value
+        case let value as Double:
+            return value
+        case let value as Float:
+            return Double(value)
+        case let value as NSNumber:
+            return value
+        case _ as NSNull:
+            return NSNull()
+        case let value as [String: Any]:
+            return sanitize(value)
+        case let value as [Any]:
+            return value.compactMap { sanitize($0) }
+        default:
             return nil
         }
     }

@@ -99,6 +99,7 @@ struct AppShell: View {
 
     let user: AuthenticatedUser
     let dashboardRepository: DashboardRepository
+    private let planificacionRepository = PlanificacionRepository()
 
     @State private var selectedTab: AppTab = .inicio
     @State private var selectedRoute: AppRoute = .module(.inicio)
@@ -180,7 +181,7 @@ struct AppShell: View {
                     NavigationStack(path: $planificacionesPath) {
                         PlanificacionesHubView(
                             dashboardRepository: dashboardRepository,
-                            planificacionRepository: PlanificacionRepository()
+                            planificacionRepository: planificacionRepository
                         )
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
@@ -202,7 +203,7 @@ struct AppShell: View {
                                 PlanificacionesDetailView(
                                     curso: course,
                                     dashboardRepository: dashboardRepository,
-                                    planificacionRepository: PlanificacionRepository()
+                                    planificacionRepository: planificacionRepository
                                 )
                             case .verUnidad(let curso, let unidadId, let unidadNombre, let initialTab):
                                 VerUnidadDashboardView(
@@ -211,7 +212,7 @@ struct AppShell: View {
                                     unidadNombre: unidadNombre,
                                     initialTab: initialTab,
                                     dashboardRepository: dashboardRepository,
-                                    planificacionRepository: PlanificacionRepository()
+                                    planificacionRepository: planificacionRepository
                                 )
                             default:
                                 RoutePlaceholderView(route: route)

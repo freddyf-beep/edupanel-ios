@@ -7,7 +7,7 @@ struct PlanificacionesDetailView: View {
     
     @State private var units: [UnidadPlan] = []
     @State private var isLoading = false
-    @State private var activeSubject = "Música"
+    @State private var activeSubject = "M\u{00FA}sica"
     @State private var saveStatus = ""
     
     // Inline creation state
@@ -359,23 +359,41 @@ struct PlanificacionesDetailView: View {
 
     private func loadData() async {
         isLoading = true
+        defer { isLoading = false }
+
         do {
             let snap = try await dashboardRepository.fetchDashboard()
-            activeSubject = snap.preferences.asignaturasHabilitadas.first ?? "Música"
-            
-            if let plan = try await planificacionRepository.cargarPlanCurso(asignatura: activeSubject, curso: curso) {
-                units = plan.units
-            } else {
+            activeSubject = subject(from: snap)
+
+            do {
+                if let plan = try await planificacionRepository.cargarPlanCurso(asignatura: activeSubject, curso: curso) {
+                    units = plan.units
+                } else {
+                    units = []
+                }
+            } catch {
                 units = []
+                saveStatus = "Error al cargar"
             }
         } catch {
+            units = []
             saveStatus = "Error al cargar"
         }
-        isLoading = false
     }
 
     private var totalHours: Int {
         units.reduce(0) { $0 + $1.hours }
+    }
+
+    private func subject(from snapshot: DashboardSnapshot) -> String {
+        if let subject = snapshot.preferences.asignaturasHabilitadas
+            .map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) })
+            .first(where: { !$0.isEmpty }) {
+            return subject
+        }
+
+        let specialty = snapshot.profile.especialidad.trimmingCharacters(in: .whitespacesAndNewlines)
+        return specialty.isEmpty ? "M\u{00FA}sica" : specialty
     }
 
     private func typeEmojiAndLabel(for type: String) -> String {

@@ -22,6 +22,89 @@ struct PlanificacionCurso: Codable, Hashable {
     var units: [UnidadPlan]
 }
 
+extension UnidadPlan {
+    static func fromFirestore(_ dictionary: [String: Any], fallbackId: Int) -> UnidadPlan {
+        UnidadPlan(
+            id: PlanificacionValue.int(dictionary["id"]) ?? fallbackId,
+            name: PlanificacionValue.string(dictionary["name"]) ?? "Unidad \(fallbackId)",
+            color: PlanificacionValue.string(dictionary["color"]) ?? "#F03E6E",
+            hours: PlanificacionValue.int(dictionary["hours"]) ?? 0,
+            start: PlanificacionValue.string(dictionary["start"]) ?? "",
+            end: PlanificacionValue.string(dictionary["end"]) ?? "",
+            type: PlanificacionValue.string(dictionary["type"]) ?? "tradicional",
+            unidadCurricularId: PlanificacionValue.string(dictionary["unidadCurricularId"])
+        )
+    }
+}
+
+extension PlanificacionCurso {
+    static func fromFirestore(
+        _ dictionary: [String: Any],
+        fallbackCurso: String? = nil,
+        fallbackAsignatura: String? = nil
+    ) -> PlanificacionCurso? {
+        let curso = PlanificacionValue.string(dictionary["curso"]) ?? fallbackCurso ?? ""
+        let asignatura = PlanificacionValue.string(dictionary["asignatura"]) ?? fallbackAsignatura ?? ""
+        guard !curso.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        guard !asignatura.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+
+        let rawUnits = PlanificacionValue.dictionaryArray(dictionary["units"])
+        var usedIds = Set<Int>()
+        var nextId = 1
+        let units = rawUnits.enumerated().map { index, rawUnit -> UnidadPlan in
+            var unit = UnidadPlan.fromFirestore(rawUnit, fallbackId: index + 1)
+            if unit.id <= 0 || usedIds.contains(unit.id) {
+                while usedIds.contains(nextId) {
+                    nextId += 1
+                }
+                unit.id = nextId
+            }
+            usedIds.insert(unit.id)
+            nextId = max(nextId, unit.id + 1)
+            return unit
+        }
+
+        return PlanificacionCurso(curso: curso, asignatura: asignatura, units: units)
+    }
+}
+
+private enum PlanificacionValue {
+    static func string(_ value: Any?) -> String? {
+        guard let value else { return nil }
+        if let value = value as? String {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        if let value = value as? CustomStringConvertible {
+            let text = value.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? nil : text
+        }
+        return nil
+    }
+
+    static func int(_ value: Any?) -> Int? {
+        guard let value else { return nil }
+        if let value = value as? Int { return value }
+        if let value = value as? Int64 { return Int(value) }
+        if let value = value as? Int32 { return Int(value) }
+        if let value = value as? Double { return Int(value) }
+        if let value = value as? Float { return Int(value) }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        return nil
+    }
+
+    static func dictionaryArray(_ value: Any?) -> [[String: Any]] {
+        if let value = value as? [[String: Any]] {
+            return value
+        }
+        if let value = value as? [Any] {
+            return value.compactMap { $0 as? [String: Any] }
+        }
+        return []
+    }
+}
+
 // MARK: - Ver Unidad (Pedagogía)
 struct IndicadorEditado: Codable, Hashable, Identifiable {
     var id: String
