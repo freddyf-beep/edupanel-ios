@@ -44,6 +44,18 @@ El workflow `.github/workflows/testflight.yml` permite compilar en macOS, firmar
 
 Importante: esta carpeta `edupanel_IOS` debe estar subida a un repositorio de GitHub para que el workflow aparezca en la pestaña Actions. Puede ser un repo separado del proyecto web.
 
+## Prueba gratis sin Apple Developer pago
+
+Para validar el primer hito en un iPhone real sin Mac y sin pagar Apple Developer todavia, usa el workflow `.github/workflows/unsigned-ipa.yml`.
+
+Ese workflow genera un `.ipa` sin firma para instalarlo manualmente con Sideloadly o AltStore desde Windows. Requiere solo estos secrets:
+
+- `GOOGLE_SERVICE_INFO_PLIST_BASE64`
+- `EDUPANEL_API_BASE_URL`
+- `GOOGLE_REVERSED_CLIENT_ID`
+
+Guia paso a paso: `docs/FREE_IOS_TESTING.md`.
+
 Requisitos fuera del repo:
 
 1. Cuenta Apple Developer activa.

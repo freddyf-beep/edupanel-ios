@@ -75,14 +75,12 @@ struct DashboardRepository {
         var result: [String: Int] = [:]
 
         for curso in cursos {
-            let cursoId = Self.buildCursoId(curso)
-            let ref = db
+            let studentsRef = db
                 .collection("users")
                 .document(uid)
                 .collection("estudiantes")
-                .document(cursoId)
 
-            if let data = try? await getDocument(ref).data(),
+            if let data = try? await getStudentDocument(for: curso, in: studentsRef).data(),
                let alumnos = data["alumnos"] as? [[String: Any]] {
                 result[curso] = alumnos.count
             } else {
@@ -91,6 +89,21 @@ struct DashboardRepository {
         }
 
         return result
+    }
+
+    private func getStudentDocument(for curso: String, in collection: CollectionReference) async throws -> DocumentSnapshot {
+        let cursoId = Self.buildCursoId(curso)
+        let snapshot = try await getDocument(collection.document(cursoId))
+        if snapshot.exists {
+            return snapshot
+        }
+
+        let legacyId = Self.buildLegacyCursoId(curso)
+        guard legacyId != cursoId else {
+            return snapshot
+        }
+
+        return try await getDocument(collection.document(legacyId))
     }
 
     static func buildCursoId(_ curso: String) -> String {
@@ -113,6 +126,18 @@ struct DashboardRepository {
         }
 
         return String(String.UnicodeScalarView(scalars)).trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+    }
+
+    static func buildLegacyCursoId(_ curso: String) -> String {
+        var scalars: [UnicodeScalar] = []
+
+        for scalar in curso.lowercased().unicodeScalars {
+            let value = scalar.value
+            let isAlphanumeric = (48...57).contains(value) || (97...122).contains(value)
+            scalars.append(isAlphanumeric ? scalar : "_")
+        }
+
+        return String(String.UnicodeScalarView(scalars))
     }
 
     private func getDocument(_ ref: DocumentReference) async throws -> DocumentSnapshot {
