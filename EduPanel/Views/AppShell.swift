@@ -95,81 +95,190 @@ struct AppShell: View {
     let user: AuthenticatedUser
     let dashboardRepository: DashboardRepository
 
+    @State private var selectedTab: AppTab = .inicio
     @State private var selectedRoute: AppRoute = .module(.inicio)
     @State private var isSidebarOpen = false
-    @State private var navigationPath = NavigationPath()
+
+    @State private var inicioPath = NavigationPath()
+    @State private var planificacionesPath = NavigationPath()
+    @State private var evaluacionesPath = NavigationPath()
+    @State private var clasesPath = NavigationPath()
+    @State private var perfilPath = NavigationPath()
+
+    private var activePath: Binding<NavigationPath> {
+        switch selectedTab {
+        case .inicio: return $inicioPath
+        case .planificaciones: return $planificacionesPath
+        case .evaluaciones: return $evaluacionesPath
+        case .clases: return $clasesPath
+        case .perfil: return $perfilPath
+        }
+    }
 
     var body: some View {
         SidebarContainer(
             isOpen: $isSidebarOpen,
-            navigationPath: $navigationPath,
+            navigationPath: activePath,
             sidebar: {
                 SidebarView(
                     repository: dashboardRepository,
                     user: user,
                     selectedRoute: $selectedRoute,
+                    selectedTab: $selectedTab,
                     isSidebarOpen: $isSidebarOpen,
-                    navigationPath: $navigationPath
+                    navigationPath: activePath
                 )
             },
             content: {
-                NavigationStack(path: $navigationPath) {
-                    Group {
-                        switch selectedRoute {
-                        case .module(.inicio):
-                            DashboardView(
-                                repository: dashboardRepository,
-                                user: user,
-                                onOpenProfile: {
-                                    withAnimation {
-                                        selectedRoute = .module(.perfil)
+                TabView(selection: $selectedTab) {
+                    // Inicio Tab
+                    NavigationStack(path: $inicioPath) {
+                        DashboardView(
+                            repository: dashboardRepository,
+                            user: user,
+                            onOpenProfile: {
+                                withAnimation {
+                                    selectedTab = .perfil
+                                }
+                            }
+                        )
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarLeading) {
+                                Button {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                        isSidebarOpen.toggle()
+                                    }
+                                } label: {
+                                    Image(systemName: "line.3.horizontal")
+                                        .font(.title3.weight(.bold))
+                                        .foregroundStyle(Color(hex: "#F03E6E"))
+                                }
+                            }
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button {
+                                    Task { await authSession.signOut() }
+                                } label: {
+                                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                                }
+                                .accessibilityLabel("Cerrar sesion")
+                            }
+                        }
+                        .navigationDestination(for: AppRoute.self) { route in
+                            RoutePlaceholderView(route: route)
+                        }
+                    }
+                    .tabItem { Label(AppTab.inicio.title, systemImage: AppTab.inicio.systemImage) }
+                    .tag(AppTab.inicio)
+
+                    // Planificaciones Tab
+                    NavigationStack(path: $planificacionesPath) {
+                        Group {
+                            if case .coursePlanificaciones(let course) = selectedRoute {
+                                RoutePlaceholderView(route: .coursePlanificaciones(course))
+                            } else {
+                                PlaceholderModuleView(tab: .planificaciones)
+                            }
+                        }
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarLeading) {
+                                Button {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                        isSidebarOpen.toggle()
+                                    }
+                                } label: {
+                                    Image(systemName: "line.3.horizontal")
+                                        .font(.title3.weight(.bold))
+                                        .foregroundStyle(Color(hex: "#F03E6E"))
+                                }
+                            }
+                        }
+                        .navigationDestination(for: AppRoute.self) { route in
+                            RoutePlaceholderView(route: route)
+                        }
+                    }
+                    .tabItem { Label(AppTab.planificaciones.title, systemImage: AppTab.planificaciones.systemImage) }
+                    .tag(AppTab.planificaciones)
+
+                    // Evaluaciones Tab
+                    NavigationStack(path: $evaluacionesPath) {
+                        PlaceholderModuleView(tab: .evaluaciones)
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar {
+                                ToolbarItem(placement: .navigationBarLeading) {
+                                    Button {
+                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                            isSidebarOpen.toggle()
+                                        }
+                                    } label: {
+                                        Image(systemName: "line.3.horizontal")
+                                            .font(.title3.weight(.bold))
+                                            .foregroundStyle(Color(hex: "#F03E6E"))
                                     }
                                 }
-                            )
-                        case .module(.perfil):
-                            ProfileView(
-                                repository: dashboardRepository,
-                                user: user
-                            )
-                        case .module(let tab):
-                            PlaceholderModuleView(tab: tab)
-                        case .cronograma:
-                            RoutePlaceholderView(route: .cronograma)
-                        case .calificaciones:
-                            RoutePlaceholderView(route: .calificaciones)
-                        case .perfil360:
-                            RoutePlaceholderView(route: .perfil360)
-                        case .coursePlanificaciones(let course):
-                            RoutePlaceholderView(route: .coursePlanificaciones(course))
-                        default:
-                            RoutePlaceholderView(route: selectedRoute)
-                        }
+                            }
+                            .navigationDestination(for: AppRoute.self) { route in
+                                RoutePlaceholderView(route: route)
+                            }
                     }
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarLeading) {
-                            Button {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                                    isSidebarOpen.toggle()
+                    .tabItem { Label(AppTab.evaluaciones.title, systemImage: AppTab.evaluaciones.systemImage) }
+                    .tag(AppTab.evaluaciones)
+
+                    // Clases Tab
+                    NavigationStack(path: $clasesPath) {
+                        PlaceholderModuleView(tab: .clases)
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar {
+                                ToolbarItem(placement: .navigationBarLeading) {
+                                    Button {
+                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                            isSidebarOpen.toggle()
+                                        }
+                                    } label: {
+                                        Image(systemName: "line.3.horizontal")
+                                            .font(.title3.weight(.bold))
+                                            .foregroundStyle(Color(hex: "#F03E6E"))
+                                    }
                                 }
-                            } label: {
-                                Image(systemName: "line.3.horizontal")
-                                    .font(.title3.weight(.bold))
-                                    .foregroundStyle(Color(hex: "#F03E6E"))
                             }
-                        }
-                        
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button {
-                                Task { await authSession.signOut() }
-                            } label: {
-                                Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .navigationDestination(for: AppRoute.self) { route in
+                                RoutePlaceholderView(route: route)
                             }
-                            .accessibilityLabel("Cerrar sesion")
-                        }
                     }
-                    .navigationDestination(for: AppRoute.self) { route in
-                        RoutePlaceholderView(route: route)
+                    .tabItem { Label(AppTab.clases.title, systemImage: AppTab.clases.systemImage) }
+                    .tag(AppTab.clases)
+
+                    // Perfil Tab
+                    NavigationStack(path: $perfilPath) {
+                        ProfileView(repository: dashboardRepository, user: user)
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar {
+                                ToolbarItem(placement: .navigationBarLeading) {
+                                    Button {
+                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                            isSidebarOpen.toggle()
+                                        }
+                                    } label: {
+                                        Image(systemName: "line.3.horizontal")
+                                            .font(.title3.weight(.bold))
+                                            .foregroundStyle(Color(hex: "#F03E6E"))
+                                    }
+                                }
+                            }
+                            .navigationDestination(for: AppRoute.self) { route in
+                                RoutePlaceholderView(route: route)
+                            }
+                    }
+                    .tabItem { Label(AppTab.perfil.title, systemImage: AppTab.perfil.systemImage) }
+                    .tag(AppTab.perfil)
+                }
+                .onChange(of: selectedTab) { oldTab, newTab in
+                    // If they switch tabs manually (away from planificaciones), reset course selection route
+                    if newTab != .planificaciones {
+                        if case .coursePlanificaciones = selectedRoute {
+                            selectedRoute = .module(.inicio)
+                        }
                     }
                 }
             }

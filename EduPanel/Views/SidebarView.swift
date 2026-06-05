@@ -48,15 +48,17 @@ struct SidebarView: View {
     let user: AuthenticatedUser
     
     @Binding var selectedRoute: AppRoute
+    @Binding var selectedTab: AppTab
     @Binding var isSidebarOpen: Bool
     @Binding var navigationPath: NavigationPath
     
     @State private var viewModel: SidebarViewModel
     
-    init(repository: DashboardRepository, user: AuthenticatedUser, selectedRoute: Binding<AppRoute>, isSidebarOpen: Binding<Bool>, navigationPath: Binding<NavigationPath>) {
+    init(repository: DashboardRepository, user: AuthenticatedUser, selectedRoute: Binding<AppRoute>, selectedTab: Binding<AppTab>, isSidebarOpen: Binding<Bool>, navigationPath: Binding<NavigationPath>) {
         self.repository = repository
         self.user = user
         self._selectedRoute = selectedRoute
+        self._selectedTab = selectedTab
         self._isSidebarOpen = isSidebarOpen
         self._navigationPath = navigationPath
         self._viewModel = State(initialValue: SidebarViewModel(repository: repository))
@@ -262,11 +264,20 @@ struct SidebarView: View {
     }
     
     private func navigateTo(_ route: AppRoute) {
-        // Reset navigation path to root when switching main routes
+        // Reset current active navigation path to root when switching
         navigationPath = NavigationPath()
         
-        // Update selected route
         selectedRoute = route
+        
+        switch route {
+        case .module(let tab):
+            selectedTab = tab
+        case .coursePlanificaciones:
+            selectedTab = .planificaciones
+        default:
+            // For sub-tools (like cronograma, calificaciones), push onto the active stack
+            navigationPath.append(route)
+        }
         
         // Close sidebar with animation
         withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
