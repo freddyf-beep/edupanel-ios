@@ -94,28 +94,165 @@ struct ClaseHorario: Identifiable, Hashable {
 }
 
 struct PerfilUsuario: Equatable {
-    let tipoProfesor: String
-    let especialidad: String
-    let biografia: String
+    var tipoProfesor: String
+    var especialidad: String
+    var estudios: String
+    var biografia: String
 
-    static let empty = PerfilUsuario(tipoProfesor: "Profesor", especialidad: "", biografia: "")
+    static let empty = PerfilUsuario(tipoProfesor: "Profesor", especialidad: "", estudios: "", biografia: "")
 
     static func from(dictionary: [String: Any]?) -> PerfilUsuario {
         guard let dictionary else { return .empty }
         return PerfilUsuario(
             tipoProfesor: dictionary["tipoProfesor"] as? String ?? "Profesor",
             especialidad: dictionary["especialidad"] as? String ?? "",
+            estudios: dictionary["estudios"] as? String ?? "",
             biografia: dictionary["biografia"] as? String ?? ""
+        )
+    }
+
+    var dictionary: [String: Any] {
+        [
+            "tipoProfesor": tipoProfesor,
+            "especialidad": especialidad,
+            "estudios": estudios,
+            "biografia": biografia
+        ]
+    }
+}
+
+struct InfoColegio: Equatable {
+    var nombre: String
+    var logoBase64: String?
+    var encabezadoHabilitado: Bool
+    var encabezadoTextoIzq: String
+    var encabezadoTextoDer: String
+    var logoDerBase64: String?
+
+    static let empty = InfoColegio(
+        nombre: "",
+        logoBase64: nil,
+        encabezadoHabilitado: false,
+        encabezadoTextoIzq: "",
+        encabezadoTextoDer: "",
+        logoDerBase64: nil
+    )
+
+    static func from(dictionary: [String: Any]?) -> InfoColegio {
+        guard let dictionary else { return .empty }
+        return InfoColegio(
+            nombre: dictionary["nombre"] as? String ?? "",
+            logoBase64: dictionary["logoBase64"] as? String,
+            encabezadoHabilitado: dictionary["encabezadoHabilitado"] as? Bool ?? false,
+            encabezadoTextoIzq: dictionary["encabezadoTextoIzq"] as? String ?? "",
+            encabezadoTextoDer: dictionary["encabezadoTextoDer"] as? String ?? "",
+            logoDerBase64: dictionary["logoDerBase64"] as? String
+        )
+    }
+
+    var dictionary: [String: Any] {
+        var result: [String: Any] = [
+            "nombre": nombre,
+            "encabezadoHabilitado": encabezadoHabilitado,
+            "encabezadoTextoIzq": encabezadoTextoIzq,
+            "encabezadoTextoDer": encabezadoTextoDer
+        ]
+        if let logoBase64 {
+            result["logoBase64"] = logoBase64
+        }
+        if let logoDerBase64 {
+            result["logoDerBase64"] = logoDerBase64
+        }
+        return result
+    }
+}
+
+struct PreferenciasUsuario: Equatable {
+    var asignaturasHabilitadas: [String]
+    var bannerStyle: String
+    var onboardingCompletado: Bool
+
+    static let empty = PreferenciasUsuario(asignaturasHabilitadas: [], bannerStyle: "rosa", onboardingCompletado: false)
+
+    static func from(dictionary: [String: Any]?) -> PreferenciasUsuario {
+        guard let dictionary else { return .empty }
+        return PreferenciasUsuario(
+            asignaturasHabilitadas: dictionary["asignaturasHabilitadas"] as? [String] ?? [],
+            bannerStyle: dictionary["bannerStyle"] as? String ?? "rosa",
+            onboardingCompletado: dictionary["onboardingCompletado"] as? Bool ?? false
+        )
+    }
+
+    var dictionary: [String: Any] {
+        [
+            "asignaturasHabilitadas": asignaturasHabilitadas,
+            "bannerStyle": bannerStyle,
+            "onboardingCompletado": onboardingCompletado
+        ]
+    }
+}
+
+enum TipoCurricular: String, Codable, Hashable {
+    case oficial
+    case taller
+    case libre
+
+    static func from(_ rawValue: String?) -> TipoCurricular {
+        switch rawValue {
+        case "taller": return .taller
+        case "libre": return .libre
+        default: return .oficial
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .oficial: return "Oficial Mineduc"
+        case .taller: return "Taller"
+        case .libre: return "Libre"
+        }
+    }
+}
+
+struct EstudiantePerfil: Identifiable, Equatable, Hashable {
+    let id: String
+    let nombre: String
+    let orden: Int
+    let pie: Bool
+    let pieDiagnostico: String
+    let pieEspecialista: String
+    let pieNotas: String
+
+    static func from(dictionary: [String: Any], index: Int) -> EstudiantePerfil? {
+        let nombre = dictionary["nombre"] as? String ?? ""
+        guard !nombre.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+
+        let rawOrden = dictionary["orden"]
+        let orden = rawOrden as? Int ?? Int(rawOrden as? Double ?? 0)
+
+        return EstudiantePerfil(
+            id: dictionary["id"] as? String ?? "est_\(index)",
+            nombre: nombre,
+            orden: orden > 0 ? orden : index + 1,
+            pie: dictionary["pie"] as? Bool ?? false,
+            pieDiagnostico: dictionary["pieDiagnostico"] as? String ?? "",
+            pieEspecialista: dictionary["pieEspecialista"] as? String ?? "",
+            pieNotas: dictionary["pieNotas"] as? String ?? ""
         )
     }
 }
 
 struct DashboardSnapshot: Equatable {
     let date: Date
-    let profile: PerfilUsuario
+    var profile: PerfilUsuario
+    var school: InfoColegio
+    var preferences: PreferenciasUsuario
     var horario: [ClaseHorario]
     var classState: [String: Bool]
     let studentCounts: [String: Int]
+    let studentsByCourse: [String: [EstudiantePerfil]]
+    let nivelMapping: [String: String]
+    let cursoTipos: [String: TipoCurricular]
 
     var todayName: String? {
         DateHelpers.weekdayName(for: date)
@@ -149,6 +286,86 @@ struct DashboardSnapshot: Equatable {
         academicTodayClasses.filter { classState[$0.id] != true }
     }
 
+    var academicClasses: [ClaseHorario] {
+        horario.filter(\.isAcademic)
+    }
+
+    var courses: [String] {
+        Array(Set(academicClasses.map(\.resumen))).sorted()
+    }
+
+    var nonTeachingBlocks: [ClaseHorario] {
+        horario.filter { $0.tipo.isFreeBlock }
+    }
+
+    var totalAcademicMinutes: Int {
+        academicClasses.reduce(0) { total, item in
+            total + max(0, DateHelpers.minutes(from: item.horaFin) - DateHelpers.minutes(from: item.horaInicio))
+        }
+    }
+
+    var totalFreeMinutes: Int {
+        nonTeachingBlocks.reduce(0) { total, item in
+            total + max(0, DateHelpers.minutes(from: item.horaFin) - DateHelpers.minutes(from: item.horaInicio))
+        }
+    }
+
+    var totalStudents: Int {
+        studentsByCourse.values.reduce(0) { $0 + $1.count }
+    }
+
+    var totalPIEStudents: Int {
+        studentsByCourse.values.reduce(0) { total, students in
+            total + students.filter(\.pie).count
+        }
+    }
+
+    var setupChecklist: [ProfileSetupItem] {
+        let coursesWithoutLevel = courses.filter { course in
+            (cursoTipos[course] ?? .oficial) == .oficial && (nivelMapping[course] ?? "").isEmpty
+        }
+
+        return [
+            ProfileSetupItem(
+                label: "Define tu rol docente",
+                target: .identidad,
+                isComplete: !profile.tipoProfesor.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                hint: "Basica, Media o Diferencial"
+            ),
+            ProfileSetupItem(
+                label: "Agrega el nombre de tu colegio",
+                target: .identidad,
+                isComplete: !school.nombre.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                hint: nil
+            ),
+            ProfileSetupItem(
+                label: "Crea al menos un curso con bloques",
+                target: .semana,
+                isComplete: !courses.isEmpty,
+                hint: nil
+            ),
+            ProfileSetupItem(
+                label: "Asocia cada curso a un nivel curricular",
+                target: .asignaturas,
+                isComplete: !courses.isEmpty && coursesWithoutLevel.isEmpty,
+                hint: coursesWithoutLevel.isEmpty ? nil : "Falta: \(coursesWithoutLevel.joined(separator: ", "))"
+            ),
+            ProfileSetupItem(
+                label: "Carga estudiantes en al menos un curso",
+                target: .cursos,
+                isComplete: studentsByCourse.values.contains { !$0.isEmpty },
+                hint: nil
+            )
+        ]
+    }
+
+    var setupProgress: Int {
+        let items = setupChecklist
+        guard !items.isEmpty else { return 0 }
+        let complete = items.filter(\.isComplete).count
+        return Int((Double(complete) / Double(items.count) * 100).rounded())
+    }
+
     func currentOrNextClass(now: Date = Date()) -> ClaseHorario? {
         let currentMinutes = DateHelpers.minutesSinceMidnight(for: now)
         var next: ClaseHorario?
@@ -167,7 +384,50 @@ struct DashboardSnapshot: Equatable {
     }
 }
 
+struct ProfileSetupItem: Identifiable, Equatable {
+    var id: String { label }
+    let label: String
+    let target: ProfileTabKey
+    let isComplete: Bool
+    let hint: String?
+}
+
+enum ProfileTabKey: String, CaseIterable, Identifiable, Hashable {
+    case resumen
+    case semana
+    case cursos
+    case asignaturas
+    case identidad
+    case conexiones
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .resumen: return "Resumen"
+        case .semana: return "Mi Semana"
+        case .cursos: return "Mis Cursos"
+        case .asignaturas: return "Asignaturas"
+        case .identidad: return "Identidad"
+        case .conexiones: return "Conexiones"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .resumen: return "square.grid.2x2.fill"
+        case .semana: return "calendar"
+        case .cursos: return "folder.fill"
+        case .asignaturas: return "book.closed.fill"
+        case .identidad: return "person.text.rectangle.fill"
+        case .conexiones: return "link"
+        }
+    }
+}
+
 enum DateHelpers {
+    static let workdays = ["Lunes", "Martes", "Mi\u{00E9}rcoles", "Jueves", "Viernes"]
+
     static let weekdayMap: [Int: String] = [
         1: "Domingo",
         2: "Lunes",

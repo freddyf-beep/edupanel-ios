@@ -28,28 +28,45 @@ struct DashboardRepository {
         let userRef = db.collection("users").document(uid)
 
         async let profileDoc = getDocument(userRef.collection("perfil_info").document("main"))
+        async let schoolDoc = getDocument(userRef.collection("perfil_info").document("colegio"))
+        async let preferencesDoc = getDocument(userRef.collection("perfil_info").document("preferencias"))
         async let scheduleDoc = getDocument(userRef.collection("configuracion").document("horario"))
+        async let levelsDoc = getDocument(userRef.collection("configuracion").document("nivel_mapping"))
         async let stateDoc = getDocument(userRef.collection("horario_estado").document(DateHelpers.dateKey(for: date)))
 
         let profileSnapshot = try await profileDoc
+        let schoolSnapshot = try await schoolDoc
+        let preferencesSnapshot = try await preferencesDoc
         let scheduleSnapshot = try await scheduleDoc
+        let levelsSnapshot = try await levelsDoc
         let stateSnapshot = try await stateDoc
 
         let profileData = profileSnapshot.data()
+        let schoolData = schoolSnapshot.data()
+        let preferencesData = preferencesSnapshot.data()
         let scheduleData = scheduleSnapshot.data()
+        let levelsData = levelsSnapshot.data()
         let stateData = stateSnapshot.data()
 
         let rawClasses = scheduleData?["clases"] as? [[String: Any]] ?? []
         let horario = rawClasses.compactMap(ClaseHorario.from(dictionary:))
         let classState = stateData?["estado"] as? [String: Bool] ?? [:]
-        let studentCounts = await loadStudentCounts(for: horario, uid: uid)
+        let studentsByCourse = await loadStudentsByCourse(for: horario, uid: uid)
+        let studentCounts = studentsByCourse.mapValues(\.count)
+        let rawCursoTipos = levelsData?["cursoTipos"] as? [String: String] ?? [:]
+        let cursoTipos = rawCursoTipos.mapValues { TipoCurricular.from($0) }
 
         return DashboardSnapshot(
             date: date,
             profile: PerfilUsuario.from(dictionary: profileData),
+            school: InfoColegio.from(dictionary: schoolData),
+            preferences: PreferenciasUsuario.from(dictionary: preferencesData),
             horario: horario,
             classState: classState,
-            studentCounts: studentCounts
+            studentCounts: studentCounts,
+            studentsByCourse: studentsByCourse,
+            nivelMapping: levelsData?["mapping"] as? [String: String] ?? [:],
+            cursoTipos: cursoTipos
         )
     }
 
@@ -70,9 +87,54 @@ struct DashboardRepository {
         ], at: ref, merge: true)
     }
 
-    private func loadStudentCounts(for horario: [ClaseHorario], uid: String) async -> [String: Int] {
+    func saveProfile(_ profile: PerfilUsuario) async throws {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            throw DashboardRepositoryError.missingUser
+        }
+
+        var data = profile.dictionary
+        data["updatedAt"] = FieldValue.serverTimestamp()
+
+        try await setData(
+            data,
+            at: db.collection("users").document(uid).collection("perfil_info").document("main"),
+            merge: false
+        )
+    }
+
+    func saveSchool(_ school: InfoColegio) async throws {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            throw DashboardRepositoryError.missingUser
+        }
+
+        var data = school.dictionary
+        data["updatedAt"] = FieldValue.serverTimestamp()
+
+        try await setData(
+            data,
+            at: db.collection("users").document(uid).collection("perfil_info").document("colegio"),
+            merge: true
+        )
+    }
+
+    func savePreferences(_ preferences: PreferenciasUsuario) async throws {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            throw DashboardRepositoryError.missingUser
+        }
+
+        var data = preferences.dictionary
+        data["updatedAt"] = FieldValue.serverTimestamp()
+
+        try await setData(
+            data,
+            at: db.collection("users").document(uid).collection("perfil_info").document("preferencias"),
+            merge: true
+        )
+    }
+
+    private func loadStudentsByCourse(for horario: [ClaseHorario], uid: String) async -> [String: [EstudiantePerfil]] {
         let cursos = Array(Set(horario.filter(\.isAcademic).map(\.resumen))).sorted()
-        var result: [String: Int] = [:]
+        var result: [String: [EstudiantePerfil]] = [:]
 
         for curso in cursos {
             let studentsRef = db
@@ -82,9 +144,17 @@ struct DashboardRepository {
 
             if let data = try? await getStudentDocument(for: curso, in: studentsRef).data(),
                let alumnos = data["alumnos"] as? [[String: Any]] {
-                result[curso] = alumnos.count
+                result[curso] = alumnos
+                    .enumerated()
+                    .compactMap { index, value in EstudiantePerfil.from(dictionary: value, index: index) }
+                    .sorted { lhs, rhs in
+                        if lhs.orden != rhs.orden {
+                            return lhs.orden < rhs.orden
+                        }
+                        return lhs.nombre.localizedCaseInsensitiveCompare(rhs.nombre) == .orderedAscending
+                    }
             } else {
-                result[curso] = 0
+                result[curso] = []
             }
         }
 

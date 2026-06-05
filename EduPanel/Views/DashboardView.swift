@@ -9,10 +9,12 @@ struct DashboardView: View {
     @AppStorage("edupanel_dashboard_reminders") private var remindersData = "[]"
 
     let user: AuthenticatedUser
+    let onOpenProfile: () -> Void
 
-    init(repository: DashboardRepository, user: AuthenticatedUser) {
+    init(repository: DashboardRepository, user: AuthenticatedUser, onOpenProfile: @escaping () -> Void = {}) {
         _viewModel = State(initialValue: DashboardViewModel(repository: repository))
         self.user = user
+        self.onOpenProfile = onOpenProfile
     }
 
     var body: some View {
@@ -157,10 +159,10 @@ struct DashboardView: View {
             }
 
             LazyVGrid(columns: dashboardGrid, spacing: 10) {
-                GradientAction(title: "Calificar", icon: "checkmark.clipboard.fill", colors: [.green, .teal])
-                GradientAction(title: "Ver cronograma", icon: "calendar.badge.clock", colors: [.cyan, .blue])
-                GradientAction(title: "Editar clase", icon: "lightbulb.fill", colors: [.purple, .pink])
-                GradientAction(title: "Perfil 360", icon: "person.crop.circle.fill", colors: [.indigo, .purple])
+                GradientAction(title: "Calificar", icon: "checkmark.clipboard.fill", colors: [.green, .teal], route: .calificaciones)
+                GradientAction(title: "Ver cronograma", icon: "calendar.badge.clock", colors: [.cyan, .blue], route: .cronograma)
+                GradientAction(title: "Editar clase", icon: "lightbulb.fill", colors: [.purple, .pink], route: .actividades)
+                GradientAction(title: "Perfil 360", icon: "person.crop.circle.fill", colors: [.indigo, .purple], route: .perfil360)
             }
         }
         .webCard()
@@ -275,23 +277,26 @@ struct DashboardView: View {
             } else {
                 VStack(spacing: 8) {
                     ForEach(snapshot.pendingClasses) { item in
-                        HStack(spacing: 10) {
-                            Image(systemName: "bell.fill")
-                                .foregroundStyle(.orange)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(item.resumen) sin marcar como dictada")
-                                    .font(.footnote.weight(.black))
-                                Text("\(item.dia) \(item.timeRange)")
-                                    .font(.caption2.weight(.medium))
+                        NavigationLink(value: AppRoute.claseDetalle(item.id)) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "bell.fill")
+                                    .foregroundStyle(.orange)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("\(item.resumen) sin marcar como dictada")
+                                        .font(.footnote.weight(.black))
+                                    Text("\(item.dia) \(item.timeRange)")
+                                        .font(.caption2.weight(.medium))
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "arrow.right")
+                                    .font(.caption.weight(.bold))
                                     .foregroundStyle(.secondary)
                             }
-                            Spacer()
-                            Image(systemName: "arrow.right")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.secondary)
+                            .padding(14)
+                            .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
-                        .padding(14)
-                        .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -390,6 +395,14 @@ struct DashboardView: View {
             Text("Cuando agregues tus bloques en la web, EduPanel los mostrara aqui para seguir tu jornada.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+            Button {
+                onOpenProfile()
+            } label: {
+                Label("Ir a Mi Perfil", systemImage: "person.crop.circle.fill")
+                    .font(.footnote.weight(.black))
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.pink)
         }
         .webCard()
     }
@@ -575,24 +588,28 @@ private struct GradientAction: View {
     let title: String
     let icon: String
     let colors: [Color]
+    let route: AppRoute
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: icon)
-                .font(.headline.weight(.bold))
-            Text(title)
-                .font(.subheadline.weight(.black))
-                .lineLimit(2)
-            Spacer(minLength: 0)
-            Image(systemName: "arrow.right")
-                .font(.caption.weight(.black))
-                .opacity(0.8)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+        NavigationLink(value: route) {
+            VStack(alignment: .leading, spacing: 10) {
+                Image(systemName: icon)
+                    .font(.headline.weight(.bold))
+                Text(title)
+                    .font(.subheadline.weight(.black))
+                    .lineLimit(2)
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.right")
+                    .font(.caption.weight(.black))
+                    .opacity(0.8)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
+            .padding(14)
+            .background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
-        .padding(14)
-        .background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .buttonStyle(.plain)
     }
 }
 
@@ -898,10 +915,6 @@ private extension View {
                     .stroke(Color(.separator).opacity(0.28), lineWidth: 1)
             )
     }
-}
-
-private extension DateHelpers {
-    static let workdays = ["Lunes", "Martes", "Mi\u{00E9}rcoles", "Jueves", "Viernes"]
 }
 
 private extension Color {
