@@ -87,7 +87,7 @@ struct DashboardView: View {
                             .foregroundStyle(.secondary)
                         Text(item.tipo.label)
                             .font(.caption.weight(.bold))
-                            .foregroundStyle(item.tipo.isFreeBlock ? .secondary : .pink)
+                            .foregroundStyle(item.tipo.isFreeBlock ? Color.secondary : Color.pink)
                     }
                     Spacer()
                 }

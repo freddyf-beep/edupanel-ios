@@ -155,7 +155,7 @@ struct DashboardRepository {
     }
 
     private func setData(_ data: [String: Any], at ref: DocumentReference, merge: Bool) async throws {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             ref.setData(data, merge: merge) { error in
                 if let error {
                     continuation.resume(throwing: error)
