@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 struct DashboardView: View {
@@ -781,7 +782,7 @@ private struct InsightsPanel: View {
 
             VStack(spacing: 12) {
                 InsightRow(icon: "person.2.fill", label: "Alumnos totales", value: "\(courses.reduce(0) { $0 + $1.students })", color: .pink)
-                InsightRow(icon: "clock.fill", label: "Horas/semana", value: "\(weeklyHours, specifier: "%.1f") h", color: .green)
+                InsightRow(icon: "clock.fill", label: "Horas/semana", value: String(format: "%.1f h", weeklyHours), color: .green)
                 InsightRow(icon: "book.closed.fill", label: "Libro de clases", value: "Prototipo", color: .blue)
                 InsightRow(icon: "flame.fill", label: "Restantes hoy", value: "\(snapshot.pendingClasses.count)", color: .orange)
             }

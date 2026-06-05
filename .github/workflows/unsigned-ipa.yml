@@ -39,6 +39,7 @@ jobs:
 
       - name: Resolve Swift packages
         run: |
+          set -o pipefail
           xcodebuild \
             -project "$PROJECT_PATH" \
             -scheme "$SCHEME" \
@@ -65,7 +66,15 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             EDUPANEL_API_BASE_URL="$EDUPANEL_API_BASE_URL" \
-            GOOGLE_REVERSED_CLIENT_ID="$GOOGLE_REVERSED_CLIENT_ID"
+            GOOGLE_REVERSED_CLIENT_ID="$GOOGLE_REVERSED_CLIENT_ID" \
+            2>&1 | tee build-xcode.log
+
+      - name: Print concise build errors
+        if: failure()
+        run: |
+          if [ -f build-xcode.log ]; then
+            grep -nE "error:|BUILD FAILED|The following build commands failed" build-xcode.log | tail -80
+          fi
 
       - name: Verify app executable metadata
         run: |
