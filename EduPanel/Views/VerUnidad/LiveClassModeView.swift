@@ -1,4 +1,6 @@
 import SwiftUI
+import FirebaseAuth
+import FirebaseFirestore
 
 struct LiveClassModeView: View {
     let actividad: ActividadClase
