@@ -55,6 +55,11 @@ struct LoginView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
 
+                Text("Build: Sidebar v1.0.18-d3e1596")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.pink)
+                    .padding(.top, 4)
+
                 Spacer(minLength: 24)
             }
             .padding(20)
