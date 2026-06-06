@@ -16,7 +16,7 @@ Este documento deja una estructura fija para revisar la app nativa contra la web
 | --- | --- | --- | --- | --- |
 | Mi Perfil - Resumen | `perfil-shell.tsx` `ResumenView` | Parcial | Layout movil no replica columnas y atajos web completos | Captura iOS comparada con web usando mismos datos |
 | Mi Perfil - Mi Semana | `perfil-shell.tsx` `SemanaView` | En correccion | Antes era lista simple, no grilla calendario | IPA mostrando cabecera, grupos no lectivos, calendario y lista |
-| Mi Perfil - Mis Cursos | `perfil-shell.tsx` `CursosView` | Parcial | Falta edicion completa de curso/estudiantes/color como web | Probar curso con estudiantes y PIE |
+| Mi Perfil - Mis Cursos | `perfil-shell.tsx` `CursosView` | Replica visual/lectura en avance | Falta edicion completa de curso/estudiantes/color como web | Probar curso con asignaturas, bloques, estudiantes y PIE |
 | Mi Perfil - Asignaturas | `perfil-shell.tsx` `AsignaturasView` | Parcial | Faltan textos de ayuda y mapeo compacto igual a web | Probar cursos oficiales/taller/libre |
 | Mi Perfil - Identidad | `perfil-shell.tsx` `IdentidadView` | Parcial | Falta subida/cambio real de logos en la misma pantalla | Probar guardar perfil, colegio y encabezado |
 | Mi Perfil - Conexiones | `perfil-shell.tsx` `ConexionesViewV2` | Placeholder | No lee estado real Calendar/Drive | Probar cuenta conectada/desconectada |
