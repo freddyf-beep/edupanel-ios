@@ -545,8 +545,10 @@ struct VerUnidadClasesView: View {
 
     private var linkedOAs: [OAEditado] {
         guard let verUnidad = viewModel.verUnidad else { return [] }
-        let ids = Set(activeActivity.oaIds)
-        return verUnidad.oas.filter { ids.contains($0.id) }
+        let ids = activeActivity.oaIds
+        return verUnidad.oas.filter { oa in
+            ids.contains { matchesOAId($0, oa: oa) }
+        }
     }
 
     private var selectedUnitSkills: [String] {
@@ -564,31 +566,7 @@ struct VerUnidadClasesView: View {
     }
 
     private var activeActivity: ActividadClase {
-        viewModel.clasesActividades[selectedClassNum] ?? ActividadClase(
-            id: PlanificacionRepository.buildActividadClaseId(
-                curso: viewModel.curso,
-                unidadId: viewModel.unidadId,
-                numeroClase: selectedClassNum,
-                asignatura: viewModel.activeSubject
-            ),
-            asignatura: viewModel.activeSubject,
-            curso: viewModel.curso,
-            unidadId: viewModel.unidadId,
-            numeroClase: selectedClassNum,
-            fecha: viewModel.cronograma?.clases.first(where: { $0.numero == selectedClassNum })?.fecha ?? "",
-            oaIds: viewModel.cronograma?.clases.first(where: { $0.numero == selectedClassNum })?.oaIds ?? [],
-            objetivo: "",
-            inicio: "",
-            desarrollo: "",
-            cierre: "",
-            adecuacion: "",
-            habilidades: [],
-            actitudes: [],
-            materiales: [],
-            tics: [],
-            estado: "no_planificada",
-            sincronizada: false
-        )
+        viewModel.clasesActividades[selectedClassNum] ?? viewModel.activityTemplate(for: selectedClassNum)
     }
 
     private var activeActivityBinding: Binding<ActividadClase> {
@@ -615,52 +593,43 @@ struct VerUnidadClasesView: View {
     }
 
     private func ensureActivityExists(for classNum: Int) {
-        guard viewModel.clasesActividades[classNum] == nil else { return }
-        let cronoClass = cronogramaClass(for: classNum)
-        viewModel.clasesActividades[classNum] = ActividadClase(
-            id: PlanificacionRepository.buildActividadClaseId(
-                curso: viewModel.curso,
-                unidadId: viewModel.unidadId,
-                numeroClase: classNum,
-                asignatura: viewModel.activeSubject
-            ),
-            asignatura: viewModel.activeSubject,
-            curso: viewModel.curso,
-            unidadId: viewModel.unidadId,
-            numeroClase: classNum,
-            fecha: cronoClass?.fecha ?? "",
-            oaIds: cronoClass?.oaIds ?? [],
-            objetivo: "",
-            inicio: "",
-            desarrollo: "",
-            cierre: "",
-            adecuacion: "",
-            habilidades: [],
-            actitudes: [],
-            materiales: [],
-            tics: [],
-            estado: "no_planificada",
-            sincronizada: false
-        )
+        viewModel.ensureActivity(for: classNum)
     }
 
     private func isClassPlanificable(classNum: Int) -> Bool {
         guard let act = viewModel.clasesActividades[classNum] else { return false }
         return !RichTextHTML.plainText(from: act.objetivo).isEmpty ||
         !RichTextHTML.plainText(from: act.inicio).isEmpty ||
-        !RichTextHTML.plainText(from: act.desarrollo).isEmpty
+        !RichTextHTML.plainText(from: act.desarrollo).isEmpty ||
+        !RichTextHTML.plainText(from: act.cierre).isEmpty ||
+        !RichTextHTML.plainText(from: act.adecuacion).isEmpty ||
+        !RichTextHTML.plainText(from: act.contextoProfesor ?? "").isEmpty ||
+        !act.oaIds.isEmpty ||
+        !act.habilidades.isEmpty ||
+        !act.actitudes.isEmpty ||
+        !act.materiales.isEmpty ||
+        !act.tics.isEmpty ||
+        !(act.archivos ?? []).isEmpty ||
+        hasExternalPedagogyData(act)
     }
 
     private func indicatorsForClass(_ oa: OAEditado) -> [IndicadorEditado] {
-        guard let raw = activeActivity.indicadoresPorOa?[oa.id], !raw.isEmpty else {
+        guard let raw = indicatorSelectionValues(for: oa), !raw.isEmpty else {
             return oa.indicadores.filter(\.seleccionado)
         }
 
         let selected = Set(raw.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
-        let known = oa.indicadores.filter { selected.contains($0.id) || selected.contains($0.texto) }
+        let normalizedSelected = Set(selected.map(normalizePedagogicalId))
+        let known = oa.indicadores.filter {
+            selected.contains($0.id) ||
+            selected.contains($0.texto) ||
+            normalizedSelected.contains(normalizePedagogicalId($0.id)) ||
+            normalizedSelected.contains(normalizePedagogicalId($0.texto))
+        }
         let knownText = Set(known.flatMap { [$0.id, $0.texto] })
+        let normalizedKnown = Set(knownText.map(normalizePedagogicalId))
         let custom = selected
-            .filter { !knownText.contains($0) }
+            .filter { !knownText.contains($0) && !normalizedKnown.contains(normalizePedagogicalId($0)) }
             .map { value in
                 IndicadorEditado(id: "\(oa.id)_class_\(value.hashValue.magnitude)", texto: value, seleccionado: true)
             }
@@ -729,12 +698,66 @@ struct VerUnidadClasesView: View {
     }
 
     private func hasExternalPedagogyData(_ act: ActividadClase) -> Bool {
-        if act.objetivoMultinivel != nil { return true }
+        if let objetivoMultinivel = act.objetivoMultinivel,
+           [objetivoMultinivel.basico, objetivoMultinivel.intermedio, objetivoMultinivel.avanzado, objetivoMultinivel.recomendado].contains(where: { ($0 ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }) {
+            return true
+        }
         if let bloom = act.analisisBloom, !bloom.isEmpty { return true }
         if let indicadores = act.indicadoresEvaluacion, !indicadores.isEmpty { return true }
-        if act.actividadEvaluacion != nil { return true }
-        if act.desarrolloFormal != nil { return true }
+        if let actividadEvaluacion = act.actividadEvaluacion,
+           (
+            [actividadEvaluacion.tipo, actividadEvaluacion.descripcion, actividadEvaluacion.instrumento].contains(where: { ($0 ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }) ||
+            !(actividadEvaluacion.criterios ?? []).isEmpty ||
+            !(actividadEvaluacion.alineacionMBE ?? []).isEmpty
+           ) {
+            return true
+        }
+        if let desarrolloFormal = act.desarrolloFormal,
+           [desarrolloFormal.inicio, desarrolloFormal.desarrollo, desarrolloFormal.cierre].contains(where: { ($0 ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }) {
+            return true
+        }
         return false
+    }
+
+    private func indicatorSelectionValues(for oa: OAEditado) -> [String]? {
+        guard let map = activeActivity.indicadoresPorOa else { return nil }
+        let keys = oaIdCandidates(for: oa)
+        for key in keys {
+            if let values = map[key], !values.isEmpty {
+                return values
+            }
+        }
+
+        let normalizedKeys = Set(keys.map(normalizePedagogicalId))
+        if let match = map.first(where: { normalizedKeys.contains(normalizePedagogicalId($0.key)) && !$0.value.isEmpty }) {
+            return match.value
+        }
+        return nil
+    }
+
+    private func matchesOAId(_ value: String, oa: OAEditado) -> Bool {
+        let candidates = oaIdCandidates(for: oa)
+        if candidates.contains(value) { return true }
+        let normalized = normalizePedagogicalId(value)
+        return candidates.map(normalizePedagogicalId).contains(normalized)
+    }
+
+    private func oaIdCandidates(for oa: OAEditado) -> [String] {
+        var candidates = [oa.id]
+        if let numero = oa.numero {
+            candidates.append("OA\(numero)")
+            candidates.append(String(numero))
+            candidates.append("oa-\(numero)")
+            candidates.append("oa_\(numero)")
+        }
+        return Array(Set(candidates)).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    private func normalizePedagogicalId(_ value: String) -> String {
+        value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL"))
+            .lowercased()
+            .replacingOccurrences(of: "[^a-z0-9]", with: "", options: .regularExpression)
     }
 
     private func externalTextRow(_ label: String, _ value: String?, tint: Color) -> some View {

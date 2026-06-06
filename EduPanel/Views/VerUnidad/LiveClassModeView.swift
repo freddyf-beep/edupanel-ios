@@ -96,7 +96,7 @@ struct LiveClassModeView: View {
                 Text(actividad.curso)
                     .font(.caption.bold())
                     .foregroundStyle(.secondary)
-                Text("Clase \(actividad.numeroClase): \(actividad.objetivo.isEmpty ? "Plan de Aula" : actividad.objetivo)")
+                Text("Clase \(actividad.numeroClase): \(cleanHtml(actividad.objetivo).isEmpty ? "Plan de Aula" : cleanHtml(actividad.objetivo))")
                     .font(.subheadline.bold())
                     .lineLimit(1)
             }
@@ -359,8 +359,7 @@ struct LiveClassModeView: View {
     }
     
     private func cleanHtml(_ text: String) -> String {
-        // Simple regex to clear basic HTML tags if any (e.g. from rich text editor)
-        return text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        RichTextHTML.plainText(from: text)
     }
 }
 

@@ -120,35 +120,71 @@ final class VerUnidadViewModel {
         
         for n in 1...total {
             if let act = try? await planificacionRepository.cargarActividadClaseConFallback(curso: curso, unidadId: unidadId, numeroClase: n, asignatura: activeSubject) {
-                clasesActividades[n] = act
+                clasesActividades[n] = normalizedActivity(act, classNum: n)
             } else {
-                // Initialize default empty activity
-                let actId = PlanificacionRepository.buildActividadClaseId(curso: curso, unidadId: unidadId, numeroClase: n, asignatura: activeSubject)
-                let dateStr = cronograma.clases.first(where: { $0.numero == n })?.fecha ?? ""
-                let oas = cronograma.clases.first(where: { $0.numero == n })?.oaIds ?? []
-                
-                clasesActividades[n] = ActividadClase(
-                    id: actId,
-                    asignatura: activeSubject,
-                    curso: curso,
-                    unidadId: unidadId,
-                    numeroClase: n,
-                    fecha: dateStr,
-                    oaIds: oas,
-                    objetivo: "",
-                    inicio: "",
-                    desarrollo: "",
-                    cierre: "",
-                    adecuacion: "",
-                    habilidades: [],
-                    actitudes: [],
-                    materiales: [],
-                    tics: [],
-                    estado: "no_planificada",
-                    sincronizada: false
-                )
+                clasesActividades[n] = activityTemplate(for: n)
             }
         }
+    }
+
+    func activityTemplate(for classNum: Int) -> ActividadClase {
+        let actId = PlanificacionRepository.buildActividadClaseId(
+            curso: curso,
+            unidadId: unidadId,
+            numeroClase: classNum,
+            asignatura: activeSubject
+        )
+        let cronoClass = cronograma?.clases.first(where: { $0.numero == classNum })
+
+        return ActividadClase(
+            id: actId,
+            asignatura: activeSubject,
+            curso: curso,
+            unidadId: unidadId,
+            numeroClase: classNum,
+            fecha: cronoClass?.fecha ?? "",
+            oaIds: cronoClass?.oaIds ?? [],
+            objetivo: "",
+            inicio: "",
+            desarrollo: "",
+            cierre: "",
+            adecuacion: "",
+            habilidades: [],
+            actitudes: [],
+            materiales: [],
+            tics: [],
+            estado: "no_planificada",
+            sincronizada: false
+        )
+    }
+
+    func ensureActivity(for classNum: Int) {
+        if let existing = clasesActividades[classNum] {
+            clasesActividades[classNum] = normalizedActivity(existing, classNum: classNum)
+        } else {
+            clasesActividades[classNum] = activityTemplate(for: classNum)
+        }
+    }
+
+    private func normalizedActivity(_ activity: ActividadClase, classNum: Int) -> ActividadClase {
+        var result = activity
+        let cronoClass = cronograma?.clases.first(where: { $0.numero == classNum })
+        result.id = PlanificacionRepository.buildActividadClaseId(
+            curso: curso,
+            unidadId: unidadId,
+            numeroClase: classNum,
+            asignatura: activeSubject
+        )
+        result.asignatura = activeSubject
+        result.curso = curso
+        result.unidadId = unidadId
+        result.numeroClase = classNum
+        result.fecha = cronoClass?.fecha ?? result.fecha
+        result.oaIds = cronoClass?.oaIds ?? result.oaIds
+        if result.estado.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            result.estado = "no_planificada"
+        }
+        return result
     }
     
     // Save everything (Unidad details + Cronograma + Classes)

@@ -180,7 +180,8 @@ struct PlanificacionRepository {
     }
 
     func cargarVerUnidadConFallback(asignatura: String, curso: String, unidadId: String) async throws -> VerUnidadGuardada? {
-        for candidate in Self.unidadIdCandidates(raw: unidadId) {
+        let candidates = Self.unidadIdCandidates(raw: unidadId)
+        for candidate in candidates {
             if let data = try await cargarVerUnidad(asignatura: asignatura, curso: curso, unidadId: candidate) {
                 var resolved = data
                 if resolved.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -189,7 +190,29 @@ struct PlanificacionRepository {
                 return resolved
             }
         }
+
+        for candidate in candidates {
+            if let data = try? await buscarVerUnidadPorCampos(asignatura: asignatura, curso: curso, unidadId: candidate) {
+                var resolved = data
+                if resolved.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    resolved.unidadId = candidate
+                }
+                return resolved
+            }
+        }
         return nil
+    }
+
+    private func buscarVerUnidadPorCampos(asignatura: String, curso: String, unidadId: String) async throws -> VerUnidadGuardada? {
+        let query = try userCol(col: "ver_unidad")
+            .whereField("asignatura", isEqualTo: asignatura)
+            .whereField("curso", isEqualTo: curso)
+            .whereField("unidadId", isEqualTo: unidadId)
+            .limit(to: 1)
+        guard let snapshot = try await getFirstDocument(query), let dict = snapshot.data() else {
+            return nil
+        }
+        return VerUnidadGuardada.from(dictionary: dict)
     }
 
     func guardarVerUnidad(asignatura: String, curso: String, unidadId: String, data: VerUnidadGuardada) async throws {
@@ -213,7 +236,8 @@ struct PlanificacionRepository {
     }
 
     func cargarCronogramaUnidadConFallback(asignatura: String, curso: String, unidadIds: [String]) async throws -> CronogramaUnidadData? {
-        for candidate in Self.uniqueNonEmpty(unidadIds.flatMap { Self.unidadIdCandidates(raw: $0) }) {
+        let candidates = Self.uniqueNonEmpty(unidadIds.flatMap { Self.unidadIdCandidates(raw: $0) })
+        for candidate in candidates {
             if let data = try await cargarCronogramaUnidad(asignatura: asignatura, curso: curso, unidadId: candidate) {
                 var resolved = data
                 if resolved.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -222,7 +246,29 @@ struct PlanificacionRepository {
                 return resolved
             }
         }
+
+        for candidate in candidates {
+            if let data = try? await buscarCronogramaUnidadPorCampos(asignatura: asignatura, curso: curso, unidadId: candidate) {
+                var resolved = data
+                if resolved.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    resolved.unidadId = candidate
+                }
+                return resolved
+            }
+        }
         return nil
+    }
+
+    private func buscarCronogramaUnidadPorCampos(asignatura: String, curso: String, unidadId: String) async throws -> CronogramaUnidadData? {
+        let query = try userCol(col: "cronograma_unidad")
+            .whereField("asignatura", isEqualTo: asignatura)
+            .whereField("curso", isEqualTo: curso)
+            .whereField("unidadId", isEqualTo: unidadId)
+            .limit(to: 1)
+        guard let snapshot = try await getFirstDocument(query), let dict = snapshot.data() else {
+            return nil
+        }
+        return CronogramaUnidadData.from(dictionary: dict)
     }
 
     func cargarCronogramas(asignatura: String, planes: [PlanificacionCurso]) async -> [String: CronogramaUnidadData] {
@@ -264,7 +310,8 @@ struct PlanificacionRepository {
     }
 
     func cargarActividadClaseConFallback(curso: String, unidadId: String, numeroClase: Int, asignatura: String) async throws -> ActividadClase? {
-        for candidate in Self.unidadIdCandidates(raw: unidadId) {
+        let candidates = Self.unidadIdCandidates(raw: unidadId)
+        for candidate in candidates {
             if let data = try await cargarActividadClase(curso: curso, unidadId: candidate, numeroClase: numeroClase, asignatura: asignatura) {
                 var resolved = data
                 if resolved.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -273,7 +320,30 @@ struct PlanificacionRepository {
                 return resolved
             }
         }
+
+        for candidate in candidates {
+            if let data = try? await buscarActividadClasePorCampos(curso: curso, unidadId: candidate, numeroClase: numeroClase, asignatura: asignatura) {
+                var resolved = data
+                if resolved.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    resolved.unidadId = candidate
+                }
+                return resolved
+            }
+        }
         return nil
+    }
+
+    private func buscarActividadClasePorCampos(curso: String, unidadId: String, numeroClase: Int, asignatura: String) async throws -> ActividadClase? {
+        let query = try userCol(col: "actividades_clase")
+            .whereField("asignatura", isEqualTo: asignatura)
+            .whereField("curso", isEqualTo: curso)
+            .whereField("unidadId", isEqualTo: unidadId)
+            .whereField("numeroClase", isEqualTo: numeroClase)
+            .limit(to: 1)
+        guard let snapshot = try await getFirstDocument(query), let dict = snapshot.data() else {
+            return nil
+        }
+        return ActividadClase.from(dictionary: dict)
     }
 
     func guardarActividadClase(data: ActividadClase) async throws {
@@ -321,6 +391,18 @@ struct PlanificacionRepository {
                     continuation.resume(returning: snapshot)
                 } else {
                     continuation.resume(throwing: DashboardRepositoryError.missingUser)
+                }
+            }
+        }
+    }
+
+    private func getFirstDocument(_ query: Query) async throws -> DocumentSnapshot? {
+        try await withCheckedThrowingContinuation { continuation in
+            query.getDocuments { snapshot, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: snapshot?.documents.first)
                 }
             }
         }
