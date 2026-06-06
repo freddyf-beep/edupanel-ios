@@ -233,7 +233,7 @@ struct SidebarView: View {
     }
     
     private func courseButton(courseName: String, colorHex: String) -> some View {
-        let route = AppRoute.coursePlanificaciones(courseName)
+        let route = AppRoute.coursePlanificaciones(curso: courseName, asignatura: nil)
         let isActive = selectedRoute == route
         
         return Button {

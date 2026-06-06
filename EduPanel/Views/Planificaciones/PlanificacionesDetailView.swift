@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PlanificacionesDetailView: View {
     let curso: String
+    let asignatura: String?
     let dashboardRepository: DashboardRepository
     let planificacionRepository: PlanificacionRepository
 
@@ -22,10 +23,15 @@ struct PlanificacionesDetailView: View {
 
     private let colors = ["#F59E0B", "#3B82F6", "#EF4444", "#22C55E", "#8B5CF6", "#F03E6E", "#06B6D4", "#D97706"]
 
-    init(curso: String, dashboardRepository: DashboardRepository, planificacionRepository: PlanificacionRepository) {
+    init(curso: String, asignatura: String? = nil, dashboardRepository: DashboardRepository, planificacionRepository: PlanificacionRepository) {
         self.curso = curso
+        self.asignatura = asignatura
         self.dashboardRepository = dashboardRepository
         self.planificacionRepository = planificacionRepository
+        let cleanSubject = asignatura?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !cleanSubject.isEmpty {
+            self._activeSubject = State(initialValue: cleanSubject)
+        }
     }
 
     var body: some View {
@@ -194,9 +200,9 @@ struct PlanificacionesDetailView: View {
     }
 
     private func unitRow(unit: UnidadPlan, index: Int) -> some View {
-        let coverage = UnitCoverage.coverage(for: unit, course: curso, cronogramasByUnit: cronogramasByUnit)
+        let coverage = UnitCoverage.coverage(for: unit, asignatura: activeSubject, course: curso, cronogramasByUnit: cronogramasByUnit)
         let state = UnitPlanningState.state(for: unit)
-        let routeId = UnitRouteID.routeId(for: unit, course: curso, cronogramasByUnit: cronogramasByUnit)
+        let routeId = UnitRouteID.routeId(for: unit, asignatura: activeSubject, course: curso, cronogramasByUnit: cronogramasByUnit)
 
         return EPWebCard {
             VStack(alignment: .leading, spacing: 12) {
@@ -269,13 +275,13 @@ struct PlanificacionesDetailView: View {
                 }
 
                 HStack(spacing: 8) {
-                    NavigationLink(value: AppRoute.verUnidad(curso: curso, unidadId: routeId, unidadNombre: unit.name, initialTab: "unidad")) {
+                    NavigationLink(value: AppRoute.verUnidad(curso: curso, asignatura: activeSubject, unidadId: routeId, unidadNombre: unit.name, initialTab: "unidad")) {
                         actionLabel("Ver", icon: "text.alignleft")
                     }
-                    NavigationLink(value: AppRoute.verUnidad(curso: curso, unidadId: routeId, unidadNombre: unit.name, initialTab: "cronograma")) {
+                    NavigationLink(value: AppRoute.verUnidad(curso: curso, asignatura: activeSubject, unidadId: routeId, unidadNombre: unit.name, initialTab: "cronograma")) {
                         actionLabel("Crono", icon: "calendar")
                     }
-                    NavigationLink(value: AppRoute.verUnidad(curso: curso, unidadId: routeId, unidadNombre: unit.name, initialTab: "clases")) {
+                    NavigationLink(value: AppRoute.verUnidad(curso: curso, asignatura: activeSubject, unidadId: routeId, unidadNombre: unit.name, initialTab: "clases")) {
                         actionLabel("Clases", icon: "book.closed")
                     }
 
@@ -384,7 +390,7 @@ struct PlanificacionesDetailView: View {
         var rows: [UpcomingRow] = []
 
         for unit in units {
-            let key = PlanificacionRepository.cronogramaKey(curso: curso, unidadId: String(unit.id))
+            let key = PlanificacionRepository.cronogramaKey(asignatura: activeSubject, curso: curso, unidadId: String(unit.id))
             guard let crono = cronogramasByUnit[key] else { continue }
 
             for clase in crono.clases {
@@ -411,7 +417,7 @@ struct PlanificacionesDetailView: View {
         var assigned = 0
         var total = 0
         for unit in units {
-            let coverage = UnitCoverage.coverage(for: unit, course: curso, cronogramasByUnit: cronogramasByUnit)
+            let coverage = UnitCoverage.coverage(for: unit, asignatura: activeSubject, course: curso, cronogramasByUnit: cronogramasByUnit)
             assigned += coverage.assigned
             total += coverage.total
         }
@@ -475,6 +481,7 @@ struct PlanificacionesDetailView: View {
         do {
             try await planificacionRepository.eliminarUnidadCompleta(asignatura: activeSubject, curso: curso, unidadId: String(unit.id))
             units.removeAll { $0.id == unit.id }
+            cronogramasByUnit.removeValue(forKey: PlanificacionRepository.cronogramaKey(asignatura: activeSubject, curso: curso, unidadId: String(unit.id)))
             cronogramasByUnit.removeValue(forKey: PlanificacionRepository.cronogramaKey(curso: curso, unidadId: String(unit.id)))
             try await planificacionRepository.guardarPlanCurso(asignatura: activeSubject, curso: curso, units: units)
             saveStatus = "Guardado"
@@ -501,19 +508,26 @@ struct PlanificacionesDetailView: View {
 
         do {
             let snap = try await dashboardRepository.fetchDashboard()
-            activeSubject = subject(from: snap)
+            let providedSubject = asignatura?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            activeSubject = providedSubject.isEmpty ? subject(from: snap) : providedSubject
 
             if let plan = try await planificacionRepository.cargarPlanCurso(asignatura: activeSubject, curso: curso) {
                 units = plan.units
             } else {
-                units = []
+                let allPlans = try await planificacionRepository.listarTodosPlanesCurso()
+                if let matchingPlan = allPlans.first(where: { $0.curso == curso }) {
+                    activeSubject = matchingPlan.asignatura
+                    units = matchingPlan.units
+                } else {
+                    units = []
+                }
             }
 
             let plan = PlanificacionCurso(curso: curso, asignatura: activeSubject, units: units)
             cronogramasByUnit = await planificacionRepository.cargarCronogramas(asignatura: activeSubject, planes: [plan])
             units = units.map { unit in
                 guard !unit.hasDates else { return unit }
-                let key = PlanificacionRepository.cronogramaKey(curso: curso, unidadId: String(unit.id))
+                let key = PlanificacionRepository.cronogramaKey(asignatura: activeSubject, curso: curso, unidadId: String(unit.id))
                 guard let range = dateRange(from: cronogramasByUnit[key]?.clases ?? []) else { return unit }
                 var next = unit
                 next.start = range.start

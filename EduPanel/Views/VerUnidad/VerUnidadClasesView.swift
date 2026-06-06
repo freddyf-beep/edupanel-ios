@@ -16,6 +16,7 @@ struct VerUnidadClasesView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     classHeaderCard
                     objectivesCard
+                    curriculumTransversalCard
                     editorFields
                     externalPedagogyCard
                     resourcesSection
@@ -27,6 +28,9 @@ struct VerUnidadClasesView: View {
         }
         .background(Color(.systemGroupedBackground))
         .onAppear {
+            normalizeSelectedClass()
+        }
+        .onChange(of: classNumbers) { _, _ in
             normalizeSelectedClass()
         }
         .sheet(isPresented: $showingLiveMode) {
@@ -46,16 +50,29 @@ struct VerUnidadClasesView: View {
                 ForEach(classNumbers, id: \.self) { cNum in
                     let isSelected = selectedClassNum == cNum
                     let hasData = isClassPlanificable(classNum: cNum)
+                    let cronoClass = cronogramaClass(for: cNum)
                     Button {
-                        selectedClassNum = cNum
+                        selectClass(cNum)
                     } label: {
-                        HStack(spacing: 5) {
-                            Text("Clase \(cNum)")
-                                .font(.caption.weight(.black))
-                            if hasData {
-                                Circle()
-                                    .fill(.green)
-                                    .frame(width: 6, height: 6)
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 5) {
+                                Text("Clase \(cNum)")
+                                    .font(.caption.weight(.black))
+                                if hasData {
+                                    Circle()
+                                        .fill(.green)
+                                        .frame(width: 6, height: 6)
+                                }
+                            }
+                            if let cronoClass, !cronoClass.fecha.isEmpty {
+                                Text(cronoClass.fecha)
+                                    .font(.system(size: 9, weight: .black))
+                                    .foregroundStyle(isSelected ? .white.opacity(0.82) : .secondary)
+                            }
+                            if let cronoClass, !cronoClass.oaIds.isEmpty {
+                                Text("\(cronoClass.oaIds.count) OA")
+                                    .font(.system(size: 9, weight: .black))
+                                    .foregroundStyle(isSelected ? .white.opacity(0.82) : EPTheme.primary)
                             }
                         }
                         .foregroundStyle(isSelected ? .white : EPTheme.ink)
@@ -83,43 +100,54 @@ struct VerUnidadClasesView: View {
 
     private var classHeaderCard: some View {
         let act = activeActivity
+        let cronoClass = cronogramaClass(for: selectedClassNum)
         let dateLabel = act.fecha.isEmpty ? "Fecha no programada" : "Programada: \(act.fecha)"
 
         return EPWebCard {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("DETALLE DE LA JORNADA")
-                        .font(.system(size: 10, weight: .black))
-                        .tracking(1.0)
-                        .foregroundStyle(EPTheme.primary)
-                    Text("Clase \(selectedClassNum): Plan de aula")
-                        .font(.headline.weight(.black))
-                    Text(dateLabel)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("DETALLE DE LA JORNADA")
+                            .font(.system(size: 10, weight: .black))
+                            .tracking(1.0)
+                            .foregroundStyle(EPTheme.primary)
+                        Text("Clase \(selectedClassNum): Plan de aula")
+                            .font(.headline.weight(.black))
+                        Text(dateLabel)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
 
-                    Picker("Estado", selection: activeActivityBinding.estado) {
-                        Text("No planificada").tag("no_planificada")
-                        Text("Planificada").tag("planificada")
-                        Text("Realizada").tag("realizada")
-                    }
-                    .pickerStyle(.menu)
-                    .font(.caption.weight(.black))
-                }
-
-                Spacer(minLength: 8)
-
-                Button {
-                    showingLiveMode = true
-                } label: {
-                    Label("Clase en vivo", systemImage: "play.fill")
+                        Picker("Estado", selection: activeActivityBinding.estado) {
+                            Text("No planificada").tag("no_planificada")
+                            Text("Planificada").tag("planificada")
+                            Text("Realizada").tag("realizada")
+                        }
+                        .pickerStyle(.menu)
                         .font(.caption.weight(.black))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 9)
-                        .background(EPTheme.primary, in: Capsule())
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Button {
+                        ensureActivityExists(for: selectedClassNum)
+                        showingLiveMode = true
+                    } label: {
+                        Label("Clase en vivo", systemImage: "play.fill")
+                            .font(.caption.weight(.black))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 9)
+                            .background(EPTheme.primary, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+
+                ReplicaFlowLayout(spacing: 7) {
+                    EPStatusPill(text: cronoClass?.fecha.isEmpty == false ? cronoClass?.fecha ?? "Sin fecha" : "Sin fecha", icon: "calendar", tint: .blue)
+                    EPStatusPill(text: "Clase \(selectedClassNum)", icon: "number.square.fill", tint: EPTheme.primary)
+                    EPStatusPill(text: "\(linkedOAs.count) OA vinculados", icon: "tag.fill", tint: linkedOAs.isEmpty ? .orange : .green)
+                    EPStatusPill(text: act.estadoLabel, icon: "circle.fill", tint: act.estadoTint)
+                }
             }
         }
     }
@@ -146,8 +174,12 @@ struct VerUnidadClasesView: View {
                                 .font(.caption.weight(.medium))
                                 .foregroundStyle(.secondary)
 
-                            let selectedIndicators = oa.indicadores.filter(\.seleccionado)
+                            let selectedIndicators = indicatorsForClass(oa)
                             if !selectedIndicators.isEmpty {
+                                Text("Indicadores seleccionados")
+                                    .font(.system(size: 9, weight: .black))
+                                    .foregroundStyle(.secondary)
+                                    .textCase(.uppercase)
                                 ReplicaFlowLayout(spacing: 6) {
                                     ForEach(selectedIndicators) { indicador in
                                         Text(indicador.texto)
@@ -164,6 +196,36 @@ struct VerUnidadClasesView: View {
                         .padding(11)
                         .background(Color(.systemGray6).opacity(0.7), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                     }
+                }
+            }
+        }
+    }
+
+    private var curriculumTransversalCard: some View {
+        EPWebCard {
+            VStack(alignment: .leading, spacing: 14) {
+                EPSectionHeader(title: "Currículo transversal", subtitle: "Habilidades y actitudes disponibles para esta clase.", icon: "layers.fill")
+
+                curriculumToggleSection(
+                    title: "Habilidades",
+                    icon: "target",
+                    available: selectedUnitSkills,
+                    selected: activeActivity.habilidades,
+                    tint: EPTheme.primary
+                ) { value in
+                    toggleString(value, keyPath: \.habilidades)
+                }
+
+                Divider()
+
+                curriculumToggleSection(
+                    title: "Actitudes",
+                    icon: "heart.fill",
+                    available: selectedUnitAttitudes,
+                    selected: activeActivity.actitudes,
+                    tint: .orange
+                ) { value in
+                    toggleString(value, keyPath: \.actitudes)
                 }
             }
         }
@@ -477,10 +539,28 @@ struct VerUnidadClasesView: View {
         return maxNumber > 0 ? Array(1...maxNumber) : [1]
     }
 
+    private func cronogramaClass(for classNum: Int) -> ClaseCronograma? {
+        viewModel.cronograma?.clases.first { $0.numero == classNum }
+    }
+
     private var linkedOAs: [OAEditado] {
         guard let verUnidad = viewModel.verUnidad else { return [] }
         let ids = Set(activeActivity.oaIds)
         return verUnidad.oas.filter { ids.contains($0.id) }
+    }
+
+    private var selectedUnitSkills: [String] {
+        viewModel.verUnidad?.habilidades
+            .filter(\.seleccionado)
+            .map(\.texto)
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? []
+    }
+
+    private var selectedUnitAttitudes: [String] {
+        viewModel.verUnidad?.actitudes
+            .filter(\.seleccionado)
+            .map(\.texto)
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? []
     }
 
     private var activeActivity: ActividadClase {
@@ -522,13 +602,46 @@ struct VerUnidadClasesView: View {
         )
     }
 
+    private func selectClass(_ classNum: Int) {
+        selectedClassNum = classNum
+        ensureActivityExists(for: classNum)
+    }
+
     private func normalizeSelectedClass() {
         if !classNumbers.contains(selectedClassNum) {
             selectedClassNum = classNumbers.first ?? 1
         }
-        if viewModel.clasesActividades[selectedClassNum] == nil {
-            viewModel.clasesActividades[selectedClassNum] = activeActivity
-        }
+        ensureActivityExists(for: selectedClassNum)
+    }
+
+    private func ensureActivityExists(for classNum: Int) {
+        guard viewModel.clasesActividades[classNum] == nil else { return }
+        let cronoClass = cronogramaClass(for: classNum)
+        viewModel.clasesActividades[classNum] = ActividadClase(
+            id: PlanificacionRepository.buildActividadClaseId(
+                curso: viewModel.curso,
+                unidadId: viewModel.unidadId,
+                numeroClase: classNum,
+                asignatura: viewModel.activeSubject
+            ),
+            asignatura: viewModel.activeSubject,
+            curso: viewModel.curso,
+            unidadId: viewModel.unidadId,
+            numeroClase: classNum,
+            fecha: cronoClass?.fecha ?? "",
+            oaIds: cronoClass?.oaIds ?? [],
+            objetivo: "",
+            inicio: "",
+            desarrollo: "",
+            cierre: "",
+            adecuacion: "",
+            habilidades: [],
+            actitudes: [],
+            materiales: [],
+            tics: [],
+            estado: "no_planificada",
+            sincronizada: false
+        )
     }
 
     private func isClassPlanificable(classNum: Int) -> Bool {
@@ -536,6 +649,79 @@ struct VerUnidadClasesView: View {
         return !RichTextHTML.plainText(from: act.objetivo).isEmpty ||
         !RichTextHTML.plainText(from: act.inicio).isEmpty ||
         !RichTextHTML.plainText(from: act.desarrollo).isEmpty
+    }
+
+    private func indicatorsForClass(_ oa: OAEditado) -> [IndicadorEditado] {
+        guard let raw = activeActivity.indicadoresPorOa?[oa.id], !raw.isEmpty else {
+            return oa.indicadores.filter(\.seleccionado)
+        }
+
+        let selected = Set(raw.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
+        let known = oa.indicadores.filter { selected.contains($0.id) || selected.contains($0.texto) }
+        let knownText = Set(known.flatMap { [$0.id, $0.texto] })
+        let custom = selected
+            .filter { !knownText.contains($0) }
+            .map { value in
+                IndicadorEditado(id: "\(oa.id)_class_\(value.hashValue.magnitude)", texto: value, seleccionado: true)
+            }
+
+        return known + custom.sorted { $0.texto.localizedCaseInsensitiveCompare($1.texto) == .orderedAscending }
+    }
+
+    private func curriculumToggleSection(
+        title: String,
+        icon: String,
+        available: [String],
+        selected: [String],
+        tint: Color,
+        onToggle: @escaping (String) -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Label(title, systemImage: icon)
+                .font(.caption.weight(.black))
+                .foregroundStyle(.secondary)
+
+            let merged = Array(Set(available + selected)).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+            if merged.isEmpty {
+                Text("Sin \(title.lowercased()) seleccionadas en la unidad.")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            } else {
+                ReplicaFlowLayout(spacing: 7) {
+                    ForEach(merged, id: \.self) { value in
+                        let isSelected = selected.contains(value)
+                        Button {
+                            onToggle(value)
+                        } label: {
+                            HStack(spacing: 5) {
+                                Text(value)
+                                    .font(.caption.weight(.black))
+                                    .lineLimit(2)
+                                if isSelected {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 8, weight: .black))
+                                }
+                            }
+                            .foregroundStyle(isSelected ? .white : tint)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 6)
+                            .background(isSelected ? tint : tint.opacity(0.11), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private func toggleString(_ value: String, keyPath: WritableKeyPath<ActividadClase, [String]>) {
+        var act = activeActivity
+        if act[keyPath: keyPath].contains(value) {
+            act[keyPath: keyPath].removeAll { $0 == value }
+        } else {
+            act[keyPath: keyPath].append(value)
+        }
+        viewModel.clasesActividades[selectedClassNum] = act
     }
 
     private func getStudents() -> [EstudiantePerfil] {
@@ -593,5 +779,25 @@ private extension Binding where Value == Optional<String> {
             get: { self.wrappedValue ?? "" },
             set: { self.wrappedValue = $0 }
         )
+    }
+}
+
+private extension ActividadClase {
+    var estadoLabel: String {
+        switch estado {
+        case "planificada": return "Planificada"
+        case "realizada": return "Realizada"
+        case "no_planificada": return "No planificada"
+        default: return estado.isEmpty ? "No planificada" : estado.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
+    var estadoTint: Color {
+        switch estado {
+        case "planificada": return .green
+        case "realizada": return .blue
+        case "no_planificada": return .orange
+        default: return .secondary
+        }
     }
 }

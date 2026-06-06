@@ -55,6 +55,10 @@ struct PlanificacionRepository {
         "\(curso)::\(unidadId)"
     }
 
+    static func cronogramaKey(asignatura: String, curso: String, unidadId: String) -> String {
+        "\(asignatura)::\(curso)::\(unidadId)"
+    }
+
     static func unidadIdFromIndex(_ index: Int) -> String {
         "unidad_\(index + 1)"
     }
@@ -117,6 +121,24 @@ struct PlanificacionRepository {
                     let results = snapshot.documents.compactMap { doc -> PlanificacionCurso? in
                         let dict = doc.data()
                         return PlanificacionCurso.fromFirestore(dict, fallbackAsignatura: asignatura)
+                    }
+                    continuation.resume(returning: results)
+                } else {
+                    continuation.resume(returning: [])
+                }
+            }
+        }
+    }
+
+    func listarTodosPlanesCurso() async throws -> [PlanificacionCurso] {
+        let colRef = try userCol(col: "planificaciones_curso")
+        return try await withCheckedThrowingContinuation { continuation in
+            colRef.getDocuments { snapshot, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let snapshot {
+                    let results = snapshot.documents.compactMap { doc -> PlanificacionCurso? in
+                        PlanificacionCurso.fromFirestore(doc.data())
                     }
                     continuation.resume(returning: results)
                 } else {
@@ -211,6 +233,7 @@ struct PlanificacionRepository {
                 let canonicalId = String(unit.id)
                 let candidates = Self.unidadIdCandidates(unit: unit, index: index)
                 if let crono = try? await cargarCronogramaUnidadConFallback(asignatura: asignatura, curso: plan.curso, unidadIds: candidates) {
+                    results[Self.cronogramaKey(asignatura: asignatura, curso: plan.curso, unidadId: canonicalId)] = crono
                     results[Self.cronogramaKey(curso: plan.curso, unidadId: canonicalId)] = crono
                 }
             }

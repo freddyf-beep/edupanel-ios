@@ -21,6 +21,10 @@ struct PlanificacionCurso: Codable, Hashable {
     var curso: String
     var asignatura: String
     var units: [UnidadPlan]
+
+    var routeKey: String {
+        "\(asignatura)::\(curso)"
+    }
 }
 
 extension UnidadPlan {

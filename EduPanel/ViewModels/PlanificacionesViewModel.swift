@@ -29,9 +29,19 @@ final class PlanificacionesViewModel {
             self.snapshot = snap
 
             do {
-                let subject = subject(from: snap)
-                let loadedPlanes = try await planificacionRepository.listarPlanesCurso(asignatura: subject)
-                let cronogramas = await planificacionRepository.cargarCronogramas(asignatura: subject, planes: loadedPlanes)
+                let profileSubjects = subjects(from: snap)
+                let loadedPlanes = try await planificacionRepository.listarTodosPlanesCurso()
+                var cronogramas: [String: CronogramaUnidadData] = [:]
+                let subjects = Set(profileSubjects + loadedPlanes.map(\.asignatura))
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+
+                for subject in subjects {
+                    let subjectPlanes = loadedPlanes.filter { $0.asignatura == subject }
+                    let subjectCronogramas = await planificacionRepository.cargarCronogramas(asignatura: subject, planes: subjectPlanes)
+                    cronogramas.merge(subjectCronogramas) { _, new in new }
+                }
+
                 self.cronogramasByUnit = cronogramas
                 self.planes = Self.enrichPlansWithCronogramaDates(loadedPlanes, cronogramasByUnit: cronogramas)
             } catch {
@@ -56,14 +66,19 @@ final class PlanificacionesViewModel {
     }
 
     private func subject(from snapshot: DashboardSnapshot?) -> String {
+        subjects(from: snapshot).first ?? Self.defaultSubject
+    }
+
+    private func subjects(from snapshot: DashboardSnapshot?) -> [String] {
         if let subject = snapshot?.preferences.asignaturasHabilitadas
             .map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) })
-            .first(where: { !$0.isEmpty }) {
+            .filter({ !$0.isEmpty }),
+           !subject.isEmpty {
             return subject
         }
 
         let specialty = snapshot?.profile.especialidad.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return specialty.isEmpty ? Self.defaultSubject : specialty
+        return [specialty.isEmpty ? Self.defaultSubject : specialty]
     }
 
     private static func enrichPlansWithCronogramaDates(
@@ -74,7 +89,7 @@ final class PlanificacionesViewModel {
             var nextPlan = plan
             nextPlan.units = plan.units.map { unit in
                 guard !unit.hasDates else { return unit }
-                let key = PlanificacionRepository.cronogramaKey(curso: plan.curso, unidadId: String(unit.id))
+                let key = PlanificacionRepository.cronogramaKey(asignatura: plan.asignatura, curso: plan.curso, unidadId: String(unit.id))
                 guard let crono = cronogramasByUnit[key],
                       let range = dateRange(from: crono.clases) else {
                     return unit

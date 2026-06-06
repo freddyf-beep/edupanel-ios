@@ -27,7 +27,7 @@ final class VerUnidadViewModel {
         self.planificacionRepository = planificacionRepository
     }
     
-    func load(curso: String, unidadId: String) async {
+    func load(curso: String, unidadId: String, asignatura: String? = nil) async {
         self.curso = curso
         self.unidadId = unidadId
         self.isLoading = true
@@ -36,12 +36,33 @@ final class VerUnidadViewModel {
         do {
             let snap = try await dashboardRepository.fetchDashboard()
             self.snapshot = snap
-            self.activeSubject = snap.preferences.asignaturasHabilitadas
+            let providedSubject = asignatura?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            var subjectCandidates = snap.preferences.asignaturasHabilitadas
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .first(where: { !$0.isEmpty }) ?? "M\u{00FA}sica"
+                .filter { !$0.isEmpty }
+            if let allPlans = try? await planificacionRepository.listarTodosPlanesCurso() {
+                subjectCandidates.append(contentsOf: allPlans.filter { $0.curso == curso }.map(\.asignatura))
+            }
+            if !providedSubject.isEmpty {
+                subjectCandidates.insert(providedSubject, at: 0)
+            }
+            subjectCandidates = uniqueSubjects(subjectCandidates)
+            if subjectCandidates.isEmpty {
+                subjectCandidates = ["M\u{00FA}sica"]
+            }
+            self.activeSubject = subjectCandidates.first ?? "M\u{00FA}sica"
             
             // 1. Load Pedagogical info
-            if let saved = try await planificacionRepository.cargarVerUnidadConFallback(asignatura: activeSubject, curso: curso, unidadId: unidadId) {
+            var loadedVerUnidad: VerUnidadGuardada?
+            for subject in subjectCandidates {
+                if let saved = try await planificacionRepository.cargarVerUnidadConFallback(asignatura: subject, curso: curso, unidadId: unidadId) {
+                    self.activeSubject = subject
+                    loadedVerUnidad = saved
+                    break
+                }
+            }
+
+            if let saved = loadedVerUnidad {
                 self.verUnidad = saved
                 if !saved.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     self.unidadId = saved.unidadId
@@ -53,7 +74,15 @@ final class VerUnidadViewModel {
             
             // 2. Load Cronograma (Class list and dates)
             let candidates = PlanificacionRepository.unidadIdCandidates(raw: self.unidadId)
-            if let savedCrono = try await planificacionRepository.cargarCronogramaUnidadConFallback(asignatura: activeSubject, curso: curso, unidadIds: candidates) {
+            var loadedCronograma: CronogramaUnidadData?
+            for subject in subjectCandidates where loadedCronograma == nil {
+                if let savedCrono = try await planificacionRepository.cargarCronogramaUnidadConFallback(asignatura: subject, curso: curso, unidadIds: candidates) {
+                    self.activeSubject = subject
+                    loadedCronograma = savedCrono
+                }
+            }
+
+            if let savedCrono = loadedCronograma {
                 self.cronograma = savedCrono
                 if (self.verUnidad?.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true),
                    !savedCrono.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -68,6 +97,8 @@ final class VerUnidadViewModel {
                 self.cronograma = CronogramaUnidadData(asignatura: activeSubject, curso: curso, unidadId: self.unidadId, totalClases: total, clases: defaultClases)
             }
 
+            self.verUnidad?.asignatura = self.activeSubject
+            self.cronograma?.asignatura = self.activeSubject
             self.verUnidad?.unidadId = self.unidadId
             self.cronograma?.unidadId = self.unidadId
             
@@ -299,5 +330,19 @@ final class VerUnidadViewModel {
                 EstrategiaEvaluacionUnidad(id: "eval_2", nombre: "Participación en coro rítmico", instrumento: "Lista de cotejo", ponderacion: 60.0)
             ]
         )
+    }
+
+    private func uniqueSubjects(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for value in values {
+            let clean = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !clean.isEmpty else { continue }
+            let key = clean.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL")).lowercased()
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            result.append(clean)
+        }
+        return result
     }
 }

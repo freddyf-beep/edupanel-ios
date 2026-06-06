@@ -2,6 +2,7 @@ import SwiftUI
 
 struct VerUnidadDashboardView: View {
     let curso: String
+    let asignatura: String?
     let unidadId: String
     let unidadNombre: String
     let dashboardRepository: DashboardRepository
@@ -16,8 +17,9 @@ struct VerUnidadDashboardView: View {
         EPWebTab(id: "clases", title: "Clases", icon: "book.closed")
     ]
 
-    init(curso: String, unidadId: String, unidadNombre: String, initialTab: String, dashboardRepository: DashboardRepository, planificacionRepository: PlanificacionRepository) {
+    init(curso: String, asignatura: String? = nil, unidadId: String, unidadNombre: String, initialTab: String, dashboardRepository: DashboardRepository, planificacionRepository: PlanificacionRepository) {
         self.curso = curso
+        self.asignatura = asignatura
         self.unidadId = unidadId
         self.unidadNombre = unidadNombre
         self.dashboardRepository = dashboardRepository
@@ -78,7 +80,7 @@ struct VerUnidadDashboardView: View {
             }
         }
         .task {
-            await viewModel.load(curso: curso, unidadId: unidadId)
+            await viewModel.load(curso: curso, unidadId: unidadId, asignatura: asignatura)
         }
     }
 

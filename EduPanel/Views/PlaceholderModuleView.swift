@@ -1389,7 +1389,7 @@ private struct ProfileCourseReplicaCard: View {
                 Label("Editar", systemImage: "pencil")
                     .frame(maxWidth: .infinity)
             }
-            NavigationLink(value: AppRoute.coursePlanificaciones(course.name)) {
+            NavigationLink(value: AppRoute.coursePlanificaciones(curso: course.name, asignatura: nil)) {
                 Label("Planificar", systemImage: "book.closed.fill")
                     .frame(maxWidth: .infinity)
             }

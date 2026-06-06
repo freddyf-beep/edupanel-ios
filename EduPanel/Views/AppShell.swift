@@ -17,8 +17,8 @@ enum AppRoute: Hashable {
     case driveConnect
     case perfilAction(String)
     case module(AppTab)
-    case coursePlanificaciones(String)
-    case verUnidad(curso: String, unidadId: String, unidadNombre: String, initialTab: String)
+    case coursePlanificaciones(curso: String, asignatura: String?)
+    case verUnidad(curso: String, asignatura: String?, unidadId: String, unidadNombre: String, initialTab: String)
 
     var title: String {
         switch self {
@@ -38,8 +38,8 @@ enum AppRoute: Hashable {
         case .driveConnect: return "Conectar Google Drive"
         case .perfilAction(let title): return title
         case .module(let tab): return tab.title
-        case .coursePlanificaciones(let course): return "Planificaciones - \(course)"
-        case .verUnidad(_, _, let unidadNombre, _): return unidadNombre
+        case .coursePlanificaciones(let course, _): return "Planificaciones - \(course)"
+        case .verUnidad(_, _, _, let unidadNombre, _): return unidadNombre
         }
     }
 
@@ -84,7 +84,7 @@ enum AppRoute: Hashable {
             return "Sincronizacion de Calendar pendiente de conectar."
         case .driveConnect:
             return "Conexion a Google Drive pendiente de implementar."
-        case .coursePlanificaciones(let course):
+        case .coursePlanificaciones(let course, _):
             return "Planificaciones filtradas para el curso \(course)."
         case .verUnidad:
             return "Detalle de Unidad"
@@ -171,7 +171,7 @@ struct AppShell: View {
                             }
                         }
                         .navigationDestination(for: AppRoute.self) { route in
-                            RoutePlaceholderView(route: route)
+                            destination(for: route)
                         }
                     }
                     .tabItem { Label(AppTab.inicio.title, systemImage: AppTab.inicio.systemImage) }
@@ -198,25 +198,7 @@ struct AppShell: View {
                             }
                         }
                         .navigationDestination(for: AppRoute.self) { route in
-                            switch route {
-                            case .coursePlanificaciones(let course):
-                                PlanificacionesDetailView(
-                                    curso: course,
-                                    dashboardRepository: dashboardRepository,
-                                    planificacionRepository: planificacionRepository
-                                )
-                            case .verUnidad(let curso, let unidadId, let unidadNombre, let initialTab):
-                                VerUnidadDashboardView(
-                                    curso: curso,
-                                    unidadId: unidadId,
-                                    unidadNombre: unidadNombre,
-                                    initialTab: initialTab,
-                                    dashboardRepository: dashboardRepository,
-                                    planificacionRepository: planificacionRepository
-                                )
-                            default:
-                                RoutePlaceholderView(route: route)
-                            }
+                            destination(for: route)
                         }
                     }
                     .tabItem { Label(AppTab.planificaciones.title, systemImage: AppTab.planificaciones.systemImage) }
@@ -240,7 +222,7 @@ struct AppShell: View {
                                 }
                             }
                             .navigationDestination(for: AppRoute.self) { route in
-                                RoutePlaceholderView(route: route)
+                                destination(for: route)
                             }
                     }
                     .tabItem { Label(AppTab.evaluaciones.title, systemImage: AppTab.evaluaciones.systemImage) }
@@ -264,7 +246,7 @@ struct AppShell: View {
                                 }
                             }
                             .navigationDestination(for: AppRoute.self) { route in
-                                RoutePlaceholderView(route: route)
+                                destination(for: route)
                             }
                     }
                     .tabItem { Label(AppTab.clases.title, systemImage: AppTab.clases.systemImage) }
@@ -288,7 +270,7 @@ struct AppShell: View {
                                 }
                             }
                             .navigationDestination(for: AppRoute.self) { route in
-                                RoutePlaceholderView(route: route)
+                                destination(for: route)
                             }
                     }
                     .tabItem { Label(AppTab.perfil.title, systemImage: AppTab.perfil.systemImage) }
@@ -304,9 +286,9 @@ struct AppShell: View {
                 }
                 .onChange(of: selectedRoute) { oldRoute, newRoute in
                     switch newRoute {
-                    case .coursePlanificaciones(let course):
+                    case .coursePlanificaciones(let course, let asignatura):
                         selectedTab = .planificaciones
-                        planificacionesPath = NavigationPath([AppRoute.coursePlanificaciones(course)])
+                        planificacionesPath = NavigationPath([AppRoute.coursePlanificaciones(curso: course, asignatura: asignatura)])
                     case .module(let tab):
                         selectedTab = tab
                         if tab == .planificaciones {
@@ -318,6 +300,31 @@ struct AppShell: View {
                 }
             }
         )
+    }
+
+    @ViewBuilder
+    private func destination(for route: AppRoute) -> some View {
+        switch route {
+        case .coursePlanificaciones(let course, let asignatura):
+            PlanificacionesDetailView(
+                curso: course,
+                asignatura: asignatura,
+                dashboardRepository: dashboardRepository,
+                planificacionRepository: planificacionRepository
+            )
+        case .verUnidad(let curso, let asignatura, let unidadId, let unidadNombre, let initialTab):
+            VerUnidadDashboardView(
+                curso: curso,
+                asignatura: asignatura,
+                unidadId: unidadId,
+                unidadNombre: unidadNombre,
+                initialTab: initialTab,
+                dashboardRepository: dashboardRepository,
+                planificacionRepository: planificacionRepository
+            )
+        default:
+            RoutePlaceholderView(route: route)
+        }
     }
 }
 

@@ -315,7 +315,7 @@ struct PlanificacionesHubView: View {
     }
 
     private var courseOptions: [String] {
-        mergedPlanes.map(\.curso).sorted()
+        Array(Set(mergedPlanes.map(\.curso))).sorted()
     }
 
     private var filteredPlanes: [PlanificacionCurso] {
@@ -356,15 +356,15 @@ struct PlanificacionesHubView: View {
         var used = Set<String>()
 
         for curso in snapshot.courses {
-            if let existing = viewModel.planes.first(where: { $0.curso == curso }) {
+            if let existing = viewModel.planes.first(where: { $0.curso == curso && $0.asignatura == subject }) {
                 merged.append(existing)
             } else {
                 merged.append(PlanificacionCurso(curso: curso, asignatura: subject, units: []))
             }
-            used.insert(curso)
+            used.insert("\(subject)::\(curso)")
         }
 
-        for plan in viewModel.planes where !used.contains(plan.curso) {
+        for plan in viewModel.planes where !used.contains(plan.routeKey) {
             merged.append(plan)
         }
 
@@ -399,7 +399,7 @@ struct PlanificacionesHubView: View {
                 case .completada: break
                 }
 
-                let coverage = UnitCoverage.coverage(for: unit, course: plan.curso, cronogramasByUnit: viewModel.cronogramasByUnit)
+                let coverage = UnitCoverage.coverage(for: unit, plan: plan, cronogramasByUnit: viewModel.cronogramasByUnit)
                 assignedClasses += coverage.assigned
                 totalClasses += coverage.total
             }
@@ -477,9 +477,18 @@ enum PlanDateParser {
 }
 
 enum UnitCoverage {
+    static func coverage(for unit: UnidadPlan, plan: PlanificacionCurso, cronogramasByUnit: [String: CronogramaUnidadData]) -> (assigned: Int, total: Int, percent: Int) {
+        coverage(for: unit, asignatura: plan.asignatura, course: plan.curso, cronogramasByUnit: cronogramasByUnit)
+    }
+
     static func coverage(for unit: UnidadPlan, course: String, cronogramasByUnit: [String: CronogramaUnidadData]) -> (assigned: Int, total: Int, percent: Int) {
-        let key = PlanificacionRepository.cronogramaKey(curso: course, unidadId: String(unit.id))
-        guard let crono = cronogramasByUnit[key] else {
+        coverage(for: unit, asignatura: nil, course: course, cronogramasByUnit: cronogramasByUnit)
+    }
+
+    static func coverage(for unit: UnidadPlan, asignatura: String?, course: String, cronogramasByUnit: [String: CronogramaUnidadData]) -> (assigned: Int, total: Int, percent: Int) {
+        let oldKey = PlanificacionRepository.cronogramaKey(curso: course, unidadId: String(unit.id))
+        let subjectKey = asignatura.map { PlanificacionRepository.cronogramaKey(asignatura: $0, curso: course, unidadId: String(unit.id)) }
+        guard let crono = subjectKey.flatMap({ cronogramasByUnit[$0] }) ?? cronogramasByUnit[oldKey] else {
             return (unit.hasDates ? 1 : 0, unit.hasDates ? 1 : 0, unit.hasDates ? 100 : 0)
         }
 
@@ -491,9 +500,18 @@ enum UnitCoverage {
 }
 
 enum UnitRouteID {
+    static func routeId(for unit: UnidadPlan, plan: PlanificacionCurso, cronogramasByUnit: [String: CronogramaUnidadData]) -> String {
+        routeId(for: unit, asignatura: plan.asignatura, course: plan.curso, cronogramasByUnit: cronogramasByUnit)
+    }
+
     static func routeId(for unit: UnidadPlan, course: String, cronogramasByUnit: [String: CronogramaUnidadData]) -> String {
-        let key = PlanificacionRepository.cronogramaKey(curso: course, unidadId: String(unit.id))
-        if let savedId = cronogramasByUnit[key]?.unidadId.trimmingCharacters(in: .whitespacesAndNewlines),
+        routeId(for: unit, asignatura: nil, course: course, cronogramasByUnit: cronogramasByUnit)
+    }
+
+    static func routeId(for unit: UnidadPlan, asignatura: String?, course: String, cronogramasByUnit: [String: CronogramaUnidadData]) -> String {
+        let oldKey = PlanificacionRepository.cronogramaKey(curso: course, unidadId: String(unit.id))
+        let subjectKey = asignatura.map { PlanificacionRepository.cronogramaKey(asignatura: $0, curso: course, unidadId: String(unit.id)) }
+        if let savedId = (subjectKey.flatMap { cronogramasByUnit[$0] } ?? cronogramasByUnit[oldKey])?.unidadId.trimmingCharacters(in: .whitespacesAndNewlines),
            !savedId.isEmpty {
             return savedId
         }
@@ -536,9 +554,9 @@ private struct PlanTimelineReplicaView: View {
                                 }
                             }
 
-                            ForEach(planes, id: \.curso) { plan in
+                            ForEach(planes, id: \.routeKey) { plan in
                                 HStack(alignment: .center, spacing: 8) {
-                                    NavigationLink(value: AppRoute.coursePlanificaciones(plan.curso)) {
+                                    NavigationLink(value: AppRoute.coursePlanificaciones(curso: plan.curso, asignatura: plan.asignatura)) {
                                         Text(plan.curso)
                                             .font(.caption.weight(.black))
                                             .foregroundStyle(EPTheme.primary)
@@ -571,10 +589,10 @@ private struct PlanTimelineReplicaView: View {
         let start = offset(for: unit.start)
         let end = max(start + 0.08, offset(for: unit.end))
         let width = max(54, 580 * (end - start))
-        let coverage = UnitCoverage.coverage(for: unit, course: plan.curso, cronogramasByUnit: cronogramasByUnit).percent
-        let routeId = UnitRouteID.routeId(for: unit, course: plan.curso, cronogramasByUnit: cronogramasByUnit)
+        let coverage = UnitCoverage.coverage(for: unit, plan: plan, cronogramasByUnit: cronogramasByUnit).percent
+        let routeId = UnitRouteID.routeId(for: unit, plan: plan, cronogramasByUnit: cronogramasByUnit)
 
-        return NavigationLink(value: AppRoute.verUnidad(curso: plan.curso, unidadId: routeId, unidadNombre: unit.name, initialTab: "unidad")) {
+        return NavigationLink(value: AppRoute.verUnidad(curso: plan.curso, asignatura: plan.asignatura, unidadId: routeId, unidadNombre: unit.name, initialTab: "unidad")) {
             HStack(spacing: 5) {
                 Text(unit.name)
                     .font(.system(size: 9, weight: .black))
@@ -628,7 +646,7 @@ private struct CursosReplicaView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ForEach(planes, id: \.curso) { plan in
+            ForEach(planes, id: \.routeKey) { plan in
                 courseCard(plan)
             }
         }
@@ -640,7 +658,7 @@ private struct CursosReplicaView: View {
         let current = plan.units.first { UnitPlanningState.state(for: $0) == .enCurso }
         let upcoming = plan.units.first { UnitPlanningState.state(for: $0) == .proxima }
 
-        return NavigationLink(value: AppRoute.coursePlanificaciones(plan.curso)) {
+        return NavigationLink(value: AppRoute.coursePlanificaciones(curso: plan.curso, asignatura: plan.asignatura)) {
             EPWebCard {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .top, spacing: 12) {
@@ -688,7 +706,7 @@ private struct CursosReplicaView: View {
         var assigned = 0
         var total = 0
         for unit in plan.units {
-            let coverage = UnitCoverage.coverage(for: unit, course: plan.curso, cronogramasByUnit: cronogramasByUnit)
+            let coverage = UnitCoverage.coverage(for: unit, plan: plan, cronogramasByUnit: cronogramasByUnit)
             assigned += coverage.assigned
             total += coverage.total
         }
@@ -862,7 +880,7 @@ private struct InsightsReplicaView: View {
             EPWebCard {
                 VStack(alignment: .leading, spacing: 12) {
                     EPSectionHeader(title: "Cobertura por curso", subtitle: "Clases con OA asignados sobre total de clases.", icon: "checkmark.seal.fill")
-                    ForEach(planes, id: \.curso) { plan in
+                    ForEach(planes, id: \.routeKey) { plan in
                         let coverage = planCoverage(plan)
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
@@ -935,7 +953,7 @@ private struct InsightsReplicaView: View {
         var assigned = 0
         var total = 0
         for unit in plan.units {
-            let coverage = UnitCoverage.coverage(for: unit, course: plan.curso, cronogramasByUnit: cronogramasByUnit)
+            let coverage = UnitCoverage.coverage(for: unit, plan: plan, cronogramasByUnit: cronogramasByUnit)
             assigned += coverage.assigned
             total += coverage.total
         }
