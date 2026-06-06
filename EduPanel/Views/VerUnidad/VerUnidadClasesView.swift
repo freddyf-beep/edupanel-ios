@@ -742,9 +742,7 @@ struct VerUnidadClasesView: View {
             if let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 VStack(alignment: .leading, spacing: 5) {
                     EPStatusPill(text: label, tint: tint)
-                    Text(RichTextHTML.plainText(from: value))
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
+                    RichTextRenderer(html: value)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(10)

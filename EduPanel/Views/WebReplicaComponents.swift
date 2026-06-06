@@ -295,6 +295,74 @@ enum RichTextHTML {
         )
     }
 
+    static func blocks(from html: String) -> [RichTextBlock] {
+        let trimmed = html.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        let normalized = trimmed
+            .replacingOccurrences(of: "<br\\s*/?>", with: "\n", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: "</li>", with: "</li>\n", options: [.caseInsensitive])
+            .replacingOccurrences(of: "</p>", with: "</p>\n", options: [.caseInsensitive])
+            .replacingOccurrences(of: "</div>", with: "</div>\n", options: [.caseInsensitive])
+
+        let pattern = #"(?is)<h([1-6])[^>]*>(.*?)</h\1>|<li[^>]*>(.*?)</li>|<p[^>]*>(.*?)</p>|<div[^>]*>(.*?)</div>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return plainBlocks(from: trimmed)
+        }
+
+        let range = NSRange(normalized.startIndex..<normalized.endIndex, in: normalized)
+        let matches = regex.matches(in: normalized, range: range)
+        guard !matches.isEmpty else {
+            return plainBlocks(from: trimmed)
+        }
+
+        var blocks: [RichTextBlock] = []
+        var consumedRanges: [Range<String.Index>] = []
+
+        for match in matches {
+            guard let fullRange = Range(match.range, in: normalized) else { continue }
+            consumedRanges.append(fullRange)
+
+            if let levelRange = Range(match.range(at: 1), in: normalized),
+               let contentRange = Range(match.range(at: 2), in: normalized),
+               let level = Int(normalized[levelRange]) {
+                let text = inlineAttributed(from: String(normalized[contentRange]))
+                if !text.characters.isEmpty {
+                    blocks.append(RichTextBlock(kind: .heading(level: level), text: text))
+                }
+                continue
+            }
+
+            if let listRange = Range(match.range(at: 3), in: normalized) {
+                let text = inlineAttributed(from: String(normalized[listRange]))
+                if !text.characters.isEmpty {
+                    blocks.append(RichTextBlock(kind: .bullet, text: text))
+                }
+                continue
+            }
+
+            for group in [4, 5] {
+                if let paragraphRange = Range(match.range(at: group), in: normalized) {
+                    let text = inlineAttributed(from: String(normalized[paragraphRange]))
+                    if !text.characters.isEmpty {
+                        blocks.append(RichTextBlock(kind: .paragraph, text: text))
+                    }
+                }
+            }
+        }
+
+        if blocks.isEmpty {
+            return plainBlocks(from: trimmed)
+        }
+
+        let unmatched = unmatchedText(in: normalized, excluding: consumedRanges)
+        if !unmatched.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            blocks.append(contentsOf: plainBlocks(from: unmatched))
+        }
+
+        return blocks
+    }
+
     private static func escape(_ text: String) -> String {
         text.replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
@@ -302,48 +370,136 @@ enum RichTextHTML {
             .replacingOccurrences(of: "\"", with: "&quot;")
     }
 
+    private static func plainBlocks(from value: String) -> [RichTextBlock] {
+        let plain = stripHTML(value)
+        return plain
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .map { line in
+                if line.hasPrefix("- ") {
+                    return RichTextBlock(kind: .bullet, text: inlineAttributed(from: String(line.dropFirst(2))))
+                }
+                return RichTextBlock(kind: .paragraph, text: inlineAttributed(from: line))
+            }
+    }
+
+    private static func inlineAttributed(from html: String) -> AttributedString {
+        let markdown = html
+            .replacingOccurrences(of: "<strong[^>]*>", with: "**", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: "</strong>", with: "**", options: .caseInsensitive)
+            .replacingOccurrences(of: "<b[^>]*>", with: "**", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: "</b>", with: "**", options: .caseInsensitive)
+            .replacingOccurrences(of: "<em[^>]*>", with: "*", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: "</em>", with: "*", options: .caseInsensitive)
+            .replacingOccurrences(of: "<i[^>]*>", with: "*", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: "</i>", with: "*", options: .caseInsensitive)
+            .replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "[ \\t]{2,}", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let decoded = decodeEntities(markdown)
+        if let attributed = try? AttributedString(markdown: decoded) {
+            return attributed
+        }
+        return AttributedString(decoded)
+    }
+
+    private static func unmatchedText(in value: String, excluding ranges: [Range<String.Index>]) -> String {
+        var result = ""
+        var cursor = value.startIndex
+
+        for range in ranges.sorted(by: { $0.lowerBound < $1.lowerBound }) {
+            if cursor < range.lowerBound {
+                result += value[cursor..<range.lowerBound]
+            }
+            if cursor < range.upperBound {
+                cursor = range.upperBound
+            }
+        }
+
+        if cursor < value.endIndex {
+            result += value[cursor..<value.endIndex]
+        }
+
+        return result
+    }
+
     private static func stripHTML(_ value: String) -> String {
-        value
+        decodeEntities(value
             .replacingOccurrences(of: "<br\\s*/?>", with: "\n", options: .regularExpression)
             .replacingOccurrences(of: "</(p|div|li|h[1-6]|section)>", with: "\n", options: [.regularExpression, .caseInsensitive])
             .replacingOccurrences(of: "<li[^>]*>", with: "- ", options: [.regularExpression, .caseInsensitive])
             .replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
-            .replacingOccurrences(of: "&nbsp;", with: " ")
-            .replacingOccurrences(of: "&amp;", with: "&")
-            .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&#39;", with: "'")
             .replacingOccurrences(of: "\r", with: "")
             .replacingOccurrences(of: "[ \\t]+\\n", with: "\n", options: .regularExpression)
             .replacingOccurrences(of: "\\n{3,}", with: "\n\n", options: .regularExpression)
             .replacingOccurrences(of: "[ \\t]{2,}", with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private static func decodeEntities(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&apos;", with: "'")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
     }
 }
 
-struct RichTextRenderer: UIViewRepresentable {
+struct RichTextBlock: Identifiable {
+    enum Kind {
+        case heading(level: Int)
+        case paragraph
+        case bullet
+    }
+
+    let id = UUID()
+    let kind: Kind
+    let text: AttributedString
+}
+
+struct RichTextRenderer: View {
     let html: String
 
-    func makeUIView(context: Context) -> UITextView {
-        let view = UITextView()
-        view.isEditable = false
-        view.isScrollEnabled = false
-        view.backgroundColor = .clear
-        view.textContainerInset = .zero
-        view.textContainer.lineFragmentPadding = 0
-        view.adjustsFontForContentSizeCategory = true
-        return view
-    }
-
-    func updateUIView(_ uiView: UITextView, context: Context) {
-        uiView.text = RichTextHTML.plainText(from: html)
-        uiView.font = .preferredFont(forTextStyle: .subheadline)
-        uiView.textColor = .secondaryLabel
-    }
-
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
-        let width = proposal.width ?? UIScreen.main.bounds.width - 40
-        let size = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
-        return CGSize(width: width, height: size.height)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            let blocks = RichTextHTML.blocks(from: html)
+            if blocks.isEmpty {
+                EmptyView()
+            } else {
+                ForEach(blocks) { block in
+                    switch block.kind {
+                    case .heading(let level):
+                        Text(block.text)
+                            .font(level <= 2 ? .subheadline.weight(.black) : .caption.weight(.black))
+                            .foregroundStyle(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    case .paragraph:
+                        Text(block.text)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    case .bullet:
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Circle()
+                                .fill(EPTheme.primary)
+                                .frame(width: 5, height: 5)
+                            Text(block.text)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .lineSpacing(3)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
