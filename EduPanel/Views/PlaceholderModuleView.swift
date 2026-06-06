@@ -416,7 +416,7 @@ struct ProfileView: View {
     private func profileWeek(_ snapshot: DashboardSnapshot) -> some View {
         let nonTeachingList = nonTeachingGroups(snapshot)
 
-        VStack(spacing: 18) {
+        return VStack(spacing: 18) {
             ProfileSection(title: "Constructor de horario", icon: "calendar", hint: "Crea bloques de clases o libres") {
                 Text("Vista visual de tu semana. Toca un bloque o usa Nuevo bloque para continuar el flujo en una pantalla dedicada.")
                     .font(.footnote.weight(.medium))
