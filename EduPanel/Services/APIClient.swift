@@ -15,7 +15,7 @@ enum APIClientError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingUser:
-            return "No hay una sesion activa."
+            return "No hay una sesión activa."
         case .invalidURL(let path):
             return "Ruta API invalida: \(path)"
         case .requestFailed(_, let message):

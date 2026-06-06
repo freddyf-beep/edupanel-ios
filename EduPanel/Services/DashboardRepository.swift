@@ -8,7 +8,7 @@ enum DashboardRepositoryError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingUser:
-            return "No hay una sesion activa."
+            return "No hay una sesión activa."
         }
     }
 }

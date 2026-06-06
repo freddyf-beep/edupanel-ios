@@ -26,8 +26,8 @@ enum AppRoute: Hashable {
         case .cronograma: return "Cronograma"
         case .actividades: return "Actividades de clase"
         case .perfil360: return "Perfil 360"
-        case .planificacionNueva: return "Nueva planificacion"
-        case .evaluacionNueva: return "Nueva evaluacion"
+        case .planificacionNueva: return "Nueva planificación"
+        case .evaluacionNueva: return "Nueva evaluación"
         case .classDetail(id: _, title: let title): return title.isEmpty ? "Detalle de clase" : title
         case .newScheduleBlock: return "Nuevo bloque"
         case .courseStudents(let course): return "Estudiantes - \(course)"
@@ -71,19 +71,19 @@ enum AppRoute: Hashable {
         case .classDetail:
             return "Pantalla preparada para revisar y editar este bloque."
         case .newScheduleBlock:
-            return "Aqui construiremos el formulario nativo para crear bloques de clase o libres."
+            return "Aquí construiremos el formulario nativo para crear bloques de clase o libres."
         case .courseStudents(let course):
             return "Lista de estudiantes preparada para \(course)."
         case .editCourse(let course):
-            return "Configuracion del curso preparada para \(course)."
+            return "Configuración del curso preparada para \(course)."
         case .schoolLogo:
             return "Subida del logo del colegio reservada para el siguiente paso."
         case .calendarConnect:
-            return "Conexion OAuth de Google Calendar pendiente de implementar."
+            return "Conexión OAuth de Google Calendar pendiente de implementar."
         case .calendarSync:
-            return "Sincronizacion de Calendar pendiente de conectar."
+            return "Sincronización de Calendar pendiente de conectar."
         case .driveConnect:
-            return "Conexion a Google Drive pendiente de implementar."
+            return "Conexión a Google Drive pendiente de implementar."
         case .coursePlanificaciones(let course, _):
             return "Planificaciones filtradas para el curso \(course)."
         case .verUnidad:
@@ -167,7 +167,7 @@ struct AppShell: View {
                                 } label: {
                                     Image(systemName: "rectangle.portrait.and.arrow.right")
                                 }
-                                .accessibilityLabel("Cerrar sesion")
+                                .accessibilityLabel("Cerrar sesión")
                             }
                         }
                         .navigationDestination(for: AppRoute.self) { route in

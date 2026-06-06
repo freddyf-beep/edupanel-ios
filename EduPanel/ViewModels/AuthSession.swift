@@ -73,7 +73,7 @@ final class AuthSession {
             return
         }
         guard let client = apiClient, let currentUser = Auth.auth().currentUser else {
-            errorMessage = "No hay una sesion activa para canjear el codigo."
+            errorMessage = "No hay una sesión activa para canjear el código."
             return
         }
 
@@ -133,4 +133,3 @@ final class AuthSession {
         return false
     }
 }
-
