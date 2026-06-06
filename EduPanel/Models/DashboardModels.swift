@@ -43,11 +43,11 @@ enum TipoHorario: String, Codable, Hashable {
         case .clase: return "Clase"
         case .taller: return "Taller"
         case .consejo: return "Consejo"
-        case .orientacion: return "Orientacion"
+        case .orientacion: return "Orientación"
         case .trabajoColaborativo: return "Trabajo colaborativo"
         case .noLectivo: return "No lectivo"
         case .almuerzo: return "Almuerzo"
-        case .planificacion: return "Planificacion"
+        case .planificacion: return "Planificación"
         case .recreo: return "Recreo"
         case .libre: return "Libre"
         case .desconocido: return "Bloque"
@@ -348,7 +348,7 @@ struct DashboardSnapshot: Equatable {
                 label: "Define tu rol docente",
                 target: .identidad,
                 isComplete: !profile.tipoProfesor.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                hint: "Basica, Media o Diferencial"
+                hint: "Básica, Media o Diferencial"
             ),
             ProfileSetupItem(
                 label: "Agrega el nombre de tu colegio",
