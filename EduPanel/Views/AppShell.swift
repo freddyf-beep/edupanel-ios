@@ -101,8 +101,8 @@ struct AppShell: View {
     let dashboardRepository: DashboardRepository
     private let planificacionRepository = PlanificacionRepository()
 
-    @State private var selectedTab: AppTab = .inicio
-    @State private var selectedRoute: AppRoute = .module(.inicio)
+    @State private var selectedTab: AppTab = .planificaciones
+    @State private var selectedRoute: AppRoute = .module(.planificaciones)
     @State private var isSidebarOpen = false
 
     @State private var inicioPath = NavigationPath()
@@ -137,6 +137,7 @@ struct AppShell: View {
             },
             content: {
                 TabView(selection: $selectedTab) {
+                    /*
                     // Inicio Tab
                     NavigationStack(path: $inicioPath) {
                         DashboardView(
@@ -176,6 +177,7 @@ struct AppShell: View {
                     }
                     .tabItem { Label(AppTab.inicio.title, systemImage: AppTab.inicio.systemImage) }
                     .tag(AppTab.inicio)
+                    */
 
                     // Planificaciones Tab
                     NavigationStack(path: $planificacionesPath) {
@@ -204,6 +206,7 @@ struct AppShell: View {
                     .tabItem { Label(AppTab.planificaciones.title, systemImage: AppTab.planificaciones.systemImage) }
                     .tag(AppTab.planificaciones)
 
+                    /*
                     // Evaluaciones Tab
                     NavigationStack(path: $evaluacionesPath) {
                         PlaceholderModuleView(tab: .evaluaciones)
@@ -275,6 +278,7 @@ struct AppShell: View {
                     }
                     .tabItem { Label(AppTab.perfil.title, systemImage: AppTab.perfil.systemImage) }
                     .tag(AppTab.perfil)
+                    */
                 }
                 .onChange(of: selectedTab) { oldTab, newTab in
                     // If they switch tabs manually (away from planificaciones), reset course selection route
