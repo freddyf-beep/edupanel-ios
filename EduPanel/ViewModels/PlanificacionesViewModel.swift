@@ -9,6 +9,7 @@ final class PlanificacionesViewModel {
     var cronogramasByUnit: [String: CronogramaUnidadData] = [:]
     var isLoading = false
     var errorMessage: String? = nil
+    var selectedSubject: String? = nil
     
     private let dashboardRepository: DashboardRepository
     private let planificacionRepository: PlanificacionRepository
@@ -62,10 +63,14 @@ final class PlanificacionesViewModel {
     }
     
     var activeSubject: String {
-        subject(from: snapshot)
+        selectedSubject ?? defaultSubjectFromSnapshot
     }
 
-    private func subject(from snapshot: DashboardSnapshot?) -> String {
+    var availableSubjects: [String] {
+        subjects(from: snapshot)
+    }
+
+    private var defaultSubjectFromSnapshot: String {
         subjects(from: snapshot).first ?? Self.defaultSubject
     }
 

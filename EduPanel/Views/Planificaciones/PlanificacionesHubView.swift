@@ -87,6 +87,9 @@ struct PlanificacionesHubView: View {
             }
 
             heroCard
+            if viewModel.availableSubjects.count > 1 {
+                subjectSelector
+            }
             kpiGrid
             filtersAndTabs
 
@@ -111,6 +114,40 @@ struct PlanificacionesHubView: View {
                 )
             default:
                 EmptyView()
+            }
+        }
+    }
+
+    private var subjectSelector: some View {
+        EPWebCard {
+            VStack(alignment: .leading, spacing: 10) {
+                EPSectionHeader(
+                    title: "Asignatura seleccionada",
+                    subtitle: "Cambia para ver la planificación de otras materias que dictas.",
+                    icon: "book.fill"
+                )
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(viewModel.availableSubjects, id: \.self) { subject in
+                            let isSelected = viewModel.activeSubject == subject
+                            Button {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                    viewModel.selectedSubject = subject
+                                }
+                            } label: {
+                                Text(subject)
+                                    .font(.caption.weight(.black))
+                                    .foregroundStyle(isSelected ? .white : EPTheme.primary)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                                    .background(isSelected ? EPTheme.primary : EPTheme.primary.opacity(0.1), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
             }
         }
     }
@@ -350,10 +387,11 @@ struct PlanificacionesHubView: View {
     }
 
     private var mergedPlanes: [PlanificacionCurso] {
-        guard let snapshot = viewModel.snapshot else { return viewModel.planes }
         let subject = viewModel.activeSubject
+        guard let snapshot = viewModel.snapshot else {
+            return viewModel.planes.filter { $0.asignatura == subject }
+        }
         var merged: [PlanificacionCurso] = []
-        var used = Set<String>()
 
         for curso in snapshot.courses {
             if let existing = viewModel.planes.first(where: { $0.curso == curso && $0.asignatura == subject }) {
@@ -361,11 +399,6 @@ struct PlanificacionesHubView: View {
             } else {
                 merged.append(PlanificacionCurso(curso: curso, asignatura: subject, units: []))
             }
-            used.insert("\(subject)::\(curso)")
-        }
-
-        for plan in viewModel.planes where !used.contains(plan.routeKey) {
-            merged.append(plan)
         }
 
         return merged

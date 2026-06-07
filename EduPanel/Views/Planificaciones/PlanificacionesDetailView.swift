@@ -514,13 +514,7 @@ struct PlanificacionesDetailView: View {
             if let plan = try await planificacionRepository.cargarPlanCurso(asignatura: activeSubject, curso: curso) {
                 units = plan.units
             } else {
-                let allPlans = try await planificacionRepository.listarTodosPlanesCurso()
-                if let matchingPlan = allPlans.first(where: { $0.curso == curso }) {
-                    activeSubject = matchingPlan.asignatura
-                    units = matchingPlan.units
-                } else {
-                    units = []
-                }
+                units = []
             }
 
             let plan = PlanificacionCurso(curso: curso, asignatura: activeSubject, units: units)

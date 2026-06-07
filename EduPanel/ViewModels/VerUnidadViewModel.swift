@@ -37,20 +37,24 @@ final class VerUnidadViewModel {
             let snap = try await dashboardRepository.fetchDashboard()
             self.snapshot = snap
             let providedSubject = asignatura?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            var subjectCandidates = snap.preferences.asignaturasHabilitadas
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            if let allPlans = try? await planificacionRepository.listarTodosPlanesCurso() {
-                subjectCandidates.append(contentsOf: allPlans.filter { $0.curso == curso }.map(\.asignatura))
-            }
+            let subjectCandidates: [String]
             if !providedSubject.isEmpty {
-                subjectCandidates.insert(providedSubject, at: 0)
+                subjectCandidates = [providedSubject]
+                self.activeSubject = providedSubject
+            } else {
+                var candidates = snap.preferences.asignaturasHabilitadas
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                if let allPlans = try? await planificacionRepository.listarTodosPlanesCurso() {
+                    candidates.append(contentsOf: allPlans.filter { $0.curso == curso }.map(\.asignatura))
+                }
+                candidates = uniqueSubjects(candidates)
+                if candidates.isEmpty {
+                    candidates = ["M\u{00FA}sica"]
+                }
+                subjectCandidates = candidates
+                self.activeSubject = candidates.first ?? "M\u{00FA}sica"
             }
-            subjectCandidates = uniqueSubjects(subjectCandidates)
-            if subjectCandidates.isEmpty {
-                subjectCandidates = ["M\u{00FA}sica"]
-            }
-            self.activeSubject = subjectCandidates.first ?? "M\u{00FA}sica"
             
             // 1. Load Pedagogical info
             var loadedVerUnidad: VerUnidadGuardada?
