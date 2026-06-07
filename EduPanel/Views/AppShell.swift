@@ -322,6 +322,16 @@ struct AppShell: View {
                 dashboardRepository: dashboardRepository,
                 planificacionRepository: planificacionRepository
             )
+        case .courseStudents(let course):
+            CourseStudentsView(courseName: course, repository: dashboardRepository)
+        case .editCourse(let course):
+            EditCourseView(courseName: course, repository: dashboardRepository)
+        case .schoolLogo:
+            SchoolLogoEditView(repository: dashboardRepository)
+        case .calendarConnect, .calendarSync:
+            GoogleConnectionView(connectionType: "calendar", repository: dashboardRepository)
+        case .driveConnect:
+            GoogleConnectionView(connectionType: "drive", repository: dashboardRepository)
         default:
             RoutePlaceholderView(route: route)
         }

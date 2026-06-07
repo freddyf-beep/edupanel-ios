@@ -132,6 +132,101 @@ struct DashboardRepository {
         )
     }
 
+    func saveConnections(googleCalendarConnected: Bool, googleDriveConnected: Bool) async throws {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            throw DashboardRepositoryError.missingUser
+        }
+
+        let ref = db.collection("users").document(uid).collection("perfil_info").document("preferencias")
+        try await setData([
+            "googleCalendarConnected": googleCalendarConnected,
+            "googleDriveConnected": googleDriveConnected,
+            "updatedAt": FieldValue.serverTimestamp()
+        ], at: ref, merge: true)
+    }
+
+    func saveStudents(_ students: [EstudiantePerfil], for course: String) async throws {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            throw DashboardRepositoryError.missingUser
+        }
+
+        let rawAlumnos = students.map { student -> [String: Any] in
+            [
+                "id": student.id,
+                "nombre": student.nombre,
+                "orden": student.orden,
+                "pie": student.pie,
+                "pieDiagnostico": student.pieDiagnostico,
+                "pieEspecialista": student.pieEspecialista,
+                "pieNotas": student.pieNotas
+            ]
+        }
+
+        let cursoId = Self.buildCursoId(course)
+        let ref = db.collection("users").document(uid).collection("estudiantes").document(cursoId)
+        try await setData([
+            "alumnos": rawAlumnos,
+            "updatedAt": FieldValue.serverTimestamp()
+        ], at: ref, merge: true)
+    }
+
+    func updateCourseDetails(oldName: String, newName: String, newColorHex: String) async throws {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            throw DashboardRepositoryError.missingUser
+        }
+
+        let scheduleRef = db.collection("users").document(uid).collection("configuracion").document("horario")
+        let snapshot = try await getDocument(scheduleRef)
+        guard let data = snapshot.data(),
+              let rawClasses = data["clases"] as? [[String: Any]] else {
+            return
+        }
+
+        var updatedClasses = rawClasses
+        for i in 0..<updatedClasses.count {
+            if updatedClasses[i]["resumen"] as? String == oldName {
+                updatedClasses[i]["resumen"] = newName
+                updatedClasses[i]["color"] = newColorHex
+            }
+        }
+
+        try await setData([
+            "clases": updatedClasses,
+            "updatedAt": FieldValue.serverTimestamp()
+        ], at: scheduleRef, merge: true)
+
+        let oldCursoId = Self.buildCursoId(oldName)
+        let newCursoId = Self.buildCursoId(newName)
+        if oldCursoId != newCursoId {
+            let studentsCollection = db.collection("users").document(uid).collection("estudiantes")
+            let oldDoc = try await getDocument(studentsCollection.document(oldCursoId))
+            if oldDoc.exists, let oldData = oldDoc.data() {
+                try await setData(oldData, at: studentsCollection.document(newCursoId), merge: false)
+                try await studentsCollection.document(oldCursoId).delete()
+            }
+
+            let levelsRef = db.collection("users").document(uid).collection("configuracion").document("nivel_mapping")
+            let levelsDoc = try await getDocument(levelsRef)
+            if levelsDoc.exists, var levelsData = levelsDoc.data() {
+                if var mapping = levelsData["mapping"] as? [String: String] {
+                    if let val = mapping[oldName] {
+                        mapping[newName] = val
+                        mapping.removeValue(forKey: oldName)
+                        levelsData["mapping"] = mapping
+                    }
+                }
+                if var cursoTipos = levelsData["cursoTipos"] as? [String: String] {
+                    if let val = cursoTipos[oldName] {
+                        cursoTipos[newName] = val
+                        cursoTipos.removeValue(forKey: oldName)
+                        levelsData["cursoTipos"] = cursoTipos
+                    }
+                }
+                try await setData(levelsData, at: levelsRef, merge: false)
+            }
+        }
+    }
+
     func saveLevelMapping(_ mapping: [String: String], cursoTipos: [String: TipoCurricular]) async throws {
         guard let uid = Auth.auth().currentUser?.uid else {
             throw DashboardRepositoryError.missingUser

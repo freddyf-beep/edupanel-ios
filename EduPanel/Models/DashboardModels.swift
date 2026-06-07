@@ -171,15 +171,25 @@ struct PreferenciasUsuario: Equatable {
     var asignaturasHabilitadas: [String]
     var bannerStyle: String
     var onboardingCompletado: Bool
+    var googleCalendarConnected: Bool
+    var googleDriveConnected: Bool
 
-    static let empty = PreferenciasUsuario(asignaturasHabilitadas: [], bannerStyle: "rosa", onboardingCompletado: false)
+    static let empty = PreferenciasUsuario(
+        asignaturasHabilitadas: [],
+        bannerStyle: "rosa",
+        onboardingCompletado: false,
+        googleCalendarConnected: false,
+        googleDriveConnected: false
+    )
 
     static func from(dictionary: [String: Any]?) -> PreferenciasUsuario {
         guard let dictionary else { return .empty }
         return PreferenciasUsuario(
             asignaturasHabilitadas: dictionary["asignaturasHabilitadas"] as? [String] ?? [],
             bannerStyle: dictionary["bannerStyle"] as? String ?? "rosa",
-            onboardingCompletado: dictionary["onboardingCompletado"] as? Bool ?? false
+            onboardingCompletado: dictionary["onboardingCompletado"] as? Bool ?? false,
+            googleCalendarConnected: dictionary["googleCalendarConnected"] as? Bool ?? false,
+            googleDriveConnected: dictionary["googleDriveConnected"] as? Bool ?? false
         )
     }
 
@@ -187,7 +197,9 @@ struct PreferenciasUsuario: Equatable {
         [
             "asignaturasHabilitadas": asignaturasHabilitadas,
             "bannerStyle": bannerStyle,
-            "onboardingCompletado": onboardingCompletado
+            "onboardingCompletado": onboardingCompletado,
+            "googleCalendarConnected": googleCalendarConnected,
+            "googleDriveConnected": googleDriveConnected
         ]
     }
 }

@@ -43,6 +43,19 @@
 		20000000000000000000010A /* VerUnidadClasesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000A /* VerUnidadClasesView.swift */; };
 		20000000000000000000010B /* LiveClassModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000B /* LiveClassModeView.swift */; };
 		300000000000000000000101 /* WebReplicaComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000001 /* WebReplicaComponents.swift */; };
+		300000000000000000000102 /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000002 /* ProfileViewModel.swift */; };
+		300000000000000000000103 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000003 /* ProfileView.swift */; };
+		300000000000000000000104 /* ProfileSummaryTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000004 /* ProfileSummaryTab.swift */; };
+		300000000000000000000105 /* ProfileWeekTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000005 /* ProfileWeekTab.swift */; };
+		300000000000000000000106 /* ProfileCoursesTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000006 /* ProfileCoursesTab.swift */; };
+		300000000000000000000107 /* ProfileSubjectsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000007 /* ProfileSubjectsTab.swift */; };
+		300000000000000000000108 /* ProfileIdentityTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000008 /* ProfileIdentityTab.swift */; };
+		300000000000000000000109 /* ProfileConnectionsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000009 /* ProfileConnectionsTab.swift */; };
+		30000000000000000000010A /* ProfileSubviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000A /* ProfileSubviews.swift */; };
+		30000000000000000000010B /* CourseStudentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000B /* CourseStudentsView.swift */; };
+		30000000000000000000010C /* EditCourseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000C /* EditCourseView.swift */; };
+		30000000000000000000010D /* SchoolLogoEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000D /* SchoolLogoEditView.swift */; };
+		30000000000000000000010E /* GoogleConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000E /* GoogleConnectionView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -84,6 +97,19 @@
 		20000000000000000000000A /* VerUnidadClasesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerUnidadClasesView.swift; sourceTree = "<group>"; };
 		20000000000000000000000B /* LiveClassModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveClassModeView.swift; sourceTree = "<group>"; };
 		300000000000000000000001 /* WebReplicaComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebReplicaComponents.swift; sourceTree = "<group>"; };
+		300000000000000000000002 /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewModel.swift; sourceTree = "<group>"; };
+		300000000000000000000003 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		300000000000000000000004 /* ProfileSummaryTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tabs/ProfileSummaryTab.swift; sourceTree = "<group>"; };
+		300000000000000000000005 /* ProfileWeekTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tabs/ProfileWeekTab.swift; sourceTree = "<group>"; };
+		300000000000000000000006 /* ProfileCoursesTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tabs/ProfileCoursesTab.swift; sourceTree = "<group>"; };
+		300000000000000000000007 /* ProfileSubjectsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tabs/ProfileSubjectsTab.swift; sourceTree = "<group>"; };
+		300000000000000000000008 /* ProfileIdentityTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tabs/ProfileIdentityTab.swift; sourceTree = "<group>"; };
+		300000000000000000000009 /* ProfileConnectionsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tabs/ProfileConnectionsTab.swift; sourceTree = "<group>"; };
+		30000000000000000000000A /* ProfileSubviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/ProfileSubviews.swift; sourceTree = "<group>"; };
+		30000000000000000000000B /* CourseStudentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/CourseStudentsView.swift; sourceTree = "<group>"; };
+		30000000000000000000000C /* EditCourseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/EditCourseView.swift; sourceTree = "<group>"; };
+		30000000000000000000000D /* SchoolLogoEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/SchoolLogoEditView.swift; sourceTree = "<group>"; };
+		30000000000000000000000E /* GoogleConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/GoogleConnectionView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -181,6 +207,7 @@
 			children = (
 				200000000000000000000020 /* Planificaciones */,
 				200000000000000000000030 /* VerUnidad */,
+				300000000000000000000040 /* Profile */,
 				300000000000000000000001 /* WebReplicaComponents.swift */,
 				10000000000000000000002C /* AppShell.swift */,
 				10000000000000000000002D /* DashboardView.swift */,
@@ -239,6 +266,26 @@
 				20000000000000000000000B /* LiveClassModeView.swift */,
 			);
 			path = VerUnidad;
+			sourceTree = "<group>";
+		};
+		300000000000000000000040 /* Profile */ = {
+			isa = PBXGroup;
+			children = (
+				300000000000000000000003 /* ProfileView.swift */,
+				300000000000000000000002 /* ProfileViewModel.swift */,
+				300000000000000000000004 /* ProfileSummaryTab.swift */,
+				300000000000000000000005 /* ProfileWeekTab.swift */,
+				300000000000000000000006 /* ProfileCoursesTab.swift */,
+				300000000000000000000007 /* ProfileSubjectsTab.swift */,
+				300000000000000000000008 /* ProfileIdentityTab.swift */,
+				300000000000000000000009 /* ProfileConnectionsTab.swift */,
+				30000000000000000000000A /* ProfileSubviews.swift */,
+				30000000000000000000000B /* CourseStudentsView.swift */,
+				30000000000000000000000C /* EditCourseView.swift */,
+				30000000000000000000000D /* SchoolLogoEditView.swift */,
+				30000000000000000000000E /* GoogleConnectionView.swift */,
+			);
+			path = Profile;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -353,6 +400,19 @@
 				20000000000000000000010A /* VerUnidadClasesView.swift in Sources */,
 				20000000000000000000010B /* LiveClassModeView.swift in Sources */,
 				300000000000000000000101 /* WebReplicaComponents.swift in Sources */,
+				300000000000000000000102 /* ProfileViewModel.swift in Sources */,
+				300000000000000000000103 /* ProfileView.swift in Sources */,
+				300000000000000000000104 /* ProfileSummaryTab.swift in Sources */,
+				300000000000000000000105 /* ProfileWeekTab.swift in Sources */,
+				300000000000000000000106 /* ProfileCoursesTab.swift in Sources */,
+				300000000000000000000107 /* ProfileSubjectsTab.swift in Sources */,
+				300000000000000000000108 /* ProfileIdentityTab.swift in Sources */,
+				300000000000000000000109 /* ProfileConnectionsTab.swift in Sources */,
+				30000000000000000000010A /* ProfileSubviews.swift in Sources */,
+				30000000000000000000010B /* CourseStudentsView.swift in Sources */,
+				30000000000000000000010C /* EditCourseView.swift in Sources */,
+				30000000000000000000010D /* SchoolLogoEditView.swift in Sources */,
+				30000000000000000000010E /* GoogleConnectionView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
