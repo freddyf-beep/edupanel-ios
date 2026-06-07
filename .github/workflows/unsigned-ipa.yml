@@ -73,12 +73,22 @@ jobs:
             GOOGLE_REVERSED_CLIENT_ID="$GOOGLE_REVERSED_CLIENT_ID" \
             2>&1 | tee build-xcode.log
 
-      - name: Print concise build errors
+      - name: Print build errors
         if: failure()
         run: |
           if [ -f build-xcode.log ]; then
-            grep -n -C 3 -E "error:|BUILD FAILED|The following build commands failed" build-xcode.log | tail -160
+            echo "=== XCODEBUILD LOG TAIL ==="
+            tail -n 300 build-xcode.log
+          else
+            echo "No build-xcode.log found."
           fi
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-xcode-log
+          path: build-xcode.log
 
       - name: Verify app executable metadata
         run: |
