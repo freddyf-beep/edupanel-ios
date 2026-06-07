@@ -7,13 +7,14 @@ struct PlanificacionesHubView: View {
     @State private var searchQuery = ""
     @State private var selectedCourseFilter: Set<String> = []
     @State private var selectedStateFilter: Set<UnitPlanningState> = []
+    @State private var isStatsExpanded = false
+    @State private var isFiltersExpanded = false
 
     let dashboardRepository: DashboardRepository
     let planificacionRepository: PlanificacionRepository
 
     private let tabs = [
         EPWebTab(id: "timeline", title: "Timeline", icon: "chart.bar.doc.horizontal"),
-        EPWebTab(id: "cursos", title: "Cursos", icon: "graduationcap.fill"),
         EPWebTab(id: "calendario", title: "Calendario", icon: "calendar"),
         EPWebTab(id: "insights", title: "Insights", icon: "sparkles")
     ]
@@ -90,19 +91,15 @@ struct PlanificacionesHubView: View {
             if viewModel.availableSubjects.count > 1 {
                 subjectSelector
             }
-            kpiGrid
-            filtersAndTabs
+            kpiSection
+            filtersSection
+
+            EPWebTabBar(tabs: tabs, selected: $selectedVista)
 
             switch selectedVista {
             case "timeline":
                 PlanTimelineReplicaView(
                     planes: filteredPlanes,
-                    cronogramasByUnit: viewModel.cronogramasByUnit
-                )
-            case "cursos":
-                CursosReplicaView(
-                    planes: filteredPlanes,
-                    snapshot: viewModel.snapshot,
                     cronogramasByUnit: viewModel.cronogramasByUnit
                 )
             case "calendario":
@@ -153,59 +150,86 @@ struct PlanificacionesHubView: View {
     }
 
     private var heroCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("MIS PLANIFICACIONES · V3 BETA")
-                        .font(.system(size: 10, weight: .black))
-                        .tracking(1.2)
-                        .foregroundStyle(.white.opacity(0.86))
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("MIS PLANIFICACIONES")
+                    .font(.system(size: 9, weight: .black))
+                    .tracking(1.0)
+                    .foregroundStyle(.white.opacity(0.8))
 
-                    Text("\(viewModel.activeSubject) · \(courseOptions.count) cursos")
-                        .font(.title2.weight(.black))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-
-                    Text("Gestiona unidades, cobertura curricular, cronogramas y evidencias de avance por curso.")
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.86))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 10)
-
-                Image("Logo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 54, height: 54)
-                    .background(.white.opacity(0.22), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                Text("\(viewModel.activeSubject) · \(courseOptions.count) Cursos")
+                    .font(.title3.weight(.black))
+                    .foregroundStyle(.white)
             }
 
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
+                    .font(.footnote)
                 TextField("Buscar unidad o curso...", text: $searchQuery)
                     .font(.footnote.weight(.semibold))
                     .textFieldStyle(.plain)
             }
-            .padding(11)
-            .background(.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(9)
+            .background(.white, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             HStack(spacing: 8) {
-                EPPlaceholderActionButton(title: "Drive", icon: "externaldrive.fill", message: "La conexión Drive queda visible como en la web y se conectará cuando habilitemos el flujo nativo.")
-                EPPlaceholderActionButton(title: "IA", icon: "sparkles", message: "La generación IA queda preparada para una siguiente entrega.")
+                EPPlaceholderActionButton(title: "Drive", icon: "externaldrive.fill", message: "La conexión Drive queda visible como en la web y se conectará cuando habilitemos el flujo nativo.", variant: .white)
+                EPPlaceholderActionButton(title: "IA", icon: "sparkles", message: "La generación IA queda preparada para una siguiente entrega.", variant: .white)
                 Spacer()
             }
         }
-        .padding(18)
+        .padding(14)
         .background(
             LinearGradient(
                 colors: [EPTheme.primary, EPTheme.rose, EPTheme.fuchsia],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             ),
-            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
         )
+    }
+
+    private var kpiSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    isStatsExpanded.toggle()
+                }
+            } label: {
+                HStack {
+                    Label(
+                        isStatsExpanded ? "Ocultar estadísticas" : "Ver estadísticas de avance",
+                        systemImage: isStatsExpanded ? "chevron.up.circle.fill" : "chevron.down.circle.fill"
+                    )
+                    .font(.footnote.weight(.black))
+                    .foregroundStyle(EPTheme.primary)
+                    
+                    Spacer()
+                    
+                    if !isStatsExpanded {
+                        let stats = calculateStats()
+                        HStack(spacing: 12) {
+                            Text("\(stats.totalUnidades) Uni.")
+                            Text("\(stats.cobertura)% Cob.")
+                        }
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color(.systemGray5), in: Capsule())
+                    }
+                }
+                .padding(12)
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+
+            if isStatsExpanded {
+                kpiGrid
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
     }
 
     private var kpiGrid: some View {
@@ -220,48 +244,84 @@ struct PlanificacionesHubView: View {
         }
     }
 
-    private var filtersAndTabs: some View {
-        EPWebCard {
-            VStack(alignment: .leading, spacing: 14) {
-                EPSectionHeader(title: "Filtros y vistas", subtitle: "Replica la navegación web: curso, estado y modo de lectura.", icon: "slider.horizontal.3")
+    private var filtersSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    isFiltersExpanded.toggle()
+                }
+            } label: {
+                HStack {
+                    Label(
+                        isFiltersExpanded ? "Ocultar filtros" : "Filtrar unidades",
+                        systemImage: "slider.horizontal.3"
+                    )
+                    .font(.footnote.weight(.black))
+                    .foregroundStyle(EPTheme.primary)
+                    
+                    Spacer()
+                    
+                    if hasActiveFilters {
+                        let activeCount = (selectedCourseFilter.count) + (selectedStateFilter.count) + (searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0 : 1)
+                        Text("\(activeCount) activos")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(EPTheme.primary, in: Capsule())
+                    } else {
+                        Image(systemName: "chevron.down")
+                            .font(.footnote.weight(.bold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(12)
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
 
-                filterSection(title: "Curso", values: courseOptions)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Estado")
-                        .font(.caption.weight(.black))
-                        .foregroundStyle(.secondary)
-                    ReplicaFlowLayout(spacing: 8) {
-                        ForEach(UnitPlanningState.allCases) { state in
-                            filterChip(
-                                title: state.label,
-                                isSelected: selectedStateFilter.contains(state),
-                                tint: state.tint
-                            ) {
-                                if selectedStateFilter.contains(state) {
-                                    selectedStateFilter.remove(state)
-                                } else {
-                                    selectedStateFilter.insert(state)
+            if isFiltersExpanded {
+                EPWebCard {
+                    VStack(alignment: .leading, spacing: 14) {
+                        filterSection(title: "Curso", values: courseOptions)
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Estado")
+                                .font(.caption.weight(.black))
+                                .foregroundStyle(.secondary)
+                            ReplicaFlowLayout(spacing: 8) {
+                                ForEach(UnitPlanningState.allCases) { state in
+                                    filterChip(
+                                        title: state.label,
+                                        isSelected: selectedStateFilter.contains(state),
+                                        tint: state.tint
+                                    ) {
+                                        if selectedStateFilter.contains(state) {
+                                            selectedStateFilter.remove(state)
+                                        } else {
+                                            selectedStateFilter.insert(state)
+                                        }
+                                    }
                                 }
                             }
                         }
+
+                        if hasActiveFilters {
+                            Button {
+                                searchQuery = ""
+                                selectedCourseFilter.removeAll()
+                                selectedStateFilter.removeAll()
+                            } label: {
+                                Label("Limpiar filtros", systemImage: "xmark.circle.fill")
+                                    .font(.caption.weight(.black))
+                                    .foregroundStyle(EPTheme.primary)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 4)
+                        }
                     }
                 }
-
-                if hasActiveFilters {
-                    Button {
-                        searchQuery = ""
-                        selectedCourseFilter.removeAll()
-                        selectedStateFilter.removeAll()
-                    } label: {
-                        Label("Limpiar filtros", systemImage: "xmark.circle.fill")
-                            .font(.caption.weight(.black))
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                EPWebTabBar(tabs: tabs, selected: $selectedVista)
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
     }
@@ -389,19 +449,63 @@ struct PlanificacionesHubView: View {
     private var mergedPlanes: [PlanificacionCurso] {
         let subject = viewModel.activeSubject
         guard let snapshot = viewModel.snapshot else {
-            return viewModel.planes.filter { $0.asignatura == subject }
+            return uniquePlanes(viewModel.planes.filter { $0.asignatura == subject })
         }
+        
+        let uniqueSnapshotCourses = uniqueNormalizedCourses(snapshot.courses)
         var merged: [PlanificacionCurso] = []
+        var seenCourses = Set<String>()
 
-        for curso in snapshot.courses {
-            if let existing = viewModel.planes.first(where: { $0.curso == curso && $0.asignatura == subject }) {
-                merged.append(existing)
+        for curso in uniqueSnapshotCourses {
+            let normalizedCurso = normalizeCourseName(curso)
+            guard !seenCourses.contains(normalizedCurso) else { continue }
+            seenCourses.insert(normalizedCurso)
+            
+            if let existing = viewModel.planes.first(where: { 
+                normalizeCourseName($0.curso) == normalizedCurso && $0.asignatura == subject 
+            }) {
+                var planCopy = existing
+                planCopy.curso = curso
+                merged.append(planCopy)
             } else {
                 merged.append(PlanificacionCurso(curso: curso, asignatura: subject, units: []))
             }
         }
 
         return merged
+    }
+
+    private func normalizeCourseName(_ name: String) -> String {
+        name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL"))
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+    }
+
+    private func uniqueNormalizedCourses(_ courses: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for course in courses {
+            let normalized = normalizeCourseName(course)
+            if !seen.contains(normalized) {
+                seen.insert(normalized)
+                result.append(course)
+            }
+        }
+        return result
+    }
+
+    private func uniquePlanes(_ planes: [PlanificacionCurso]) -> [PlanificacionCurso] {
+        var seen = Set<String>()
+        var result: [PlanificacionCurso] = []
+        for plan in planes {
+            let normalized = normalizeCourseName(plan.curso)
+            if !seen.contains(normalized) {
+                seen.insert(normalized)
+                result.append(plan)
+            }
+        }
+        return result
     }
 
     private struct Stats {
@@ -701,81 +805,6 @@ private struct PlanTimelineReplicaView: View {
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.vertical, 22)
-    }
-}
-
-private struct CursosReplicaView: View {
-    let planes: [PlanificacionCurso]
-    let snapshot: DashboardSnapshot?
-    let cronogramasByUnit: [String: CronogramaUnidadData]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ForEach(planes, id: \.routeKey) { plan in
-                courseCard(plan)
-            }
-        }
-    }
-
-    private func courseCard(_ plan: PlanificacionCurso) -> some View {
-        let coverage = planCoverage(plan)
-        let colorHex = snapshot?.horario.first(where: { $0.resumen == plan.curso })?.colorHex ?? "#F03E6E"
-        let current = plan.units.first { UnitPlanningState.state(for: $0) == .enCurso }
-        let upcoming = plan.units.first { UnitPlanningState.state(for: $0) == .proxima }
-
-        return NavigationLink(value: AppRoute.coursePlanificaciones(curso: plan.curso, asignatura: plan.asignatura)) {
-            EPWebCard {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(alignment: .top, spacing: 12) {
-                        Circle()
-                            .fill(EPTheme.color(hex: colorHex))
-                            .frame(width: 14, height: 14)
-                            .padding(.top, 4)
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(plan.curso)
-                                .font(.headline.weight(.black))
-                                .foregroundStyle(.primary)
-                            Text("\(plan.units.count) unidades · \(plan.units.reduce(0) { $0 + $1.hours }) horas")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.black))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    ProgressView(value: Double(coverage) / 100.0)
-                        .tint(coverage >= 80 ? .green : coverage >= 45 ? .orange : EPTheme.primary)
-
-                    HStack {
-                        EPStatusPill(text: "\(coverage)% cobertura", icon: "checkmark.seal.fill", tint: coverage >= 80 ? .green : .orange)
-                        if let current {
-                            EPStatusPill(text: "Ahora: \(current.name)", icon: "play.fill", tint: .green)
-                        } else if let upcoming {
-                            EPStatusPill(text: "Próxima: \(upcoming.name)", icon: "calendar", tint: .purple)
-                        } else if plan.units.isEmpty {
-                            EPStatusPill(text: "Sin unidades", icon: "plus.circle", tint: .secondary)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func planCoverage(_ plan: PlanificacionCurso) -> Int {
-        var assigned = 0
-        var total = 0
-        for unit in plan.units {
-            let coverage = UnitCoverage.coverage(for: unit, plan: plan, cronogramasByUnit: cronogramasByUnit)
-            assigned += coverage.assigned
-            total += coverage.total
-        }
-        return total > 0 ? Int((Double(assigned) / Double(total)) * 100) : 0
     }
 }
 

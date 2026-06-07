@@ -31,7 +31,11 @@ final class PlanificacionesViewModel {
 
             do {
                 let profileSubjects = subjects(from: snap)
-                let loadedPlanes = try await planificacionRepository.listarTodosPlanesCurso()
+                let posiblesCursos = Array(Set(snap.courses + Array(snap.studentsByCourse.keys)))
+                let loadedPlanes = try await planificacionRepository.listarTodosPlanesCurso(
+                    posiblesCursos: posiblesCursos,
+                    posiblesAsignaturas: profileSubjects
+                )
                 var cronogramas: [String: CronogramaUnidadData] = [:]
                 let subjects = Set(profileSubjects + loadedPlanes.map(\.asignatura))
                     .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }

@@ -178,9 +178,15 @@ struct EPWebTabBar: View {
 }
 
 struct EPPlaceholderActionButton: View {
+    enum Variant {
+        case accent
+        case white
+    }
+
     let title: String
     let icon: String
     var message: String = "Esta acción queda preparada para conectarla en el siguiente paso."
+    var variant: Variant = .accent
 
     @State private var showAlert = false
 
@@ -192,8 +198,8 @@ struct EPPlaceholderActionButton: View {
                 .font(.caption.weight(.black))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-                .foregroundStyle(EPTheme.primary)
-                .background(EPTheme.primary.opacity(0.1), in: Capsule())
+                .foregroundStyle(variant == .white ? .white : EPTheme.primary)
+                .background(variant == .white ? .white.opacity(0.25) : EPTheme.primary.opacity(0.1), in: Capsule())
         }
         .buttonStyle(.plain)
         .alert(title, isPresented: $showAlert) {

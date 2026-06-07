@@ -130,7 +130,7 @@ struct PlanificacionRepository {
         }
     }
 
-    func listarTodosPlanesCurso() async throws -> [PlanificacionCurso] {
+    func listarTodosPlanesCurso(posiblesCursos: [String] = [], posiblesAsignaturas: [String] = []) async throws -> [PlanificacionCurso] {
         let colRef = try userCol(col: "planificaciones_curso")
         return try await withCheckedThrowingContinuation { continuation in
             colRef.getDocuments { snapshot, error in
@@ -138,7 +138,50 @@ struct PlanificacionRepository {
                     continuation.resume(throwing: error)
                 } else if let snapshot {
                     let results = snapshot.documents.compactMap { doc -> PlanificacionCurso? in
-                        PlanificacionCurso.fromFirestore(doc.data())
+                        let dict = doc.data()
+                        let docId = doc.documentID
+                        
+                        var fallbackCurso: String? = nil
+                        var fallbackAsignatura: String? = nil
+                        
+                        for asignatura in posiblesAsignaturas {
+                            for curso in posiblesCursos {
+                                let expectedId = Self.buildPlanCursoId(asignatura: asignatura, curso: curso)
+                                if expectedId == docId {
+                                    fallbackCurso = curso
+                                    fallbackAsignatura = asignatura
+                                    break
+                                }
+                            }
+                            if fallbackCurso != nil { break }
+                        }
+                        
+                        if fallbackCurso == nil && docId.hasPrefix("plan_") {
+                            let cleanId = String(docId.dropFirst(5))
+                            for asignatura in posiblesAsignaturas {
+                                let slugAsig = asignatura.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL"))
+                                    .lowercased()
+                                    .replacingOccurrences(of: " ", with: "_")
+                                    .replacingOccurrences(of: "[^a-z0-9_]", with: "", options: .regularExpression)
+                                if cleanId.hasPrefix(slugAsig + "_") {
+                                    fallbackAsignatura = asignatura
+                                    let slugCursoPart = String(cleanId.dropFirst(slugAsig.count + 1))
+                                    for curso in posiblesCursos {
+                                        let slugCurso = curso.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL"))
+                                            .lowercased()
+                                            .replacingOccurrences(of: " ", with: "_")
+                                            .replacingOccurrences(of: "[^a-z0-9_]", with: "", options: .regularExpression)
+                                        if slugCurso == slugCursoPart {
+                                            fallbackCurso = curso
+                                            break
+                                        }
+                                    }
+                                    break
+                                }
+                            }
+                        }
+                        
+                        return PlanificacionCurso.fromFirestore(dict, fallbackCurso: fallbackCurso, fallbackAsignatura: fallbackAsignatura)
                     }
                     continuation.resume(returning: results)
                 } else {
