@@ -585,6 +585,11 @@ private struct PlanTimelineReplicaView: View {
                                         .foregroundStyle(.secondary)
                                         .frame(width: 58)
                                 }
+                                Text("Sin fecha")
+                                    .font(.system(size: 10, weight: .black))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 54, alignment: .center)
+                                    .padding(.leading, 8)
                             }
 
                             ForEach(planes, id: \.routeKey) { plan in
@@ -603,11 +608,38 @@ private struct PlanTimelineReplicaView: View {
                                             .fill(Color(.systemGray6))
                                             .frame(width: 580, height: 30)
 
-                                        ForEach(plan.units) { unit in
+                                        ForEach(plan.units.filter(\.hasDates)) { unit in
                                             unitBlock(plan: plan, unit: unit)
                                         }
                                     }
                                     .frame(width: 580, height: 34)
+
+                                    let unscheduled = plan.units.filter { !$0.hasDates }
+                                    if !unscheduled.isEmpty {
+                                        Menu {
+                                            ForEach(unscheduled) { unit in
+                                                let routeId = UnitRouteID.routeId(for: unit, plan: plan, cronogramasByUnit: cronogramasByUnit)
+                                                NavigationLink(value: AppRoute.verUnidad(curso: plan.curso, asignatura: plan.asignatura, unidadId: routeId, unidadNombre: unit.name, initialTab: "cronograma")) {
+                                                    Label(unit.name, systemImage: "calendar")
+                                                }
+                                            }
+                                        } label: {
+                                            HStack(spacing: 3) {
+                                                Image(systemName: "calendar.badge.exclamationmark")
+                                                Text("\(unscheduled.count)")
+                                            }
+                                            .font(.system(size: 9, weight: .black))
+                                            .foregroundStyle(.orange)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 5)
+                                            .frame(width: 46)
+                                            .background(.orange.opacity(0.12), in: Capsule())
+                                        }
+                                        .menuStyle(.borderlessButton)
+                                        .frame(width: 54)
+                                    } else {
+                                        Spacer().frame(width: 54)
+                                    }
                                 }
                             }
                         }
@@ -750,78 +782,181 @@ private struct CursosReplicaView: View {
 private struct CalendarioReplicaView: View {
     let planes: [PlanificacionCurso]
     @State private var selectedMonthOffset = 0
+    @State private var selectedDate: Date? = Calendar.current.startOfDay(for: Date())
+
+    private let monthGrid = Array(repeating: GridItem(.flexible(), spacing: 7), count: 7)
 
     var body: some View {
-        EPWebCard {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Button { selectedMonthOffset -= 1 } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.caption.weight(.black))
-                            .padding(8)
-                            .background(Color(.systemGray6), in: Circle())
+        VStack(spacing: 16) {
+            EPWebCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        Button {
+                            selectedMonthOffset -= 1
+                            selectedDate = nil
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.caption.weight(.black))
+                                .padding(8)
+                                .background(Color(.systemGray6), in: Circle())
+                        }
+                        Spacer()
+                        Text(monthYearString(for: activeMonthDate))
+                            .font(.headline.weight(.black))
+                        Spacer()
+                        Button {
+                            selectedMonthOffset += 1
+                            selectedDate = nil
+                        } label: {
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.black))
+                                .padding(8)
+                                .background(Color(.systemGray6), in: Circle())
+                        }
                     }
-                    Spacer()
-                    Text(monthYearString(for: activeMonthDate))
-                        .font(.headline.weight(.black))
-                    Spacer()
-                    Button { selectedMonthOffset += 1 } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.black))
-                            .padding(8)
-                            .background(Color(.systemGray6), in: Circle())
+                    .buttonStyle(.plain)
+
+                    HStack {
+                        ForEach(["Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"], id: \.self) { day in
+                            Text(day)
+                                .font(.system(size: 10, weight: .black))
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+
+                    let milestones = getMilestones(for: activeMonthDate)
+
+                    LazyVGrid(columns: monthGrid, spacing: 7) {
+                        ForEach(Array(currentMonthGrid(for: activeMonthDate).enumerated()), id: \.offset) { item in
+                            let date = item.element
+                            dayCell(date: date, milestones: milestones)
+                        }
                     }
                 }
-                .buttonStyle(.plain)
+            }
 
-                let milestones = getMilestones(for: activeMonthDate)
-                if milestones.isEmpty {
-                    VStack(spacing: 9) {
-                        Image(systemName: "calendar.badge.clock")
-                            .font(.title.weight(.bold))
-                            .foregroundStyle(.secondary)
-                        Text("No hay hitos este mes")
-                            .font(.footnote.weight(.black))
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 28)
-                } else {
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(milestones) { milestone in
-                            HStack(spacing: 12) {
-                                VStack(spacing: 1) {
-                                    Text("\(milestone.day)")
-                                        .font(.title3.weight(.black))
-                                    Text(milestone.weekday)
-                                        .font(.caption2.weight(.black))
-                                        .foregroundStyle(.secondary)
-                                }
-                                .frame(width: 38)
+            EPWebCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let selectedDate {
+                        EPSectionHeader(
+                            title: "Hitos del \(formattedDate(selectedDate))",
+                            subtitle: "Eventos planificados para esta fecha.",
+                            icon: "calendar.badge.clock"
+                        )
 
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: milestone.isStart ? "arrow.right.circle.fill" : "stop.circle.fill")
-                                            .foregroundStyle(EPTheme.color(hex: milestone.unitColor))
-                                        Text(milestone.isStart ? "Inicio de unidad" : "Cierre de unidad")
-                                            .font(.caption.weight(.black))
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Text(milestone.unitName)
-                                        .font(.subheadline.weight(.black))
-                                    Text(milestone.curso)
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                            }
-                            .padding(11)
-                            .background(Color(.systemGray6).opacity(0.6), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                        let dayMilestones = getMilestonesForDate(selectedDate)
+                        if dayMilestones.isEmpty {
+                            Text("No hay hitos programados para este día.")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 16)
+                        } else {
+                            milestonesList(dayMilestones)
+                        }
+                    } else {
+                        EPSectionHeader(
+                            title: "Hitos de \(monthYearString(for: activeMonthDate))",
+                            subtitle: "Eventos planificados para este mes. Toca un día para filtrar.",
+                            icon: "calendar.badge.clock"
+                        )
+
+                        let monthMilestones = getMilestones(for: activeMonthDate)
+                        if monthMilestones.isEmpty {
+                            Text("No hay hitos este mes.")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 16)
+                        } else {
+                            milestonesList(monthMilestones)
                         }
                     }
                 }
             }
         }
+    }
+
+    private func milestonesList(_ milestones: [Milestone]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(milestones) { milestone in
+                let routeId = UnitRouteID.routeId(for: milestone.unit, plan: milestone.plan, cronogramasByUnit: [:])
+                NavigationLink(value: AppRoute.verUnidad(curso: milestone.curso, asignatura: milestone.plan.asignatura, unidadId: routeId, unidadNombre: milestone.unitName, initialTab: "unidad")) {
+                    HStack(spacing: 12) {
+                        VStack(spacing: 1) {
+                            Text("\(milestone.day)")
+                                .font(.title3.weight(.black))
+                            Text(milestone.weekday)
+                                .font(.caption2.weight(.black))
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(width: 38)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Image(systemName: milestone.isStart ? "arrow.right.circle.fill" : "stop.circle.fill")
+                                    .foregroundStyle(EPTheme.color(hex: milestone.unitColor))
+                                Text(milestone.isStart ? "Inicio de unidad" : "Cierre de unidad")
+                                    .font(.caption.weight(.black))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(milestone.unitName)
+                                .font(.subheadline.weight(.black))
+                                .foregroundStyle(.primary)
+                            Text(milestone.curso)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(11)
+                    .background(Color(.systemGray6).opacity(0.6), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func dayCell(date: Date?, milestones: [Milestone]) -> some View {
+        guard let date else {
+            return AnyView(Spacer().frame(height: 38))
+        }
+
+        let calendar = Calendar.current
+        let isToday = calendar.isDateInToday(date)
+        let isSelected = selectedDate.map { calendar.isDate($0, inSameDayAs: date) } ?? false
+        let dayNum = calendar.component(.day, from: date)
+
+        let dayMilestones = milestones.filter { calendar.isDate($0.date, inSameDayAs: date) }
+
+        return AnyView(
+            Button {
+                selectedDate = date
+            } label: {
+                VStack(spacing: 4) {
+                    Text("\(dayNum)")
+                        .font(.system(size: 11, weight: isToday || isSelected ? .black : .bold))
+                        .foregroundStyle(isSelected ? .white : isToday ? EPTheme.primary : .primary)
+                        .frame(width: 26, height: 26)
+                        .background(isSelected ? EPTheme.primary : isToday ? EPTheme.primary.opacity(0.12) : Color.clear, in: Circle())
+
+                    HStack(spacing: 3) {
+                        ForEach(dayMilestones.prefix(3)) { ms in
+                            Circle()
+                                .fill(EPTheme.color(hex: ms.unitColor))
+                                .frame(width: 4, height: 4)
+                        }
+                    }
+                    .frame(height: 4)
+                }
+                .frame(maxWidth: .infinity, minHeight: 38)
+            }
+            .buttonStyle(.plain)
+        )
     }
 
     private var activeMonthDate: Date {
@@ -835,6 +970,34 @@ private struct CalendarioReplicaView: View {
         return formatter.string(from: date).capitalized
     }
 
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "es_CL")
+        formatter.dateFormat = "d 'de' MMMM"
+        return formatter.string(for: date)
+    }
+
+    private func currentMonthGrid(for monthDate: Date) -> [Date?] {
+        let calendar = Calendar.current
+        var components = calendar.dateComponents([.year, .month], from: monthDate)
+        components.day = 1
+        guard let firstDay = calendar.date(from: components),
+              let dayRange = calendar.range(of: .day, in: .month, for: firstDay) else {
+            return []
+        }
+
+        let leadingSpaces = calendar.component(.weekday, from: firstDay) - 1
+        var result: [Date?] = Array(repeating: nil, count: leadingSpaces)
+        for day in dayRange {
+            components.day = day
+            result.append(calendar.date(from: components))
+        }
+        while result.count % 7 != 0 {
+            result.append(nil)
+        }
+        return result
+    }
+
     private struct Milestone: Identifiable {
         let id: String
         let day: Int
@@ -843,6 +1006,9 @@ private struct CalendarioReplicaView: View {
         let unitName: String
         let unitColor: String
         let curso: String
+        let date: Date
+        let plan: PlanificacionCurso
+        let unit: UnidadPlan
     }
 
     private func getMilestones(for monthDate: Date) -> [Milestone] {
@@ -861,6 +1027,12 @@ private struct CalendarioReplicaView: View {
             }
         }
         return list.sorted { $0.day < $1.day }
+    }
+
+    private func getMilestonesForDate(_ date: Date) -> [Milestone] {
+        let milestones = getMilestones(for: date)
+        let calendar = Calendar.current
+        return milestones.filter { calendar.isDate($0.date, inSameDayAs: date) }
     }
 
     private func addMilestone(
@@ -885,7 +1057,10 @@ private struct CalendarioReplicaView: View {
             isStart: isStart,
             unitName: unit.name,
             unitColor: unit.color,
-            curso: plan.curso
+            curso: plan.curso,
+            date: date,
+            plan: plan,
+            unit: unit
         ))
     }
 }
