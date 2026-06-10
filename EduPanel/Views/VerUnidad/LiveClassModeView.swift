@@ -61,21 +61,24 @@ struct LiveClassModeView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Pausar") {
-                        isTimerRunning.toggle()
+                    Button(isTimerRunning ? "Pausar" : "Reanudar") {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isTimerRunning.toggle()
+                        }
                     }
                     .font(.subheadline.bold())
-                    .foregroundStyle(Color(hex: "#F03E6E"))
+                    .foregroundStyle(EPTheme.primary)
                 }
-                
+
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Finalizar") {
                         dismiss()
                     }
                     .font(.subheadline.bold())
-                    .foregroundStyle(Color(hex: "#F03E6E"))
+                    .foregroundStyle(EPTheme.primary)
                 }
             }
+            .sensoryFeedback(.impact(weight: .light), trigger: activeMoment)
             .onReceive(timer) { _ in
                 guard isTimerRunning else { return }
                 if timeRemaining > 0 {
@@ -104,21 +107,27 @@ struct LiveClassModeView: View {
             Spacer()
             
             // Timer Display
-            HStack(spacing: 6) {
-                Image(systemName: "hourglass")
-                    .font(.footnote)
-                    .foregroundStyle(.pink)
+            HStack(spacing: 7) {
+                Image(systemName: isTimerRunning ? "hourglass" : "pause.fill")
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(EPTheme.primary)
                 Text(formatTimeString(timeRemaining))
-                    .font(.system(size: 22, weight: .black, design: .monospaced))
+                    .font(.system(size: 24, weight: .black, design: .monospaced))
                     .foregroundStyle(timeRemaining < 5 * 60 ? .red : Color(.label))
+                    .contentTransition(.numericText(countsDown: true))
+                    .animation(.linear(duration: 0.3), value: timeRemaining)
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+            .padding(.vertical, 9)
+            .background(EPTheme.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(EPTheme.primary.opacity(0.2), lineWidth: 1)
+            )
         }
         .padding(16)
-        .background(Color(.secondarySystemGroupedBackground))
-        .border(width: 1, edges: [.bottom], color: Color(.separator).opacity(0.15))
+        .background(.ultraThinMaterial)
+        .border(width: 1, edges: [.bottom], color: Color(.separator).opacity(0.12))
     }
     
     // MARK: - Moment Selector
@@ -196,10 +205,16 @@ struct LiveClassModeView: View {
                 .background(Color.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
             }
         }
-        .padding(16)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(18)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(activeMomentColor.opacity(0.2), lineWidth: 1.5)
+        )
+        .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
         .padding(.horizontal, 16)
         .padding(.top, 14)
+        .animation(.easeInOut(duration: 0.2), value: activeMoment)
     }
     
     // MARK: - Students list
@@ -249,12 +264,13 @@ struct LiveClassModeView: View {
                                 }
                                 Spacer()
                             }
-                            .padding(10)
-                            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .padding(11)
+                            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(student.pie ? Color.purple.opacity(0.3) : Color.clear, lineWidth: 1)
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(student.pie ? Color.purple.opacity(0.3) : Color(.separator).opacity(0.1), lineWidth: 1)
                             )
+                            .shadow(color: .black.opacity(0.03), radius: 6, y: 2)
                         }
                         .buttonStyle(.plain)
                     }
@@ -420,27 +436,5 @@ private struct BorderModifier: ViewModifier {
 private extension View {
     func border(width: CGFloat, edges: [Edge], color: Color) -> some View {
         modifier(BorderModifier(width: width, edges: edges, color: color))
-    }
-}
-
-// Color Hex Helper (if not globally declared)
-private extension Color {
-    init(hex: String) {
-        let clean = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        guard clean.count == 6 else {
-            self = .pink
-            return
-        }
-
-        var value: UInt64 = 0
-        guard Scanner(string: clean).scanHexInt64(&value) else {
-            self = .pink
-            return
-        }
-
-        let red = Double((value >> 16) & 0xFF) / 255.0
-        let green = Double((value >> 8) & 0xFF) / 255.0
-        let blue = Double(value & 0xFF) / 255.0
-        self.init(red: red, green: green, blue: blue)
     }
 }

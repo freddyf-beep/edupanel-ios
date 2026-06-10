@@ -67,17 +67,24 @@ struct VerUnidadDashboardView: View {
                 Button {
                     Task { await viewModel.saveAll() }
                 } label: {
-                    if viewModel.isSaving {
-                        ProgressView()
-                    } else {
-                        Label("Guardar", systemImage: "square.and.arrow.down.fill")
-                            .labelStyle(.iconOnly)
-                            .foregroundStyle(EPTheme.primary)
+                    Group {
+                        if viewModel.isSaving {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "square.and.arrow.down.fill")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(EPTheme.primary)
+                        }
                     }
+                    .frame(width: 34, height: 34)
+                    .background(EPTheme.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                 }
                 .disabled(viewModel.isSaving)
                 .accessibilityLabel("Guardar unidad")
             }
+        }
+        .sensoryFeedback(.success, trigger: viewModel.saveStatus) { _, newValue in
+            !newValue.isEmpty && !newValue.contains("Error")
         }
         .task {
             await viewModel.load(curso: curso, unidadId: unidadId, asignatura: asignatura)
@@ -85,12 +92,11 @@ struct VerUnidadDashboardView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 12) {
-                Circle()
-                    .fill(EPTheme.primary)
-                    .frame(width: 12, height: 12)
-                    .padding(.top, 5)
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(EPTheme.heroGradient)
+                    .frame(width: 5, height: 44)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("\(viewModel.activeSubject.uppercased()) · \(curso.uppercased())")
@@ -98,10 +104,10 @@ struct VerUnidadDashboardView: View {
                         .tracking(1.0)
                         .foregroundStyle(EPTheme.primary)
                     Text(unidadNombre)
-                        .font(.headline.weight(.black))
+                        .font(.system(size: 17, weight: .black))
                         .lineLimit(2)
                     Text(headerSubtitle)
-                        .font(.caption.weight(.semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.secondary)
                 }
 
@@ -121,12 +127,12 @@ struct VerUnidadDashboardView: View {
             EPWebTabBar(tabs: tabs, selected: $selectedTab)
         }
         .padding(.horizontal, 16)
-        .padding(.top, 10)
+        .padding(.top, 12)
         .padding(.bottom, 12)
-        .background(EPTheme.card)
+        .background(.ultraThinMaterial)
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(Color(.separator).opacity(0.16))
+                .fill(Color(.separator).opacity(0.12))
                 .frame(height: 1)
         }
     }

@@ -98,7 +98,22 @@ struct DashboardRepository {
         try await setData(
             data,
             at: db.collection("users").document(uid).collection("perfil_info").document("main"),
-            merge: false
+            merge: true
+        )
+    }
+
+    func saveHorario(_ horario: [ClaseHorario]) async throws {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            throw DashboardRepositoryError.missingUser
+        }
+
+        try await setData(
+            [
+                "clases": horario.map(\.firestoreDictionary),
+                "updatedAt": FieldValue.serverTimestamp()
+            ],
+            at: db.collection("users").document(uid).collection("configuracion").document("horario"),
+            merge: true
         )
     }
 
@@ -243,7 +258,7 @@ struct DashboardRepository {
                 "updatedAt": FieldValue.serverTimestamp()
             ],
             at: db.collection("users").document(uid).collection("configuracion").document("nivel_mapping"),
-            merge: true
+            merge: false
         )
     }
 
@@ -349,5 +364,23 @@ struct DashboardRepository {
                 }
             }
         }
+    }
+}
+
+extension ClaseHorario {
+    var firestoreDictionary: [String: Any] {
+        var data: [String: Any] = [
+            "uid": id,
+            "resumen": resumen,
+            "dia": dia,
+            "horaInicio": horaInicio,
+            "horaFin": horaFin,
+            "color": colorHex,
+            "tipo": tipo == .desconocido ? "clase" : tipo.rawValue
+        ]
+        if let asignatura, !asignatura.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            data["asignatura"] = asignatura
+        }
+        return data
     }
 }

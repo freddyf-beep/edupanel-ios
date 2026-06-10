@@ -56,7 +56,7 @@ struct CourseStudentsView: View {
                                     .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.bordered)
-                            .tint(.pink)
+                            .tint(EPTheme.primary)
 
                             Button {
                                 rawImportText = ""
@@ -74,20 +74,13 @@ struct CourseStudentsView: View {
 
                     if students.isEmpty {
                         Section {
-                            VStack(spacing: 14) {
-                                Image(systemName: "person.2.slash.fill")
-                                    .font(.title)
-                                    .foregroundStyle(.secondary)
-                                Text("Sin estudiantes registrados")
-                                    .font(.subheadline.weight(.black))
-                                Text("Toca los botones superiores para poblar el curso.")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .multilineTextAlignment(.center)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 24)
+                            EPEmptyState(
+                                icon: "person.2.slash.fill",
+                                title: "Sin estudiantes registrados",
+                                message: "Toca los botones superiores para poblar el curso."
+                            )
                         }
+                        .listRowBackground(Color.clear)
                     } else {
                         Section("Estudiantes (\(students.count))") {
                             ForEach(students) { student in
@@ -158,7 +151,7 @@ struct CourseStudentsView: View {
                     Task { await saveList() }
                 }
                 .font(.subheadline.weight(.black))
-                .tint(.pink)
+                .tint(EPTheme.primary)
                 .disabled(isLoading || savingStatus == .saving)
             }
         }
@@ -243,7 +236,7 @@ struct CourseStudentsView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.pink)
+                .tint(EPTheme.primary)
                 .disabled(rawImportText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             .padding(18)

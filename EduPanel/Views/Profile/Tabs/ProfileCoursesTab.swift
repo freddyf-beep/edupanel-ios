@@ -19,18 +19,46 @@ struct ProfileCoursesTab: View {
                     selectedTab = .semana
                 }
             } else {
+                HStack {
+                    Text("Cada curso muestra sus bloques, nivel curricular y estudiantes.")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    ProfileSaveBadge(status: viewModel.saveHorarioStatus)
+                        .fixedSize()
+                    ProfileSaveBadge(status: viewModel.saveMappingStatus)
+                        .fixedSize()
+                }
+
                 ForEach(courses) { course in
-                    ProfileSection(title: course.name, icon: "folder.fill", hint: course.levelText) {
-                        ProfileCourseReplicaCard(course: course)
-                    }
+                    CursoConfigCard(viewModel: viewModel, course: course)
                 }
             }
         }
     }
 }
 
-struct ProfileCourseReplicaCard: View {
+private struct WizardPreset: Identifiable {
+    let curso: String
+    let asignatura: String?
+
+    var id: String { "\(curso)::\(asignatura ?? "")" }
+}
+
+private struct CursoConfigCard: View {
+    let viewModel: ProfileViewModel
     let course: ProfileCourseSummary
+
+    @State private var renombrando = false
+    @State private var nuevoNombre = ""
+    @State private var mostrandoEstudiantes = false
+    @State private var nuevoEstudiante = ""
+    @State private var pieExpandido: String?
+    @State private var confirmandoEliminar = false
+    @State private var agregandoAsignatura = false
+    @State private var nuevaAsignatura = ""
+    @State private var wizardPreset: WizardPreset?
+    @State private var editingBloque: ClaseHorario?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -40,300 +68,723 @@ struct ProfileCourseReplicaCard: View {
 
             VStack(alignment: .leading, spacing: 14) {
                 header
-                curriculumBlock
-                subjectsBlock
-                studentsBlock
-                actions
+                tipoNivelBlock
+                asignaturasBlock
             }
-            .padding(14)
+            .padding(16)
+
+            if mostrandoEstudiantes {
+                estudiantesBlock
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 14)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            footer
         }
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color(.separator).opacity(0.22), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color(.separator).opacity(0.1), lineWidth: 1)
         )
+        .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+        .sheet(item: $wizardPreset) { preset in
+            BloqueWizardSheet(
+                viewModel: viewModel,
+                presetCurso: preset.curso,
+                presetAsignatura: preset.asignatura
+            )
+        }
+        .sheet(item: $editingBloque) { bloque in
+            BloqueEditorSheet(viewModel: viewModel, bloque: bloque)
+        }
+        .confirmationDialog(
+            "¿Eliminar el curso \(course.name) completo?",
+            isPresented: $confirmandoEliminar,
+            titleVisibility: .visible
+        ) {
+            Button("Sí, eliminar curso", role: .destructive) {
+                viewModel.removeCurso(course.name)
+            }
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("Se quitarán sus \(course.blocks) bloques del horario. La lista de estudiantes no se borra de Firestore.")
+        }
     }
+
+    // MARK: - Header
 
     private var header: some View {
         HStack(alignment: .top, spacing: 12) {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            colorSelector
+
+            VStack(alignment: .leading, spacing: 7) {
+                if renombrando {
+                    HStack(spacing: 8) {
+                        TextField("Nombre del curso", text: $nuevoNombre)
+                            .textFieldStyle(.plain)
+                            .font(.headline.weight(.black))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .onSubmit { confirmarRenombre() }
+
+                        Button {
+                            confirmarRenombre()
+                        } label: {
+                            Image(systemName: "checkmark")
+                                .font(.caption.weight(.black))
+                                .foregroundStyle(.white)
+                                .frame(width: 28, height: 28)
+                                .background(EPTheme.primary, in: Circle())
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            renombrando = false
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.caption.weight(.black))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 28, height: 28)
+                                .background(Color(.systemGray5), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } else {
+                    HStack(spacing: 7) {
+                        Text(course.name)
+                            .font(.title3.weight(.black))
+                            .lineLimit(2)
+                        Button {
+                            nuevoNombre = course.name
+                            renombrando = true
+                        } label: {
+                            Image(systemName: "pencil")
+                                .font(.caption.weight(.black))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 26, height: 26)
+                                .background(Color(.systemGray5), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                ReplicaFlowLayout(spacing: 7) {
+                    metricChip("\(asignaturasAgrupadas.count) asignatura\(asignaturasAgrupadas.count == 1 ? "" : "s")", icon: "book.closed.fill", tint: .blue)
+                    metricChip("\(course.blocks) bloques · \(ProfileFormat.minutes(course.minutes))", icon: "clock.fill", tint: .purple)
+                    metricChip("\(course.students) alumnos", icon: "person.2.fill", tint: .green)
+                    if course.pie > 0 {
+                        metricChip("\(course.pie) PIE", icon: "number", tint: .orange)
+                    }
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var colorSelector: some View {
+        Menu {
+            ForEach(BloqueHelpers.paleta, id: \.self) { hex in
+                Button {
+                    viewModel.recolorCurso(course.name, colorHex: hex)
+                } label: {
+                    Label(hex.uppercased() == course.colorHex.uppercased() ? "Actual" : hex, systemImage: hex.uppercased() == course.colorHex.uppercased() ? "checkmark.circle.fill" : "circle.fill")
+                }
+            }
+        } label: {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(profileHex: course.colorHex))
                 .frame(width: 42, height: 42)
                 .overlay {
-                    Image(systemName: "folder.fill")
-                        .font(.headline.weight(.black))
+                    Image(systemName: "paintpalette.fill")
+                        .font(.system(size: 14, weight: .black))
                         .foregroundStyle(.white)
                 }
-
-            VStack(alignment: .leading, spacing: 7) {
-                Text(course.name)
-                    .font(.title3.weight(.black))
-                    .lineLimit(2)
-
-                ReplicaFlowLayout(spacing: 7) {
-                    profileMetricChip("\(course.subjectSchedules.count) asignaturas", icon: "book.closed.fill", tint: .blue)
-                    profileMetricChip("\(course.blocks) bloques", icon: "clock.fill", tint: .purple)
-                    profileMetricChip(ProfileFormat.minutes(course.minutes), icon: "timer", tint: .green)
-                    profileMetricChip("\(course.students) alumnos", icon: "person.2.fill", tint: .pink)
-                    if course.pie > 0 {
-                        profileMetricChip("\(course.pie) PIE", icon: "number", tint: .orange)
-                    }
-                }
-            }
+                .shadow(color: Color(profileHex: course.colorHex).opacity(0.35), radius: 6, y: 3)
         }
+        .buttonStyle(.plain)
     }
 
-    private var curriculumBlock: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Tipo de curso y nivel curricular")
-                .font(.system(size: 10, weight: .black))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
+    private func confirmarRenombre() {
+        let clean = nuevoNombre.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !clean.isEmpty, clean != course.name {
+            viewModel.renameCurso(course.name, to: clean)
+        }
+        renombrando = false
+    }
 
-            HStack(alignment: .top, spacing: 10) {
-                profileStatusPill(course.type.label, icon: "graduationcap.fill", tint: course.type == .oficial ? .pink : .secondary)
+    // MARK: - Tipo y nivel
 
-                if course.type == .oficial {
-                    if let level = course.level, !level.isEmpty {
-                        profileStatusPill(level, icon: "checkmark.seal.fill", tint: .green)
-                    } else {
-                        profileStatusPill("Sin nivel", icon: "exclamationmark.triangle.fill", tint: .orange)
-                    }
-                } else {
-                    Text(course.type == .taller ? "Este curso no requiere nivel curricular Mineduc." : "Curso libre sin currículo asociado.")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
+    private var tipoNivelBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Tipo de curso")
+                    .profileFieldLabel()
+                Picker("Tipo de curso", selection: tipoBinding) {
+                    Text("Oficial Mineduc").tag(TipoCurricular.oficial)
+                    Text("Taller").tag(TipoCurricular.taller)
+                    Text("Libre").tag(TipoCurricular.libre)
                 }
+                .pickerStyle(.segmented)
+            }
 
-                Spacer(minLength: 0)
+            if course.type == .oficial {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Nivel curricular")
+                        .profileFieldLabel()
+                    Picker("Nivel curricular", selection: nivelBinding) {
+                        Text("— Sin configurar —").tag("")
+                        ForEach(CurriculumLevels.all, id: \.self) { nivel in
+                            Text(nivel).tag(nivel)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke((course.level ?? "").isEmpty ? Color.orange.opacity(0.5) : Color.clear, lineWidth: 1.5)
+                    )
+
+                    if (course.level ?? "").isEmpty {
+                        Label("Falta seleccionar nivel curricular.", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.orange)
+                    }
+                }
+            } else {
+                Label(course.type == .taller ? "Este curso no requiere nivel curricular Mineduc." : "Curso libre — sin currículum asociado.", systemImage: "info.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(12)
-        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(Color(.tertiarySystemGroupedBackground).opacity(0.7), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    private var subjectsBlock: some View {
+    private var tipoBinding: Binding<TipoCurricular> {
+        Binding(
+            get: { viewModel.draftCursoTipos[course.name] ?? .oficial },
+            set: { nuevo in
+                if nuevo == .oficial {
+                    viewModel.draftCursoTipos.removeValue(forKey: course.name)
+                } else {
+                    viewModel.draftCursoTipos[course.name] = nuevo
+                    viewModel.draftNivelMapping.removeValue(forKey: course.name)
+                }
+                viewModel.saveMappingDebounced()
+            }
+        )
+    }
+
+    private var nivelBinding: Binding<String> {
+        Binding(
+            get: { viewModel.draftNivelMapping[course.name] ?? "" },
+            set: { nuevo in
+                if nuevo.isEmpty {
+                    viewModel.draftNivelMapping.removeValue(forKey: course.name)
+                } else {
+                    viewModel.draftNivelMapping[course.name] = nuevo
+                }
+                viewModel.saveMappingDebounced()
+            }
+        )
+    }
+
+    // MARK: - Asignaturas y bloques
+
+    private var asignaturasAgrupadas: [(asignatura: String, bloques: [ClaseHorario])] {
+        let grouped = Dictionary(grouping: course.weeklyBlocks) { bloque in
+            let nombre = bloque.asignatura?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return nombre.isEmpty ? "Sin asignatura" : nombre
+        }
+        return grouped.map { ($0.key, $0.value) }.sorted { lhs, rhs in
+            if lhs.0 == "Sin asignatura" { return false }
+            if rhs.0 == "Sin asignatura" { return true }
+            return lhs.0.localizedCaseInsensitiveCompare(rhs.0) == .orderedAscending
+        }
+    }
+
+    private var asignaturasBlock: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label("Asignaturas y horario", systemImage: "book.closed.fill")
-                    .font(.caption.weight(.black))
+                    .font(.system(size: 10, weight: .black))
+                    .tracking(0.6)
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
                 Spacer()
-                EPPlaceholderActionButton(
-                    title: "Asignatura",
-                    icon: "plus",
-                    message: "La web permite crear asignaturas y abrir el formulario de bloque. En iOS queda visible hasta conectar el editor completo."
-                )
-            }
-
-            if course.subjectSchedules.isEmpty {
-                Text("Este curso aún no tiene asignaturas. Agrega bloques en Mi Semana para comenzar.")
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(18)
-                    .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            } else {
-                VStack(spacing: 10) {
-                    ForEach(course.subjectSchedules) { schedule in
-                        ProfileSubjectScheduleRow(schedule: schedule)
+                Button {
+                    withAnimation(EPTheme.spring) {
+                        agregandoAsignatura = true
                     }
+                } label: {
+                    Label("Asignatura", systemImage: "plus")
+                        .font(.caption.weight(.black))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(EPTheme.primary, in: Capsule())
                 }
-            }
-        }
-    }
-
-    private var studentsBlock: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label("Estudiantes", systemImage: "person.2.fill")
-                    .font(.caption.weight(.black))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                Spacer()
-                Text("\(course.students) alumnos")
-                    .font(.caption.weight(.black))
-                    .foregroundStyle(.secondary)
+                .buttonStyle(.plain)
             }
 
-            if course.studentsList.isEmpty {
-                Text("Aún no hay estudiantes. Agrégalos manualmente o impórtalos presionando el botón 'Estudiantes' abajo.")
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(18)
-                    .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(course.studentsList.prefix(8))) { student in
-                        ProfileStudentRow(student: student)
-                        if student.id != course.studentsList.prefix(8).last?.id {
-                            Divider()
-                                .padding(.leading, 42)
+            if agregandoAsignatura {
+                HStack(spacing: 8) {
+                    TextField("Ej. Música, Lenguaje…", text: $nuevaAsignatura)
+                        .textFieldStyle(.plain)
+                        .font(.footnote.weight(.semibold))
+                        .padding(10)
+                        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .onSubmit { continuarNuevaAsignatura() }
+
+                    Button {
+                        continuarNuevaAsignatura()
+                    } label: {
+                        Label("Continuar", systemImage: "arrow.right")
+                            .font(.caption.weight(.black))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 10)
+                            .background(EPTheme.primary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(nuevaAsignatura.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    Button("Cancelar") {
+                        withAnimation(EPTheme.spring) {
+                            agregandoAsignatura = false
+                            nuevaAsignatura = ""
                         }
                     }
+                    .font(.caption.weight(.bold))
+                    .tint(.secondary)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
 
-                    if course.studentsList.count > 8 {
-                        Text("+ \(course.studentsList.count - 8) estudiantes más")
-                            .font(.caption.weight(.black))
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 9)
+            if asignaturasAgrupadas.isEmpty {
+                Text("Este curso aún no tiene asignaturas. Agrega una para comenzar.")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(16)
+                    .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(asignaturasAgrupadas, id: \.asignatura) { grupo in
+                        asignaturaRow(grupo.asignatura, bloques: grupo.bloques)
                     }
                 }
-                .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color(.separator).opacity(0.18), lineWidth: 1)
-                )
             }
         }
     }
 
-    private var actions: some View {
-        HStack(spacing: 8) {
-            NavigationLink(value: AppRoute.courseStudents(course.name)) {
-                Label("Estudiantes", systemImage: "person.2.fill")
-                    .frame(maxWidth: .infinity)
-            }
-            NavigationLink(value: AppRoute.editCourse(course.name)) {
-                Label("Editar", systemImage: "pencil")
-                    .frame(maxWidth: .infinity)
-            }
-            NavigationLink(value: AppRoute.coursePlanificaciones(curso: course.name, asignatura: nil)) {
-                Label("Planificar", systemImage: "book.closed.fill")
-                    .frame(maxWidth: .infinity)
-            }
+    private func continuarNuevaAsignatura() {
+        let nombre = nuevaAsignatura.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !nombre.isEmpty else { return }
+        agregandoAsignatura = false
+        nuevaAsignatura = ""
+        wizardPreset = WizardPreset(curso: course.name, asignatura: nombre)
+    }
+
+    private func asignaturaRow(_ asignatura: String, bloques: [ClaseHorario]) -> some View {
+        let sinAsignatura = asignatura == "Sin asignatura"
+        let minutos = bloques.reduce(0) { total, bloque in
+            total + max(0, DateHelpers.minutes(from: bloque.horaFin) - DateHelpers.minutes(from: bloque.horaInicio))
         }
-        .font(.caption.weight(.black))
-        .buttonStyle(.bordered)
-        .tint(.pink)
-    }
 
-    private func profileMetricChip(_ text: String, icon: String, tint: Color) -> some View {
-        Label(text, systemImage: icon)
-            .font(.caption.weight(.black))
-            .lineLimit(1)
-            .foregroundStyle(tint)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(tint.opacity(0.12), in: Capsule())
-    }
-
-    private func profileStatusPill(_ text: String, icon: String, tint: Color) -> some View {
-        Label(text, systemImage: icon)
-            .font(.caption.weight(.black))
-            .lineLimit(1)
-            .foregroundStyle(tint)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 6)
-            .background(tint.opacity(0.12), in: Capsule())
-    }
-}
-
-struct ProfileSubjectScheduleRow: View {
-    let schedule: ProfileSubjectSchedule
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 8) {
-                if schedule.isMissingSubject {
+        return VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 7) {
+                if sinAsignatura {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.caption.weight(.black))
                         .foregroundStyle(.orange)
                 } else {
                     Circle()
-                        .fill(Color(profileHex: schedule.colorHex))
+                        .fill(Color(profileHex: bloques.first?.colorHex ?? course.colorHex))
                         .frame(width: 10, height: 10)
                 }
 
-                Text(schedule.subject)
-                    .font(.subheadline.weight(.black))
-                    .foregroundStyle(schedule.isMissingSubject ? .orange : .primary)
+                Text(asignatura)
+                    .font(.footnote.weight(.black))
+                    .foregroundStyle(sinAsignatura ? .orange : .primary)
                     .lineLimit(1)
+
+                Text("· \(bloques.count) bloque\(bloques.count == 1 ? "" : "s") · \(ProfileFormat.minutes(minutos))")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
 
                 Spacer()
 
-                Text("\(schedule.blocks.count) bloques · \(ProfileFormat.minutes(schedule.minutes))")
-                    .font(.caption.weight(.black))
-                    .foregroundStyle(.secondary)
+                Button {
+                    wizardPreset = WizardPreset(curso: course.name, asignatura: sinAsignatura ? nil : asignatura)
+                } label: {
+                    Label("Bloque", systemImage: "plus")
+                        .font(.system(size: 10, weight: .black))
+                        .foregroundStyle(EPTheme.primary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(EPTheme.primary.opacity(0.1), in: Capsule())
+                }
+                .buttonStyle(.plain)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: 8)], spacing: 8) {
-                ForEach(schedule.blocks) { block in
-                    NavigationLink(value: AppRoute.classDetail(id: block.id, title: block.resumen.isEmpty ? block.tipo.label : block.resumen)) {
-                        HStack(spacing: 7) {
-                            Circle()
-                                .fill(Color(profileHex: block.colorHex))
-                                .frame(width: 8, height: 8)
-                            Text(block.dia)
-                                .font(.caption.weight(.black))
-                            Spacer(minLength: 4)
-                            Text(block.timeRange)
-                                .font(.caption.weight(.semibold))
+            VStack(spacing: 6) {
+                ForEach(bloques) { bloque in
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(Color(profileHex: bloque.colorHex))
+                            .frame(width: 8, height: 8)
+                        Text(bloque.dia)
+                            .font(.caption.weight(.black))
+                        Text(bloque.timeRange)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button {
+                            editingBloque = bloque
+                        } label: {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 10, weight: .black))
                                 .foregroundStyle(.secondary)
+                                .frame(width: 26, height: 26)
+                                .background(Color(.systemGray5), in: Circle())
                         }
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 8)
-                        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .buttonStyle(.plain)
+                        Button {
+                            viewModel.removeBloque(id: bloque.id)
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 10, weight: .black))
+                                .foregroundStyle(.red)
+                                .frame(width: 26, height: 26)
+                                .background(.red.opacity(0.1), in: Circle())
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                }
+            }
+        }
+        .padding(11)
+        .background(
+            sinAsignatura ? Color.orange.opacity(0.08) : Color(.tertiarySystemGroupedBackground),
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(sinAsignatura ? Color.orange.opacity(0.3) : Color(.separator).opacity(0.1), lineWidth: 1)
+        )
+    }
+
+    // MARK: - Estudiantes
+
+    private var estudiantes: [EstudiantePerfil] {
+        viewModel.students(for: course.name)
+    }
+
+    private var estudiantesBlock: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                TextField("Nombre del estudiante (ej: Juan Tapia)", text: $nuevoEstudiante)
+                    .textFieldStyle(.plain)
+                    .font(.footnote.weight(.semibold))
+                    .padding(10)
+                    .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .onSubmit { agregarEstudiante() }
+
+                Button {
+                    agregarEstudiante()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.footnote.weight(.black))
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(EPTheme.primary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(nuevoEstudiante.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                Button {
+                    Task { await viewModel.saveStudents(curso: course.name) }
+                } label: {
+                    Label("Guardar", systemImage: "square.and.arrow.down.fill")
+                        .font(.caption.weight(.black))
+                        .foregroundStyle(EPTheme.primary)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 10)
+                        .background(EPTheme.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+
+            HStack {
+                ProfileSaveBadge(status: viewModel.saveStudentsStatus)
+                Spacer()
+                NavigationLink(value: AppRoute.courseStudents(course.name)) {
+                    Label("Importación masiva", systemImage: "square.and.arrow.down.on.square")
+                        .font(.caption.weight(.black))
+                        .foregroundStyle(.blue)
+                }
+            }
+
+            if estudiantes.isEmpty {
+                Text("Aún no hay estudiantes. Añade el primero arriba.")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 16)
+            } else {
+                VStack(spacing: 6) {
+                    ForEach(estudiantes) { estudiante in
+                        estudianteRow(estudiante)
+                    }
                 }
             }
         }
         .padding(12)
-        .background(schedule.isMissingSubject ? Color.orange.opacity(0.10) : Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(Color(.tertiarySystemGroupedBackground).opacity(0.7), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func estudianteRow(_ estudiante: EstudiantePerfil) -> some View {
+        let pieAbierto = estudiante.pie && pieExpandido == estudiante.id
+
+        return VStack(spacing: 0) {
+            HStack(spacing: 9) {
+                Text("\(estudiante.orden)")
+                    .font(.caption.weight(.black))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 26, height: 26)
+                    .background(Color(.systemGray5), in: Circle())
+
+                Text(estudiante.nombre)
+                    .font(.footnote.weight(.semibold))
+                    .lineLimit(1)
+
+                Spacer()
+
+                Button {
+                    viewModel.updateStudents(curso: course.name) { lista in
+                        lista.map { $0.id == estudiante.id ? $0.con(pie: !$0.pie) : $0 }
+                    }
+                } label: {
+                    Text("PIE")
+                        .font(.system(size: 10, weight: .black))
+                        .foregroundStyle(estudiante.pie ? .orange : .secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(estudiante.pie ? Color.orange.opacity(0.15) : Color(.systemGray5), in: Capsule())
+                }
+                .buttonStyle(.plain)
+
+                if estudiante.pie {
+                    Button {
+                        withAnimation(EPTheme.spring) {
+                            pieExpandido = pieAbierto ? nil : estudiante.id
+                        }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(pieAbierto ? 90 : 0))
+                            .frame(width: 26, height: 26)
+                            .background(Color(.systemGray5), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Button {
+                    viewModel.updateStudents(curso: course.name) { lista in
+                        reordenar(lista.filter { $0.id != estudiante.id })
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 10, weight: .black))
+                        .foregroundStyle(.red)
+                        .frame(width: 26, height: 26)
+                        .background(.red.opacity(0.1), in: Circle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+
+            if pieAbierto {
+                pieDetalle(estudiante)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(schedule.isMissingSubject ? Color.orange.opacity(0.30) : Color(.separator).opacity(0.16), lineWidth: 1)
+                .stroke(estudiante.pie ? Color.orange.opacity(0.25) : Color.clear, lineWidth: 1)
         )
     }
-}
 
-struct ProfileStudentRow: View {
-    let student: EstudiantePerfil
+    private let diagnosticosPIE = ["TEL", "DEA", "DI", "FIL", "TEA", "TDAH", "Disc. Visual", "Disc. Auditiva", "Disc. Motora", "Trast. Psiquiátrico"]
 
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text("\(student.orden)")
-                .font(.caption.weight(.black))
-                .foregroundStyle(.secondary)
-                .frame(width: 30, height: 30)
-                .background(Color(.tertiarySystemGroupedBackground), in: Circle())
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(student.nombre)
-                    .font(.footnote.weight(.semibold))
-                    .lineLimit(2)
-
-                if student.pie {
-                    let detail = [student.pieDiagnostico, student.pieEspecialista, student.pieNotas]
-                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                        .filter { !$0.isEmpty }
-                    if !detail.isEmpty {
-                        Text(detail.joined(separator: " · "))
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
+    private func pieDetalle(_ estudiante: EstudiantePerfil) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Diagnóstico")
+                    .profileFieldLabel()
+                Picker("Diagnóstico", selection: Binding(
+                    get: { estudiante.pieDiagnostico },
+                    set: { nuevo in
+                        viewModel.updateStudents(curso: course.name) { lista in
+                            lista.map { $0.id == estudiante.id ? $0.con(pieDiagnostico: nuevo) : $0 }
+                        }
+                    }
+                )) {
+                    Text("— Seleccionar —").tag("")
+                    ForEach(diagnosticosPIE, id: \.self) { diagnostico in
+                        Text(diagnostico).tag(diagnostico)
                     }
                 }
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Especialista")
+                    .profileFieldLabel()
+                TextField("Nombre del especialista", text: Binding(
+                    get: { estudiante.pieEspecialista },
+                    set: { nuevo in
+                        viewModel.updateStudents(curso: course.name) { lista in
+                            lista.map { $0.id == estudiante.id ? $0.con(pieEspecialista: nuevo) : $0 }
+                        }
+                    }
+                ))
+                .textFieldStyle(.plain)
+                .font(.caption.weight(.semibold))
+                .padding(8)
+                .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Notas de adecuación")
+                    .profileFieldLabel()
+                TextField("Apoyos, adecuaciones…", text: Binding(
+                    get: { estudiante.pieNotas },
+                    set: { nuevo in
+                        viewModel.updateStudents(curso: course.name) { lista in
+                            lista.map { $0.id == estudiante.id ? $0.con(pieNotas: nuevo) : $0 }
+                        }
+                    }
+                ), axis: .vertical)
+                .lineLimit(2...4)
+                .textFieldStyle(.plain)
+                .font(.caption.weight(.semibold))
+                .padding(8)
+                .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            }
+        }
+        .padding(10)
+        .background(Color.orange.opacity(0.07))
+    }
+
+    private func agregarEstudiante() {
+        let nombre = nuevoEstudiante.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !nombre.isEmpty else { return }
+        viewModel.updateStudents(curso: course.name) { lista in
+            let siguienteOrden = (lista.map(\.orden).max() ?? 0) + 1
+            return lista + [EstudiantePerfil(
+                id: "est_\(Int(Date().timeIntervalSince1970 * 1000))",
+                nombre: nombre,
+                orden: siguienteOrden,
+                pie: false,
+                pieDiagnostico: "",
+                pieEspecialista: "",
+                pieNotas: ""
+            )]
+        }
+        nuevoEstudiante = ""
+    }
+
+    private func reordenar(_ lista: [EstudiantePerfil]) -> [EstudiantePerfil] {
+        lista
+            .sorted { $0.orden < $1.orden }
+            .enumerated()
+            .map { index, estudiante in estudiante.con(orden: index + 1) }
+    }
+
+    // MARK: - Footer
+
+    private var footer: some View {
+        HStack {
+            Button {
+                withAnimation(EPTheme.spring) {
+                    mostrandoEstudiantes.toggle()
+                }
+            } label: {
+                Label(
+                    mostrandoEstudiantes ? "Ocultar estudiantes" : "Estudiantes (\(course.students))",
+                    systemImage: "person.2.fill"
+                )
+                .font(.caption.weight(.black))
+                .foregroundStyle(mostrandoEstudiantes ? .white : EPTheme.primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(mostrandoEstudiantes ? AnyShapeStyle(EPTheme.primary) : AnyShapeStyle(EPTheme.primary.opacity(0.1)), in: Capsule())
+            }
+            .buttonStyle(.plain)
 
             Spacer()
 
-            if student.pie {
-                Text("PIE")
-                    .font(.caption2.weight(.black))
-                    .foregroundStyle(.orange)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(.orange.opacity(0.14), in: Capsule())
+            Button {
+                confirmandoEliminar = true
+            } label: {
+                Label("Eliminar curso", systemImage: "trash")
+                    .font(.caption.weight(.black))
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.red.opacity(0.1), in: Capsule())
             }
+            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color(.tertiarySystemGroupedBackground).opacity(0.5))
+    }
+
+    private func metricChip(_ text: String, icon: String, tint: Color) -> some View {
+        Label(text, systemImage: icon)
+            .font(.system(size: 11, weight: .black))
+            .lineLimit(1)
+            .foregroundStyle(tint)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(tint.opacity(0.12), in: Capsule())
+    }
+}
+
+private extension EstudiantePerfil {
+    func con(
+        nombre: String? = nil,
+        orden: Int? = nil,
+        pie: Bool? = nil,
+        pieDiagnostico: String? = nil,
+        pieEspecialista: String? = nil,
+        pieNotas: String? = nil
+    ) -> EstudiantePerfil {
+        EstudiantePerfil(
+            id: id,
+            nombre: nombre ?? self.nombre,
+            orden: orden ?? self.orden,
+            pie: pie ?? self.pie,
+            pieDiagnostico: pieDiagnostico ?? self.pieDiagnostico,
+            pieEspecialista: pieEspecialista ?? self.pieEspecialista,
+            pieNotas: pieNotas ?? self.pieNotas
+        )
     }
 }

@@ -21,7 +21,7 @@ struct PlanificacionesDetailView: View {
     @State private var unitToDelete: UnidadPlan? = nil
     @State private var showingDeleteAlert = false
 
-    private let colors = ["#F59E0B", "#3B82F6", "#EF4444", "#22C55E", "#8B5CF6", "#F03E6E", "#06B6D4", "#D97706"]
+    private static let maxUnidades = 12
 
     init(curso: String, asignatura: String? = nil, dashboardRepository: DashboardRepository, planificacionRepository: PlanificacionRepository) {
         self.curso = curso
@@ -39,7 +39,7 @@ struct PlanificacionesDetailView: View {
             if isLoading && units.isEmpty {
                 VStack(spacing: 12) {
                     ProgressView()
-                    Text("Cargando planificación...")
+                    Text("Cargando planificación…")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
@@ -65,13 +65,16 @@ struct PlanificacionesDetailView: View {
         .task {
             await loadData()
         }
+        .sensoryFeedback(.success, trigger: saveStatus) { _, newValue in
+            newValue == "Guardado"
+        }
         .alert("¿Eliminar unidad?", isPresented: $showingDeleteAlert, presenting: unitToDelete) { unit in
-            Button("Eliminar", role: .destructive) {
+            Button("Sí, borrar", role: .destructive) {
                 Task { await performDelete(unit: unit) }
             }
             Button("Cancelar", role: .cancel) {}
         } message: { unit in
-            Text("Esto eliminará la unidad \"\(unit.name)\", su cronograma y todas sus clases planificadas.")
+            Text("Se eliminará la planificación, el cronograma y todas las clases planificadas de \"\(unit.name)\". No se puede deshacer.")
         }
     }
 
@@ -79,8 +82,8 @@ struct PlanificacionesDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 headerCard
-                inlineCreationCard
-                unitsSection
+                creacionInlineCard
+                listaUnidades
                 sidebarReplica
             }
             .padding(.horizontal, 16)
@@ -91,6 +94,8 @@ struct PlanificacionesDetailView: View {
             await loadData()
         }
     }
+
+    // MARK: - Header
 
     private var headerCard: some View {
         EPWebCard {
@@ -103,97 +108,110 @@ struct PlanificacionesDetailView: View {
                             .foregroundStyle(EPTheme.primary)
                         Text("Planificación por curso")
                             .font(.title3.weight(.black))
-                        Text("\(units.count) unidades · \(totalHours) horas · \(overallCoverage)% cobertura")
+                        Text("\(units.count) unidades · \(totalHoras) horas · \(coberturaGeneral)% cobertura")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
 
                     Spacer(minLength: 8)
 
-                    EPStatusPill(text: planningStateLabel, icon: "circle.fill", tint: planningStateTint)
+                    EPStatusPill(text: estadoGeneral.label, icon: estadoGeneral.icon, tint: estadoGeneral.tint)
                 }
 
-                ProgressView(value: Double(overallCoverage) / 100.0)
-                    .tint(planningStateTint)
+                ProgressView(value: Double(coberturaGeneral) / 100.0)
+                    .tint(estadoGeneral.tint)
 
                 HStack(spacing: 8) {
-                    EPPlaceholderActionButton(title: "Drive", icon: "externaldrive.fill", message: "Backup Drive visible como en la web. La conexión nativa se implementará en una entrega posterior.")
-                    EPPlaceholderActionButton(title: "Exportar", icon: "square.and.arrow.up", message: "Exportaciones DOCX/PDF quedan preparadas como placeholder nativo.")
+                    EPPlaceholderActionButton(
+                        title: "Drive",
+                        icon: "externaldrive.fill",
+                        message: "El respaldo en Drive queda visible como en la web. La conexión nativa se implementará en una entrega posterior."
+                    )
+                    EPPlaceholderActionButton(
+                        title: "Exportar",
+                        icon: "square.and.arrow.up",
+                        message: "Las exportaciones DOCX/PDF quedan preparadas como placeholder nativo."
+                    )
                     Spacer(minLength: 0)
                 }
             }
         }
     }
 
-    private var inlineCreationCard: some View {
-        EPWebCard {
-            VStack(alignment: .leading, spacing: 12) {
-                EPSectionHeader(title: "Crear unidad inline", subtitle: "Mismo flujo compacto de la web.", icon: "plus.square.fill")
+    // MARK: - Creación inline
 
-                VStack(spacing: 10) {
-                    TextField("Nombre de la unidad...", text: $newUnitName)
-                        .textFieldStyle(.plain)
-                        .font(.subheadline.weight(.semibold))
-                        .padding(12)
-                        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    private var creacionInlineCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            TextField("Nombre de la nueva unidad…", text: $newUnitName)
+                .textFieldStyle(.plain)
+                .font(.subheadline.weight(.semibold))
+                .padding(12)
+                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .onSubmit {
+                    addUnit()
+                }
 
-                    HStack(spacing: 10) {
-                        Picker("Tipo", selection: $newUnitType) {
-                            Text("Tradicional").tag("tradicional")
-                            Text("Invertida").tag("invertida")
-                            Text("Proyecto").tag("proyecto")
-                            Text("Unidad 0").tag("unidad0")
-                        }
-                        .pickerStyle(.menu)
-                        .font(.caption.weight(.black))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 9)
-                        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                        Button {
-                            addUnit()
-                        } label: {
-                            Label("Agregar", systemImage: "plus")
-                                .font(.caption.weight(.black))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                .background(EPTheme.primary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(newUnitName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            HStack(spacing: 10) {
+                Picker("Tipo", selection: $newUnitType) {
+                    ForEach(TipoUnidad.all, id: \.self) { tipo in
+                        Text("\(TipoUnidad.emoji(tipo)) \(TipoUnidad.label(tipo))").tag(tipo)
                     }
                 }
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                Button {
+                    addUnit()
+                } label: {
+                    Label("Agregar", systemImage: "plus")
+                        .font(.caption.weight(.black))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 11)
+                        .background(EPTheme.primary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(!puedeAgregar)
+                .opacity(puedeAgregar ? 1 : 0.4)
+            }
+
+            if units.count >= Self.maxUnidades {
+                Text("Máximo \(Self.maxUnidades) unidades por curso.")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.orange)
             }
         }
+        .padding(14)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                .foregroundStyle(EPTheme.primary.opacity(0.35))
+        )
     }
 
-    private var unitsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            EPSectionHeader(title: "Unidades programadas", subtitle: "Filas compactas con acciones Ver, Crono y Clases.", icon: "list.bullet.rectangle")
+    private var puedeAgregar: Bool {
+        !newUnitName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && units.count < Self.maxUnidades
+    }
 
+    // MARK: - Lista de unidades
+
+    private var listaUnidades: some View {
+        VStack(alignment: .leading, spacing: 12) {
             if units.isEmpty {
                 EPWebCard {
-                    VStack(spacing: 9) {
-                        Image(systemName: "doc.badge.plus")
-                            .font(.title.weight(.bold))
-                            .foregroundStyle(.secondary)
-                        Text("No hay unidades creadas")
-                            .font(.subheadline.weight(.black))
-                        Text("Usa el formulario superior para añadir tu primera unidad didáctica.")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 22)
+                    EPEmptyState(
+                        icon: "square.stack.3d.up.slash",
+                        title: "No hay unidades en \(curso) todavía",
+                        message: "Empieza agregando una con el formulario de arriba."
+                    )
                 }
             } else {
-                VStack(spacing: 12) {
-                    ForEach(Array(units.enumerated()), id: \.element.id) { index, unit in
-                        unitRow(unit: unit, index: index)
-                    }
+                ForEach(Array(units.enumerated()), id: \.element.id) { index, unit in
+                    unitRow(unit: unit, index: index)
                 }
             }
         }
@@ -204,8 +222,8 @@ struct PlanificacionesDetailView: View {
         let state = UnitPlanningState.state(for: unit)
         let routeId = UnitRouteID.routeId(for: unit, asignatura: activeSubject, course: curso, cronogramasByUnit: cronogramasByUnit)
 
-        return EPWebCard {
-            VStack(alignment: .leading, spacing: 12) {
+        return EPWebCard(padding: 13) {
+            VStack(alignment: .leading, spacing: 11) {
                 HStack(alignment: .top, spacing: 10) {
                     Text("\(index + 1)")
                         .font(.caption.weight(.black))
@@ -214,7 +232,7 @@ struct PlanificacionesDetailView: View {
                         .background(EPTheme.color(hex: unit.color), in: Circle())
                         .padding(.top, 1)
 
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 7) {
                         if renamingUnitId == unit.id {
                             TextField("Nombre de la unidad", text: $renamingName)
                                 .textFieldStyle(.plain)
@@ -236,11 +254,13 @@ struct PlanificacionesDetailView: View {
                         }
 
                         HStack(spacing: 6) {
-                            EPStatusPill(text: typeLabel(unit.type), icon: typeIcon(unit.type), tint: EPTheme.color(hex: unit.color))
-                            EPStatusPill(text: state.label, icon: "circle.fill", tint: state.tint)
+                            EPStatusPill(text: TipoUnidad.label(unit.type), icon: TipoUnidad.icon(unit.type), tint: TipoUnidad.tint(unit.type))
+                            EPStatusPill(text: state.label, icon: state.icon, tint: state.tint)
                         }
 
-                        Text(unit.hasDates ? "\(PlanDateParser.short(unit.start)) al \(PlanDateParser.short(unit.end)) · \(unit.hours) horas" : "Sin fechas · \(unit.hours) horas")
+                        Text(unit.hasDates
+                             ? "\(PlanDateParser.short(unit.start)) al \(PlanDateParser.short(unit.end)) · \(unit.hours) horas"
+                             : "Sin fechas · \(unit.hours) horas")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
@@ -260,85 +280,102 @@ struct PlanificacionesDetailView: View {
                     .buttonStyle(.plain)
                 }
 
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack {
-                        Text("Cobertura \(coverage.assigned)/\(coverage.total)")
-                            .font(.caption2.weight(.black))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text("\(coverage.percent)%")
-                            .font(.caption.weight(.black))
-                            .foregroundStyle(coverage.percent >= 80 ? .green : coverage.percent >= 45 ? .orange : EPTheme.primary)
+                if coverage.total > 0 {
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack {
+                            Text("Clases con fecha \(coverage.assigned)/\(coverage.total)")
+                                .font(.caption2.weight(.black))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(coverage.percent)%")
+                                .font(.caption.weight(.black))
+                                .foregroundStyle(barraCobertura(coverage.percent))
+                        }
+                        ProgressView(value: Double(coverage.percent) / 100.0)
+                            .tint(barraCobertura(coverage.percent))
                     }
-                    ProgressView(value: Double(coverage.percent) / 100.0)
-                        .tint(coverage.percent >= 80 ? .green : coverage.percent >= 45 ? .orange : EPTheme.primary)
                 }
 
                 HStack(spacing: 8) {
                     NavigationLink(value: AppRoute.verUnidad(curso: curso, asignatura: activeSubject, unidadId: routeId, unidadNombre: unit.name, initialTab: "unidad")) {
-                        actionLabel("Ver", icon: "text.alignleft")
+                        actionLabel("Ver", icon: "book.closed.fill", destacado: true)
                     }
                     NavigationLink(value: AppRoute.verUnidad(curso: curso, asignatura: activeSubject, unidadId: routeId, unidadNombre: unit.name, initialTab: "cronograma")) {
                         actionLabel("Crono", icon: "calendar")
                     }
                     NavigationLink(value: AppRoute.verUnidad(curso: curso, asignatura: activeSubject, unidadId: routeId, unidadNombre: unit.name, initialTab: "clases")) {
-                        actionLabel("Clases", icon: "book.closed")
+                        actionLabel("Clases", icon: "text.book.closed")
                     }
 
                     if renamingUnitId == unit.id {
                         Button {
                             finishRenaming(unitId: unit.id)
                         } label: {
-                            actionLabel("OK", icon: "checkmark")
+                            actionLabel("OK", icon: "checkmark", destacado: true)
                         }
-                        .buttonStyle(.plain)
                     }
                     Spacer(minLength: 0)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(EPTheme.primary)
             }
         }
     }
 
-    private func actionLabel(_ title: String, icon: String) -> some View {
+    private func actionLabel(_ title: String, icon: String, destacado: Bool = false) -> some View {
         Label(title, systemImage: icon)
             .font(.caption.weight(.black))
+            .foregroundStyle(destacado ? EPTheme.primary : .secondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background(Color(.systemGray6), in: Capsule())
+            .background(destacado ? EPTheme.primary.opacity(0.1) : Color(.systemGray6), in: Capsule())
+            .overlay {
+                if destacado {
+                    Capsule().stroke(EPTheme.primary.opacity(0.4), lineWidth: 1)
+                }
+            }
     }
+
+    private func barraCobertura(_ pct: Int) -> Color {
+        pct == 100 ? .green : pct >= 50 ? .orange : pct > 0 ? .red : .gray
+    }
+
+    // MARK: - Sidebar
 
     private var sidebarReplica: some View {
         VStack(alignment: .leading, spacing: 12) {
             EPWebCard {
                 VStack(alignment: .leading, spacing: 12) {
-                    EPSectionHeader(title: "Próximas clases", subtitle: "Resumen operativo del curso.", icon: "calendar.badge.clock")
-                    let rows = upcomingRows
-                    if rows.isEmpty {
-                        Text("No hay próximas clases programadas en cronogramas.")
+                    EPSectionHeader(title: "Próximas clases", subtitle: "Clases con fecha asignada hacia el futuro.", icon: "calendar.badge.clock")
+
+                    if proximasClases.isEmpty {
+                        Text("No hay clases con fecha asignada hacia el futuro.")
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(rows.prefix(5), id: \.id) { row in
-                            HStack(spacing: 10) {
-                                Text(row.badge)
+                        ForEach(proximasClases) { clase in
+                            HStack(alignment: .top, spacing: 10) {
+                                Text("C\(clase.numero)")
                                     .font(.caption.weight(.black))
                                     .foregroundStyle(.white)
                                     .frame(width: 36, height: 36)
-                                    .background(EPTheme.color(hex: row.color), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(row.title)
+                                    .background(EPTheme.color(hex: clase.color), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("\(clase.diaSemana) \(clase.fechaCorta)")
+                                        .font(.caption.weight(.black))
+                                        .foregroundStyle(.secondary)
+                                    Text("Clase \(clase.numero) · \(clase.unidadNombre)")
                                         .font(.footnote.weight(.black))
                                         .lineLimit(1)
-                                    Text(row.subtitle)
+                                    Text(clase.oas)
                                         .font(.caption.weight(.semibold))
                                         .foregroundStyle(.secondary)
+                                        .lineLimit(1)
                                 }
-                                Spacer()
+                                Spacer(minLength: 0)
                             }
                             .padding(10)
-                            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .background(Color(.systemGray6).opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                     }
                 }
@@ -347,19 +384,27 @@ struct PlanificacionesDetailView: View {
             EPWebCard {
                 VStack(alignment: .leading, spacing: 10) {
                     EPSectionHeader(title: "Resumen", subtitle: nil, icon: "chart.pie.fill")
-                    summaryLine("Unidades", "\(units.count)")
-                    summaryLine("Horas", "\(totalHours)")
+                    summaryLine("Unidades", "\(units.count) / \(Self.maxUnidades)")
+                    summaryLine("Horas totales", "\(totalHoras)")
                     summaryLine("Con fechas", "\(units.filter(\.hasDates).count)")
                     summaryLine("Sin fechas", "\(units.filter { !$0.hasDates }.count)")
-                    summaryLine("Cobertura", "\(overallCoverage)%")
+                    summaryLine("Cobertura", "\(coberturaGeneral)%")
                 }
             }
 
             EPWebCard {
                 VStack(alignment: .leading, spacing: 10) {
-                    EPSectionHeader(title: "Exportar", subtitle: "Placeholder nativo para mantener la estructura web.", icon: "square.and.arrow.up")
-                    EPPlaceholderActionButton(title: "Informe DOCX", icon: "doc.richtext", message: "La exportación DOCX se conectará cuando migremos el servicio web.")
-                    EPPlaceholderActionButton(title: "Resumen PDF", icon: "doc.text", message: "La exportación PDF se conectará en una entrega posterior.")
+                    EPSectionHeader(title: "Exportar", subtitle: "Elige entre formato detallado o por tabla.", icon: "square.and.arrow.up")
+                    EPPlaceholderActionButton(
+                        title: "Descargar DOCX",
+                        icon: "doc.richtext",
+                        message: "La exportación DOCX se conectará cuando migremos el servicio web."
+                    )
+                    EPPlaceholderActionButton(
+                        title: "Resumen PDF",
+                        icon: "doc.text",
+                        message: "La exportación PDF se conectará en una entrega posterior."
+                    )
                 }
             }
         }
@@ -376,44 +421,54 @@ struct PlanificacionesDetailView: View {
         }
     }
 
-    private struct UpcomingRow: Identifiable {
+    // MARK: - Datos derivados
+
+    private struct ProximaClase: Identifiable {
         let id: String
-        let badge: String
-        let title: String
-        let subtitle: String
+        let numero: Int
+        let unidadNombre: String
         let color: String
-        let sortDate: Date
+        let diaSemana: String
+        let fechaCorta: String
+        let oas: String
+        let fecha: Date
     }
 
-    private var upcomingRows: [UpcomingRow] {
-        let today = Calendar.current.startOfDay(for: Date())
-        var rows: [UpcomingRow] = []
+    private var proximasClases: [ProximaClase] {
+        let hoy = Calendar.current.startOfDay(for: Date())
+        let weekdayFormatter = DateFormatter()
+        weekdayFormatter.locale = Locale(identifier: "es_CL")
+        weekdayFormatter.dateFormat = "EEE"
 
+        var lista: [ProximaClase] = []
         for unit in units {
-            let key = PlanificacionRepository.cronogramaKey(asignatura: activeSubject, curso: curso, unidadId: String(unit.id))
-            guard let crono = cronogramasByUnit[key] else { continue }
+            let subjectKey = PlanificacionRepository.cronogramaKey(asignatura: activeSubject, curso: curso, unidadId: String(unit.id))
+            let oldKey = PlanificacionRepository.cronogramaKey(curso: curso, unidadId: String(unit.id))
+            guard let crono = cronogramasByUnit[subjectKey] ?? cronogramasByUnit[oldKey] else { continue }
 
             for clase in crono.clases {
-                guard let date = PlanDateParser.date(from: clase.fecha), date >= today else { continue }
-                rows.append(UpcomingRow(
+                guard let fecha = PlanDateParser.date(from: clase.fecha), fecha >= hoy else { continue }
+                lista.append(ProximaClase(
                     id: "\(unit.id)-\(clase.numero)",
-                    badge: "C\(clase.numero)",
-                    title: unit.name,
-                    subtitle: "\(PlanDateParser.short(clase.fecha)) · \(clase.oaIds.isEmpty ? "sin OA" : clase.oaIds.joined(separator: ", "))",
+                    numero: clase.numero,
+                    unidadNombre: unit.name,
                     color: unit.color,
-                    sortDate: date
+                    diaSemana: weekdayFormatter.string(from: fecha).capitalized.replacingOccurrences(of: ".", with: ""),
+                    fechaCorta: PlanDateParser.short(clase.fecha),
+                    oas: clase.oaIds.isEmpty ? "Sin OA asignados" : clase.oaIds.joined(separator: ", "),
+                    fecha: fecha
                 ))
             }
         }
 
-        return rows.sorted { $0.sortDate < $1.sortDate }
+        return Array(lista.sorted { $0.fecha < $1.fecha }.prefix(8))
     }
 
-    private var totalHours: Int {
+    private var totalHoras: Int {
         units.reduce(0) { $0 + $1.hours }
     }
 
-    private var overallCoverage: Int {
+    private var coberturaGeneral: Int {
         var assigned = 0
         var total = 0
         for unit in units {
@@ -421,38 +476,31 @@ struct PlanificacionesDetailView: View {
             assigned += coverage.assigned
             total += coverage.total
         }
-        return total > 0 ? Int((Double(assigned) / Double(total)) * 100) : 0
+        return total > 0 ? Int(round(Double(assigned) / Double(total) * 100)) : 0
     }
 
-    private var planningStateLabel: String {
-        if units.isEmpty { return "Sin unidades" }
-        if units.contains(where: { UnitPlanningState.state(for: $0) == .enCurso }) { return "En curso" }
-        if units.contains(where: { UnitPlanningState.state(for: $0) == .proxima }) { return "Próximas" }
-        if units.allSatisfy({ UnitPlanningState.state(for: $0) == .completada }) { return "Completada" }
-        return "Por programar"
+    private var estadoGeneral: (label: String, icon: String, tint: Color) {
+        guard !units.isEmpty else { return ("Sin unidades", "tray", .gray) }
+        let estados = units.map { UnitPlanningState.state(for: $0) }
+        if estados.contains(.actual) { return ("En curso", "waveform.path.ecg", .green) }
+        if estados.contains(.futura) { return ("Próximas", "clock.fill", .blue) }
+        if estados.allSatisfy({ $0 == .pasada }) { return ("Cerrada", "checkmark", .gray) }
+        return ("Sin fechas", "exclamationmark.triangle.fill", .orange)
     }
 
-    private var planningStateTint: Color {
-        switch planningStateLabel {
-        case "En curso": return .green
-        case "Próximas": return .purple
-        case "Completada": return .blue
-        default: return .orange
-        }
-    }
+    // MARK: - Acciones
 
     private func addUnit() {
         let name = newUnitName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { return }
+        guard !name.isEmpty, units.count < Self.maxUnidades else { return }
 
         let nextIndex = units.count + 1
         let nextId = (units.map(\.id).max() ?? 0) + 1
-        let color = colors[units.count % colors.count]
 
         units.append(UnidadPlan(
             id: nextId,
             name: name,
-            color: color,
+            color: CursoPalette.color(at: units.count),
             hours: 8,
             start: "",
             end: "",
@@ -465,7 +513,7 @@ struct PlanificacionesDetailView: View {
     }
 
     private func savePlan() async {
-        saveStatus = "Guardando..."
+        saveStatus = "Guardando…"
         do {
             try await planificacionRepository.guardarPlanCurso(asignatura: activeSubject, curso: curso, units: units)
             saveStatus = "Guardado"
@@ -477,7 +525,7 @@ struct PlanificacionesDetailView: View {
     }
 
     private func performDelete(unit: UnidadPlan) async {
-        saveStatus = "Eliminando..."
+        saveStatus = "Eliminando…"
         do {
             try await planificacionRepository.eliminarUnidadCompleta(asignatura: activeSubject, curso: curso, unidadId: String(unit.id))
             units.removeAll { $0.id == unit.id }
@@ -501,6 +549,8 @@ struct PlanificacionesDetailView: View {
         renamingUnitId = nil
         renamingName = ""
     }
+
+    // MARK: - Carga
 
     private func loadData() async {
         isLoading = true
@@ -546,42 +596,12 @@ struct PlanificacionesDetailView: View {
         return specialty.isEmpty ? "M\u{00FA}sica" : specialty
     }
 
-    private func typeLabel(_ type: String) -> String {
-        switch type {
-        case "unidad0": return "Unidad 0"
-        case "invertida": return "Invertida"
-        case "proyecto": return "Proyecto"
-        case "tradicional": return "Tradicional"
-        default: return "Unidad"
-        }
-    }
-
-    private func typeIcon(_ type: String) -> String {
-        switch type {
-        case "unidad0": return "0.circle.fill"
-        case "invertida": return "arrow.triangle.2.circlepath"
-        case "proyecto": return "target"
-        default: return "book.closed.fill"
-        }
-    }
-
     private func dateRange(from clases: [ClaseCronograma]) -> (start: String, end: String)? {
-        let dates = clases.compactMap { parseDDMMYYYY($0.fecha) }.sorted()
+        let dates = clases.compactMap { PlanDateParser.date(from: $0.fecha) }.sorted()
         guard let first = dates.first, let last = dates.last else { return nil }
-        return (toISODate(first), toISODate(last))
-    }
-
-    private func parseDDMMYYYY(_ value: String) -> Date? {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "es_CL")
-        formatter.dateFormat = "dd/MM/yyyy"
-        return formatter.date(from: value.trimmingCharacters(in: .whitespacesAndNewlines))
-    }
-
-    private func toISODate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "es_CL")
         formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        return (formatter.string(from: first), formatter.string(from: last))
     }
 }

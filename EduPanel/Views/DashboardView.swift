@@ -92,13 +92,15 @@ struct DashboardView: View {
             HStack(spacing: 8) {
                 ForEach(DashboardTabKey.allCases) { tab in
                     Button {
-                        selectedTab = tab
+                        withAnimation(EPTheme.spring) {
+                            selectedTab = tab
+                        }
                     } label: {
                         HStack(spacing: 7) {
                             Image(systemName: tab.systemImage)
-                                .font(.caption.weight(.black))
+                                .font(.system(size: 11, weight: .black))
                             Text(tab.title)
-                                .font(.caption.weight(.black))
+                                .font(.system(size: 12, weight: .black))
                             if tab == .pendientes && !snapshot.pendingClasses.isEmpty {
                                 Text("\(snapshot.pendingClasses.count)")
                                     .font(.system(size: 9, weight: .black))
@@ -108,15 +110,16 @@ struct DashboardView: View {
                                     .background(.red, in: Capsule())
                             }
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 9)
-                        .foregroundStyle(selectedTab == tab ? .white : .primary)
-                        .background(selectedTab == tab ? Color.pink : Color(.secondarySystemGroupedBackground), in: Capsule())
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 10)
+                        .foregroundStyle(selectedTab == tab ? .white : .secondary)
+                        .background(selectedTab == tab ? AnyShapeStyle(EPTheme.primary) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)), in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }
             }
         }
+        .sensoryFeedback(.selection, trigger: selectedTab)
     }
 
     @ViewBuilder
@@ -246,6 +249,7 @@ struct DashboardView: View {
             }
         )
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .shadow(color: .black.opacity(0.1), radius: 14, y: 7)
     }
 
     private func quickActions(_ snapshot: DashboardSnapshot) -> some View {
@@ -345,7 +349,7 @@ struct DashboardView: View {
             LazyVGrid(columns: dashboardGrid, spacing: 10) {
                 DashboardMetricTile(label: "Horas lectivas", value: formatDuration(snapshot.totalAcademicMinutes), icon: "clock.fill", color: .blue)
                 DashboardMetricTile(label: "Bloques libres", value: "\(snapshot.nonTeachingBlocks.count)", icon: "cup.and.saucer.fill", color: .purple)
-                DashboardMetricTile(label: "Cursos activos", value: "\(snapshot.courses.count)", icon: "folder.fill", color: .pink)
+                DashboardMetricTile(label: "Cursos activos", value: "\(snapshot.courses.count)", icon: "folder.fill", color: EPTheme.primary)
                 DashboardMetricTile(label: "Estudiantes", value: "\(snapshot.totalStudents)", icon: "person.2.fill", color: .green)
             }
 
@@ -393,7 +397,7 @@ struct DashboardView: View {
             }
 
             LazyVGrid(columns: dashboardGrid, spacing: 10) {
-                DashboardMetricTile(label: "Proyeccion clases", value: "\(snapshot.academicClasses.count * 4)", icon: "chart.line.uptrend.xyaxis", color: .pink)
+                DashboardMetricTile(label: "Proyeccion clases", value: "\(snapshot.academicClasses.count * 4)", icon: "chart.line.uptrend.xyaxis", color: EPTheme.primary)
                 DashboardMetricTile(label: "Horas aprox.", value: formatDuration(snapshot.totalAcademicMinutes * 4), icon: "clock.badge.checkmark.fill", color: .green)
                 DashboardMetricTile(label: "Pendientes hoy", value: "\(snapshot.pendingClasses.count)", icon: "bell.fill", color: .orange)
                 DashboardMetricTile(label: "Avance de hoy", value: "\(Int(snapshot.progress * 100))%", icon: "target", color: .blue)
@@ -430,7 +434,7 @@ struct DashboardView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
-                .tint(.pink)
+                .tint(EPTheme.primary)
             }
 
             Label("El mes usa tu horario semanal como proyeccion hasta que conectemos calendario real.", systemImage: "info.circle.fill")
@@ -444,19 +448,19 @@ struct DashboardView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(DateHelpers.workdays, id: \.self) { day in
+                    let isSelected = selectedDay == day
                     Button {
-                        selectedDay = day
+                        withAnimation(EPTheme.spring) {
+                            selectedDay = day
+                        }
                     } label: {
                         Text(String(day.prefix(3)))
                             .font(.caption.weight(.black))
                             .frame(minWidth: 48)
-                            .padding(.vertical, 8)
-                            .background(selectedDay == day ? Color.pink.opacity(0.16) : Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .foregroundStyle(selectedDay == day ? Color.pink : Color.primary)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(selectedDay == day ? Color.pink : Color.clear, lineWidth: 1)
-                            )
+                            .padding(.vertical, 9)
+                            .background(isSelected ? AnyShapeStyle(EPTheme.primary) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                            .foregroundStyle(isSelected ? Color.white : Color.primary)
+                            .shadow(color: isSelected ? EPTheme.primary.opacity(0.3) : .clear, radius: 6, y: 3)
                     }
                     .buttonStyle(.plain)
                 }
@@ -538,12 +542,14 @@ struct DashboardView: View {
             HStack(spacing: 8) {
                 ForEach(ReminderColor.allCases) { color in
                     Button {
-                        reminderColor = color
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            reminderColor = color
+                        }
                     } label: {
                         Circle()
                             .fill(color.background)
-                            .frame(width: 24, height: 24)
-                            .overlay(Circle().stroke(reminderColor == color ? Color.pink : Color.clear, lineWidth: 3))
+                            .frame(width: 26, height: 26)
+                            .overlay(Circle().stroke(reminderColor == color ? EPTheme.primary : Color.clear, lineWidth: 2.5))
                     }
                     .buttonStyle(.plain)
                 }
@@ -554,7 +560,7 @@ struct DashboardView: View {
                     .textFieldStyle(.plain)
                     .font(.footnote)
                     .padding(11)
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
 
                 Button {
                     addReminder()
@@ -563,7 +569,7 @@ struct DashboardView: View {
                         .font(.headline.weight(.bold))
                         .frame(width: 38, height: 38)
                         .foregroundStyle(.white)
-                        .background(.pink, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .background(EPTheme.primary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .disabled(newReminder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || reminders.count >= 10)
             }
@@ -600,7 +606,7 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: 12) {
             Image(systemName: "calendar.badge.exclamationmark")
                 .font(.title)
-                .foregroundStyle(.pink)
+                .foregroundStyle(EPTheme.primary)
             Text("Configura tu horario")
                 .font(.title3.bold())
             Text("Cuando agregues tus bloques en la web, EduPanel los mostrara aqui para seguir tu jornada.")
@@ -613,26 +619,23 @@ struct DashboardView: View {
                     .font(.footnote.weight(.black))
             }
             .buttonStyle(.borderedProminent)
-            .tint(.pink)
+            .tint(EPTheme.primary)
         }
         .webCard()
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "tray")
-                .font(.largeTitle)
-                .foregroundStyle(.secondary)
-            Text("Sin datos para mostrar")
-                .font(.headline)
+        ContentUnavailableView {
+            Label("Sin datos para mostrar", systemImage: "tray")
+        } description: {
+            Text("Revisa tu conexión e inténtalo de nuevo.")
+        } actions: {
             Button("Reintentar") {
                 Task { await viewModel.refresh() }
             }
             .buttonStyle(.borderedProminent)
-            .tint(.pink)
+            .tint(EPTheme.primary)
         }
-        .frame(maxWidth: .infinity)
-        .padding(32)
     }
 
     private var loadingState: some View {
@@ -903,7 +906,7 @@ private struct CourseMiniCard: View {
                     Label("\(course.students)", systemImage: "person.2.fill")
                     if course.todayBlocks > 0 {
                         Text("hoy \(course.todayBlocks)b")
-                            .foregroundStyle(.pink)
+                            .foregroundStyle(EPTheme.primary)
                     }
                 }
                 .font(.caption2.weight(.semibold))
@@ -912,12 +915,13 @@ private struct CourseMiniCard: View {
 
             Spacer(minLength: 0)
         }
-        .padding(12)
-        .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(13)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color(.separator).opacity(0.32), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color(.separator).opacity(0.1), lineWidth: 1)
         )
+        .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
     }
 }
 
@@ -947,7 +951,7 @@ private struct DashboardMetricTile: View {
             Spacer(minLength: 0)
         }
         .padding(12)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
@@ -1003,14 +1007,14 @@ private struct DashboardWeekDayRow: View {
                     if items.count > 3 {
                         Text("+\(items.count - 3) bloques mas")
                             .font(.caption2.weight(.black))
-                            .foregroundStyle(.pink)
+                            .foregroundStyle(EPTheme.primary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }
         }
         .padding(12)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
@@ -1028,13 +1032,13 @@ private struct DashboardMonthDayCell: View {
                 .frame(maxWidth: .infinity)
 
             Circle()
-                .fill(hasPending ? Color.orange : (hasClasses ? Color.pink : Color.clear))
+                .fill(hasPending ? Color.orange : (hasClasses ? EPTheme.primary : Color.clear))
                 .frame(width: 5, height: 5)
         }
         .frame(maxWidth: .infinity)
         .aspectRatio(1, contentMode: .fit)
         .padding(4)
-        .background(isToday ? Color.pink : Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(isToday ? AnyShapeStyle(EPTheme.primary) : AnyShapeStyle(Color(.tertiarySystemGroupedBackground)), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .opacity(day.isEmpty ? 0.35 : 1)
     }
 }
@@ -1087,7 +1091,7 @@ private struct TimelineClassRow: View {
                             } else if isCompleted {
                                 BadgeLabel(text: "Dictada", color: .green)
                             } else if isCurrent {
-                                BadgeLabel(text: "EN CURSO", color: .pink)
+                                BadgeLabel(text: "EN CURSO", color: EPTheme.primary)
                             }
                         }
 
@@ -1119,8 +1123,8 @@ private struct TimelineClassRow: View {
                                 .font(.caption.weight(.black))
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 7)
-                                .foregroundStyle(Color.pink)
-                                .background(Color.pink.opacity(0.12), in: Capsule())
+                                .foregroundStyle(EPTheme.primary)
+                                .background(EPTheme.primary.opacity(0.12), in: Capsule())
                         }
                         .buttonStyle(.plain)
 
@@ -1130,7 +1134,7 @@ private struct TimelineClassRow: View {
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 7)
                                 .foregroundStyle(isCompleted ? Color.green : Color.primary)
-                                .background(isCompleted ? Color.green.opacity(0.14) : Color(.secondarySystemGroupedBackground), in: Capsule())
+                                .background(isCompleted ? Color.green.opacity(0.14) : Color(.tertiarySystemGroupedBackground), in: Capsule())
                         }
                         .buttonStyle(.plain)
                     } else {
@@ -1143,18 +1147,19 @@ private struct TimelineClassRow: View {
                 .padding(.horizontal, 14)
                 .padding(.bottom, 14)
             }
-            .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(isCurrent ? Color.pink : Color(.separator).opacity(0.28), lineWidth: isCurrent ? 1.4 : 1)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(isCurrent ? EPTheme.primary : Color(.separator).opacity(0.1), lineWidth: isCurrent ? 1.5 : 1)
             )
+            .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
             .padding(.bottom, 12)
         }
     }
 
     private var circleFill: Color {
         if isCompleted { return .green }
-        if isCurrent { return .pink }
+        if isCurrent { return EPTheme.primary }
         return Color(.systemGroupedBackground)
     }
 }
@@ -1209,7 +1214,7 @@ private struct InsightsPanel: View {
                 .font(.subheadline.weight(.black))
 
             VStack(spacing: 12) {
-                InsightRow(icon: "person.2.fill", label: "Alumnos totales", value: "\(courses.reduce(0) { $0 + $1.students })", color: .pink)
+                InsightRow(icon: "person.2.fill", label: "Alumnos totales", value: "\(courses.reduce(0) { $0 + $1.students })", color: EPTheme.primary)
                 InsightRow(icon: "clock.fill", label: "Horas/semana", value: String(format: "%.1f h", weeklyHours), color: .green)
                 InsightRow(icon: "book.closed.fill", label: "Libro de clases", value: "Prototipo", color: .blue)
                 InsightRow(icon: "flame.fill", label: "Restantes hoy", value: "\(snapshot.pendingClasses.count)", color: .orange)
@@ -1217,10 +1222,10 @@ private struct InsightsPanel: View {
 
             Text(insightMessage)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.pink)
+                .foregroundStyle(EPTheme.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
-                .background(.pink.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(EPTheme.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .webCard()
     }
@@ -1308,12 +1313,13 @@ private struct ReminderNote: Codable, Identifiable, Equatable {
 
 private extension View {
     func webCard() -> some View {
-        self.padding(16)
-            .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        self.padding(18)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color(.separator).opacity(0.28), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(Color(.separator).opacity(0.1), lineWidth: 1)
             )
+            .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
     }
 }
 

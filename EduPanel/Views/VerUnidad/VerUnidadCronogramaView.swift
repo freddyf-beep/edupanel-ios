@@ -17,8 +17,10 @@ struct VerUnidadCronogramaView: View {
 
                     if isMatrixMode {
                         matrixEditor(crono)
+                            .transition(.opacity.combined(with: .move(edge: .trailing)))
                     } else {
                         sequenceList(crono)
+                            .transition(.opacity.combined(with: .move(edge: .leading)))
                     }
                 }
                 .padding(.horizontal, 16)
@@ -54,7 +56,9 @@ struct VerUnidadCronogramaView: View {
                     }
 
                     Button {
-                        isMatrixMode.toggle()
+                        withAnimation(EPTheme.spring) {
+                            isMatrixMode.toggle()
+                        }
                     } label: {
                         Label(isMatrixMode ? "Vista secuencia" : "Vista matriz", systemImage: isMatrixMode ? "list.bullet" : "grid")
                             .font(.caption.weight(.black))
@@ -207,18 +211,21 @@ struct VerUnidadCronogramaView: View {
                                     ForEach(safeClassNumbers(crono), id: \.self) { cNum in
                                         let isAssigned = isOaAssigned(oaId: oa.id, classNum: cNum)
                                         Button {
-                                            toggleOaAssignment(oaId: oa.id, classNum: cNum)
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                toggleOaAssignment(oaId: oa.id, classNum: cNum)
+                                            }
                                         } label: {
                                             Image(systemName: isAssigned ? "checkmark.circle.fill" : "circle")
                                                 .font(.body.weight(.bold))
                                                 .foregroundStyle(isAssigned ? EPTheme.primary : Color(.separator))
                                                 .frame(width: 42, height: 34)
+                                                .contentTransition(.symbolEffect(.replace))
                                         }
                                         .buttonStyle(.plain)
                                     }
                                 }
                                 .padding(.vertical, 6)
-                                .background(Color(.systemGray6).opacity(0.45), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .background(Color(.systemGray6).opacity(0.45), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
                         }
                         .padding(.bottom, 4)

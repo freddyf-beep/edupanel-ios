@@ -10,6 +10,15 @@ enum EPTheme {
     static let card = Color(.secondarySystemGroupedBackground)
     static let subtle = Color(.tertiarySystemGroupedBackground)
 
+    static let cardRadius: CGFloat = 22
+    static let spring = Animation.spring(response: 0.35, dampingFraction: 0.82)
+
+    static let heroGradient = LinearGradient(
+        colors: [primary, rose, fuchsia],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
     static func color(hex: String, fallback: Color = .pink) -> Color {
         let clean = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
         guard clean.count == 6 else { return fallback }
@@ -26,10 +35,10 @@ enum EPTheme {
 }
 
 struct EPWebCard<Content: View>: View {
-    var padding: CGFloat = 16
+    var padding: CGFloat = 18
     var content: Content
 
-    init(padding: CGFloat = 16, @ViewBuilder content: () -> Content) {
+    init(padding: CGFloat = 18, @ViewBuilder content: () -> Content) {
         self.padding = padding
         self.content = content()
     }
@@ -37,11 +46,23 @@ struct EPWebCard<Content: View>: View {
     var body: some View {
         content
             .padding(padding)
-            .background(EPTheme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(EPTheme.card, in: RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color(.separator).opacity(0.16), lineWidth: 1)
+                RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous)
+                    .stroke(Color(.separator).opacity(0.1), lineWidth: 1)
             )
+            .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+    }
+}
+
+extension View {
+    func epCardSurface(radius: CGFloat = EPTheme.cardRadius) -> some View {
+        background(EPTheme.card, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .stroke(Color(.separator).opacity(0.1), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
     }
 }
 
@@ -51,24 +72,25 @@ struct EPSectionHeader: View {
     var icon: String?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 9) {
+        HStack(alignment: .top, spacing: 10) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.caption.weight(.black))
+                    .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(EPTheme.primary)
-                    .frame(width: 24, height: 24)
-                    .background(EPTheme.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .frame(width: 28, height: 28)
+                    .background(EPTheme.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(title.uppercased())
                     .font(.system(size: 10, weight: .black))
                     .tracking(0.8)
                     .foregroundStyle(.secondary)
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.caption.weight(.medium))
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
@@ -85,37 +107,43 @@ struct EPKPIBox: View {
     var tint: Color = EPTheme.primary
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 7) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
                 if let icon {
                     Image(systemName: icon)
-                        .font(.caption.weight(.black))
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(tint)
+                        .frame(width: 28, height: 28)
+                        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 }
                 Text(title.uppercased())
                     .font(.system(size: 9, weight: .black))
+                    .tracking(0.6)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
             }
 
             Text(value)
-                .font(.title2.weight(.black))
+                .font(.system(size: 26, weight: .black, design: .rounded))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .contentTransition(.numericText())
 
             Text(subtitle)
-                .font(.caption2.weight(.semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, minHeight: 98, alignment: .topLeading)
-        .padding(12)
-        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .frame(maxWidth: .infinity, minHeight: 108, alignment: .topLeading)
+        .padding(14)
+        .background(EPTheme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color(.separator).opacity(0.14), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color(.separator).opacity(0.1), lineWidth: 1)
         )
+        .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
     }
 }
 
@@ -128,15 +156,15 @@ struct EPStatusPill: View {
         HStack(spacing: 5) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.caption2.weight(.black))
+                    .font(.system(size: 9, weight: .black))
             }
             Text(text)
-                .font(.caption2.weight(.black))
+                .font(.system(size: 11, weight: .black))
                 .lineLimit(1)
         }
         .foregroundStyle(tint)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(tint.opacity(0.12), in: Capsule())
     }
 }
@@ -151,29 +179,43 @@ struct EPWebTabBar: View {
     let tabs: [EPWebTab]
     @Binding var selected: String
 
+    @Namespace private var tabNamespace
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 ForEach(tabs) { tab in
+                    let isSelected = selected == tab.id
                     Button {
-                        selected = tab.id
+                        withAnimation(EPTheme.spring) {
+                            selected = tab.id
+                        }
                     } label: {
                         HStack(spacing: 7) {
                             Image(systemName: tab.icon)
-                                .font(.caption.weight(.black))
+                                .font(.system(size: 11, weight: .black))
                             Text(tab.title)
-                                .font(.caption.weight(.black))
+                                .font(.system(size: 12, weight: .black))
                         }
-                        .foregroundStyle(selected == tab.id ? .white : EPTheme.ink)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 9)
-                        .background(selected == tab.id ? EPTheme.primary : Color(.systemGray6), in: Capsule())
+                        .foregroundStyle(isSelected ? .white : .secondary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background {
+                            if isSelected {
+                                Capsule()
+                                    .fill(EPTheme.primary)
+                                    .matchedGeometryEffect(id: "ep-tab-selection", in: tabNamespace)
+                            }
+                        }
+                        .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 2)
+            .padding(4)
+            .background(Color(.systemGray6).opacity(0.8), in: Capsule())
         }
+        .sensoryFeedback(.selection, trigger: selected)
     }
 }
 
@@ -195,16 +237,37 @@ struct EPPlaceholderActionButton: View {
             showAlert = true
         } label: {
             Label(title, systemImage: icon)
-                .font(.caption.weight(.black))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
+                .font(.system(size: 12, weight: .black))
+                .padding(.horizontal, 13)
+                .padding(.vertical, 9)
                 .foregroundStyle(variant == .white ? .white : EPTheme.primary)
-                .background(variant == .white ? .white.opacity(0.25) : EPTheme.primary.opacity(0.1), in: Capsule())
+                .background {
+                    if variant == .white {
+                        Capsule().fill(.white.opacity(0.22))
+                            .overlay(Capsule().stroke(.white.opacity(0.3), lineWidth: 1))
+                    } else {
+                        Capsule().fill(EPTheme.primary.opacity(0.1))
+                    }
+                }
         }
         .buttonStyle(.plain)
         .alert(title, isPresented: $showAlert) {
             Button("OK", role: .cancel) {}
         } message: {
+            Text(message)
+        }
+    }
+}
+
+struct EPEmptyState: View {
+    let icon: String
+    let title: String
+    let message: String
+
+    var body: some View {
+        ContentUnavailableView {
+            Label(title, systemImage: icon)
+        } description: {
             Text(message)
         }
     }

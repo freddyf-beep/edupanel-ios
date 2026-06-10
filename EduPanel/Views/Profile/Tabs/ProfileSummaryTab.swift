@@ -42,7 +42,7 @@ struct ProfileSummaryTab: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
-                .tint(.pink)
+                .tint(EPTheme.primary)
             }
 
             ProfileSection(title: "Tu progreso", icon: "sparkles", hint: "\(snapshot.setupProgress)%") {
@@ -109,7 +109,7 @@ struct ProfileCourseRow: View {
 
                 Text(course.levelText)
                     .font(.caption.weight(.black))
-                    .foregroundStyle(course.levelText == "Sin nivel" ? .orange : .pink)
+                    .foregroundStyle(course.levelText == "Sin nivel" ? .orange : EPTheme.primary)
 
                 if !course.subjects.isEmpty {
                     FlowChips(items: course.subjects, color: .blue)
@@ -123,7 +123,7 @@ struct ProfileCourseRow: View {
                 .padding(.top, 3)
         }
         .padding(12)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
@@ -156,7 +156,7 @@ struct ProfileChecklistRow: View {
             }
         }
         .padding(12)
-        .background(item.isComplete ? Color.green.opacity(0.1) : Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(item.isComplete ? Color.green.opacity(0.1) : Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
@@ -176,7 +176,7 @@ struct MiniWeekView: View {
                             .font(.caption.weight(.black))
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, minHeight: 42)
-                            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                            .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     } else {
                         VStack(spacing: 4) {
                             ForEach(items.prefix(3)) { item in

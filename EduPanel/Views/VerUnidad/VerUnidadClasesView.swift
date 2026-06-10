@@ -52,7 +52,9 @@ struct VerUnidadClasesView: View {
                     let hasData = isClassPlanificable(classNum: cNum)
                     let cronoClass = cronogramaClass(for: cNum)
                     Button {
-                        selectClass(cNum)
+                        withAnimation(EPTheme.spring) {
+                            selectClass(cNum)
+                        }
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 5) {
@@ -60,7 +62,7 @@ struct VerUnidadClasesView: View {
                                     .font(.caption.weight(.black))
                                 if hasData {
                                     Circle()
-                                        .fill(.green)
+                                        .fill(isSelected ? .white : .green)
                                         .frame(width: 6, height: 6)
                                 }
                             }
@@ -76,13 +78,13 @@ struct VerUnidadClasesView: View {
                             }
                         }
                         .foregroundStyle(isSelected ? .white : EPTheme.ink)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(isSelected ? EPTheme.primary : EPTheme.card, in: Capsule())
-                        .overlay(
-                            Capsule()
-                                .stroke(Color(.separator).opacity(isSelected ? 0 : 0.16), lineWidth: 1)
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 9)
+                        .background(
+                            isSelected ? AnyShapeStyle(EPTheme.primary) : AnyShapeStyle(Color(.systemGray6)),
+                            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
                         )
+                        .shadow(color: isSelected ? EPTheme.primary.opacity(0.3) : .clear, radius: 8, y: 3)
                     }
                     .buttonStyle(.plain)
                 }
@@ -90,12 +92,13 @@ struct VerUnidadClasesView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
-        .background(EPTheme.card)
+        .background(.ultraThinMaterial)
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(Color(.separator).opacity(0.16))
+                .fill(Color(.separator).opacity(0.12))
                 .frame(height: 1)
         }
+        .sensoryFeedback(.selection, trigger: selectedClassNum)
     }
 
     private var classHeaderCard: some View {
@@ -135,11 +138,13 @@ struct VerUnidadClasesView: View {
                         Label("Clase en vivo", systemImage: "play.fill")
                             .font(.caption.weight(.black))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 11)
-                            .padding(.vertical, 9)
-                            .background(EPTheme.primary, in: Capsule())
+                            .padding(.horizontal, 13)
+                            .padding(.vertical, 10)
+                            .background(EPTheme.heroGradient, in: Capsule())
+                            .shadow(color: EPTheme.primary.opacity(0.3), radius: 8, y: 4)
                     }
                     .buttonStyle(.plain)
+                    .sensoryFeedback(.impact(weight: .medium), trigger: showingLiveMode)
                 }
 
                 ReplicaFlowLayout(spacing: 7) {

@@ -4,6 +4,7 @@ struct ProfileView: View {
     @State private var viewModel: ProfileViewModel
     @State private var selectedTab: ProfileTabKey = .resumen
     @State private var showBannerPicker = false
+    @Namespace private var profileTabNamespace
 
     let user: AuthenticatedUser
 
@@ -97,49 +98,63 @@ struct ProfileView: View {
                         .font(.caption.weight(.black))
                         .foregroundStyle(.secondary)
                     ProgressView(value: Double(snapshot.setupProgress), total: 100)
-                        .tint(snapshot.setupProgress == 100 ? .green : .pink)
+                        .tint(snapshot.setupProgress == 100 ? .green : EPTheme.primary)
                     Text("\(snapshot.setupProgress)%")
                         .font(.caption.weight(.black))
-                        .foregroundStyle(snapshot.setupProgress == 100 ? .green : .pink)
+                        .foregroundStyle(snapshot.setupProgress == 100 ? .green : EPTheme.primary)
                 }
 
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                    ProfileKPI(label: "Cursos", value: "\(snapshot.courses.count)", icon: "folder.fill", color: .pink)
-                    ProfileKPI(label: "Bloques clase", value: "\(snapshot.academicClasses.count)", icon: "clock.fill", color: .blue, hint: formatMinutes(snapshot.totalAcademicMinutes))
+                    ProfileKPI(label: "Cursos", value: "\(snapshot.courses.count)", icon: "folder.fill", color: EPTheme.primary)
+                    ProfileKPI(label: "Bloques clase", value: "\(snapshot.academicClasses.count)", icon: "clock.fill", color: .blue, hint: "\(formatMinutes(snapshot.totalAcademicMinutes)) semanales")
                     ProfileKPI(label: "Estudiantes", value: "\(snapshot.totalStudents)", icon: "person.2.fill", color: .green)
-                    ProfileKPI(label: "PIE", value: "\(snapshot.totalPIEStudents)", icon: "number", color: .orange)
-                    ProfileKPI(label: "Bloques libres", value: "\(snapshot.nonTeachingBlocks.count)", icon: "cup.and.saucer.fill", color: .purple, hint: formatMinutes(snapshot.totalFreeMinutes))
-                    ProfileKPI(label: "Tu perfil", value: "\(snapshot.setupProgress)%", icon: "sparkles", color: snapshot.setupProgress == 100 ? .green : .teal)
+                    ProfileKPI(label: "PIE", value: "\(snapshot.totalPIEStudents)", icon: "number", color: .orange, hint: snapshot.totalStudents > 0 ? "\(Int(round(Double(snapshot.totalPIEStudents) / Double(snapshot.totalStudents) * 100)))% del total" : nil)
+                    ProfileKPI(label: "Bloques libres", value: "\(snapshot.nonTeachingBlocks.count)", icon: "cup.and.saucer.fill", color: .purple, hint: "\(formatMinutes(snapshot.totalFreeMinutes)) sem.")
+                    ProfileKPI(label: "Tu perfil", value: "\(snapshot.setupProgress)%", icon: "sparkles", color: snapshot.setupProgress == 100 ? .green : .teal, hint: snapshot.setupProgress == 100 ? "Perfil completo" : "completado")
                 }
             }
-            .padding(16)
+            .padding(18)
         }
-        .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color(.separator).opacity(0.28), lineWidth: 1)
+            RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous)
+                .stroke(Color(.separator).opacity(0.1), lineWidth: 1)
         )
+        .shadow(color: .black.opacity(0.05), radius: 12, y: 4)
     }
 
     private var profileTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 ForEach(ProfileTabKey.allCases) { tab in
+                    let isSelected = selectedTab == tab
                     Button {
-                        selectedTab = tab
+                        withAnimation(EPTheme.spring) {
+                            selectedTab = tab
+                        }
                     } label: {
                         Label(tab.title, systemImage: tab.systemImage)
-                            .font(.caption.weight(.black))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 9)
-                            .foregroundStyle(selectedTab == tab ? .white : .primary)
-                            .background(selectedTab == tab ? Color.pink : Color(.secondarySystemGroupedBackground), in: Capsule())
+                            .font(.system(size: 12, weight: .black))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .foregroundStyle(isSelected ? .white : .secondary)
+                            .background {
+                                if isSelected {
+                                    Capsule()
+                                        .fill(EPTheme.primary)
+                                        .matchedGeometryEffect(id: "profile-tab", in: profileTabNamespace)
+                                }
+                            }
+                            .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
                 }
             }
+            .padding(4)
+            .background(Color(.secondarySystemGroupedBackground), in: Capsule())
         }
+        .sensoryFeedback(.selection, trigger: selectedTab)
     }
 
     @ViewBuilder
@@ -172,20 +187,17 @@ struct ProfileView: View {
     }
 
     private var profileEmpty: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "person.crop.circle.badge.exclamationmark")
-                .font(.largeTitle)
-                .foregroundStyle(.secondary)
-            Text("No se pudo cargar Mi Perfil")
-                .font(.headline)
+        ContentUnavailableView {
+            Label("No se pudo cargar Mi Perfil", systemImage: "person.crop.circle.badge.exclamationmark")
+        } description: {
+            Text("Revisa tu conexión e inténtalo de nuevo.")
+        } actions: {
             Button("Reintentar") {
                 Task { await viewModel.refresh() }
             }
             .buttonStyle(.borderedProminent)
-            .tint(.pink)
+            .tint(EPTheme.primary)
         }
-        .frame(maxWidth: .infinity)
-        .padding(32)
     }
 
     private func formatMinutes(_ minutes: Int) -> String {

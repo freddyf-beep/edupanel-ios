@@ -47,7 +47,9 @@ struct EditCourseView: View {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 5), spacing: 12) {
                             ForEach(colorPresets, id: \.self) { hex in
                                 Button {
-                                    selectedColorHex = hex
+                                    withAnimation(EPTheme.spring) {
+                                        selectedColorHex = hex
+                                    }
                                 } label: {
                                     Circle()
                                         .fill(Color(profileHex: hex))
@@ -57,9 +59,17 @@ struct EditCourseView: View {
                                                 Image(systemName: "checkmark")
                                                     .font(.headline.weight(.black))
                                                     .foregroundStyle(.white)
+                                                    .transition(.scale.combined(with: .opacity))
                                             }
                                         }
-                                        .shadow(color: .black.opacity(0.12), radius: 3, y: 2)
+                                        .overlay {
+                                            if selectedColorHex.uppercased() == hex.uppercased() {
+                                                Circle()
+                                                    .stroke(Color(profileHex: hex).opacity(0.45), lineWidth: 3)
+                                                    .padding(-4)
+                                            }
+                                        }
+                                        .shadow(color: Color(profileHex: hex).opacity(0.3), radius: 5, y: 3)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -102,7 +112,7 @@ struct EditCourseView: View {
                     Task { await performSave() }
                 }
                 .font(.subheadline.weight(.black))
-                .tint(.pink)
+                .tint(EPTheme.primary)
                 .disabled(isLoading || saveStatus == .saving || newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }

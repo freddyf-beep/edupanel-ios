@@ -87,7 +87,9 @@ struct VerUnidadBaseView: View {
     private func oaCard(oa: OAEditado, oIdx: Int) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Button {
-                viewModel.verUnidad?.oas[oIdx].seleccionado.toggle()
+                withAnimation(EPTheme.spring) {
+                    viewModel.verUnidad?.oas[oIdx].seleccionado.toggle()
+                }
             } label: {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: oa.seleccionado ? "checkmark.square.fill" : "square")
@@ -137,10 +139,15 @@ struct VerUnidadBaseView: View {
                     }
                 }
                 .padding(.leading, 28)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(12)
-        .background(Color(.systemGray6).opacity(0.7), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(13)
+        .background(Color(.systemGray6).opacity(0.7), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(oa.seleccionado ? EPTheme.primary.opacity(0.25) : Color.clear, lineWidth: 1.5)
+        )
     }
 
     private func rutaTrabajoCard(_ verUnidad: VerUnidadGuardada) -> some View {
@@ -423,8 +430,8 @@ struct VerUnidadBaseView: View {
                 .disabled(newItemText.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
-        .padding(12)
-        .background(Color(.systemGray6).opacity(0.55), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(13)
+        .background(Color(.systemGray6).opacity(0.55), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private func addCurriculumItem(text: String, prefix: String, append: (ElementoCurricular) -> Void) {

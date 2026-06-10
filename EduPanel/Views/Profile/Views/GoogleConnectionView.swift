@@ -72,7 +72,7 @@ struct GoogleConnectionView: View {
                                 .padding(.vertical, 12)
                             }
                             .buttonStyle(.borderedProminent)
-                            .tint(.pink)
+                            .tint(EPTheme.primary)
                         } else {
                             if connectionType == "calendar" {
                                 Button {
@@ -84,7 +84,7 @@ struct GoogleConnectionView: View {
                                         .padding(.vertical, 12)
                                 }
                                 .buttonStyle(.bordered)
-                                .tint(.pink)
+                                .tint(EPTheme.primary)
                                 .disabled(isSyncing)
                             }
 

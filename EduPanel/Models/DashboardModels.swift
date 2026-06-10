@@ -279,8 +279,8 @@ struct DashboardSnapshot: Equatable {
     var preferences: PreferenciasUsuario
     var horario: [ClaseHorario]
     var classState: [String: Bool]
-    let studentCounts: [String: Int]
-    let studentsByCourse: [String: [EstudiantePerfil]]
+    var studentCounts: [String: Int]
+    var studentsByCourse: [String: [EstudiantePerfil]]
     var nivelMapping: [String: String]
     var cursoTipos: [String: TipoCurricular]
 

@@ -41,9 +41,8 @@ final class SidebarViewModel {
 }
 
 struct SidebarView: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(AuthSession.self) private var authSession
-    
+
     let repository: DashboardRepository
     let user: AuthenticatedUser
     
@@ -84,30 +83,37 @@ struct SidebarView: View {
                         avatarFallback
                     }
                 }
-                .frame(width: 54, height: 54)
+                .frame(width: 60, height: 60)
                 .clipShape(Circle())
-                .overlay(Circle().stroke(Color(.separator).opacity(0.3), lineWidth: 1.5))
-                .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
-                
+                .overlay(
+                    Circle()
+                        .stroke(EPTheme.heroGradient, lineWidth: 2.5)
+                        .padding(-3.5)
+                )
+                .shadow(color: EPTheme.primary.opacity(0.18), radius: 10, y: 4)
+
                 // User Names
-                VStack(spacing: 3) {
+                VStack(spacing: 4) {
                     Text(userShortName)
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 15, weight: .black))
                         .foregroundStyle(Color(.label))
-                    
-                    HStack(spacing: 4) {
+
+                    HStack(spacing: 5) {
                         Image(systemName: "music.note")
-                            .font(.system(size: 10))
+                            .font(.system(size: 9, weight: .bold))
                         Text(viewModel.snapshot?.profile.tipoProfesor.isEmpty == false ? viewModel.snapshot!.profile.tipoProfesor : "Profesor")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: 11, weight: .bold))
                     }
-                    .foregroundStyle(Color(.secondaryLabel))
+                    .foregroundStyle(EPTheme.primary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(EPTheme.primary.opacity(0.1), in: Capsule())
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.top, 54)
+            .padding(.top, 58)
             .padding(.bottom, 22)
-            .border(width: 1, edges: [.bottom], color: Color(.separator).opacity(0.25))
+            .border(width: 1, edges: [.bottom], color: Color(.separator).opacity(0.2))
             
             // Scrollable Navigation List
             ScrollView(.vertical, showsIndicators: false) {
@@ -118,8 +124,8 @@ struct SidebarView: View {
                     
                     // Tools Header
                     Text("Herramientas")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Color(hex: "#C0C4D6"))
+                        .font(.system(size: 10, weight: .black))
+                        .foregroundStyle(Color(.tertiaryLabel))
                         .textCase(.uppercase)
                         .tracking(1.1)
                         .padding(.horizontal, 14)
@@ -137,8 +143,8 @@ struct SidebarView: View {
                     
                     // Courses Header
                     Text("Mis cursos")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Color(hex: "#C0C4D6"))
+                        .font(.system(size: 10, weight: .black))
+                        .foregroundStyle(Color(.tertiaryLabel))
                         .textCase(.uppercase)
                         .tracking(1.1)
                         .padding(.horizontal, 14)
@@ -183,13 +189,9 @@ struct SidebarView: View {
     // Helpers & Subviews
     private var avatarFallback: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(hex: "#F03E6E"), Color.purple],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            EPTheme.heroGradient
             Text(String((user.displayName ?? "P").prefix(1)).uppercased())
-                .font(.system(size: 20, weight: .black))
+                .font(.system(size: 22, weight: .black))
                 .foregroundStyle(.white)
         }
     }
@@ -205,62 +207,61 @@ struct SidebarView: View {
     
     private func navButton(route: AppRoute, label: String, systemName: String) -> some View {
         let isActive = selectedRoute == route
-        
+
         return Button {
             navigateTo(route)
         } label: {
             HStack(spacing: 11) {
                 Image(systemName: systemName)
-                    .font(.system(size: 16, weight: isActive ? .semibold : .medium))
-                    .frame(width: 20, alignment: .center)
-                
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isActive ? .white : Color(.secondaryLabel))
+                    .frame(width: 30, height: 30)
+                    .background(
+                        isActive ? AnyShapeStyle(EPTheme.primary) : AnyShapeStyle(Color(.systemGray6)),
+                        in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    )
+
                 Text(label)
-                    .font(.system(size: 13, weight: isActive ? .semibold : .medium))
-                
+                    .font(.system(size: 13, weight: isActive ? .bold : .medium))
+
                 Spacer()
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9.5)
-            .foregroundStyle(isActive ? Color(hex: "#F03E6E") : Color(.secondaryLabel))
-            .background(
-                isActive 
-                ? (colorScheme == .dark ? Color(hex: "#F03E6E").opacity(0.15) : Color(hex: "#FFF0F4"))
-                : Color.clear
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .foregroundStyle(isActive ? EPTheme.primary : Color(.label))
+            .background(isActive ? EPTheme.primary.opacity(0.1) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
         }
         .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.2), value: isActive)
     }
-    
+
     private func courseButton(courseName: String, colorHex: String) -> some View {
         let route = AppRoute.coursePlanificaciones(curso: courseName, asignatura: nil)
         let isActive = selectedRoute == route
-        
+
         return Button {
             navigateTo(route)
         } label: {
             HStack(spacing: 11) {
                 Circle()
-                    .fill(Color(hex: colorHex))
-                    .frame(width: 8, height: 8)
-                    .frame(width: 20, alignment: .center)
-                
+                    .fill(EPTheme.color(hex: colorHex))
+                    .frame(width: 9, height: 9)
+                    .frame(width: 30, alignment: .center)
+
                 Text(courseName)
-                    .font(.system(size: 12, weight: isActive ? .semibold : .medium))
-                
+                    .font(.system(size: 12, weight: isActive ? .bold : .medium))
+
                 Spacer()
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .foregroundStyle(isActive ? Color(hex: "#F03E6E") : Color(.secondaryLabel))
-            .background(
-                isActive 
-                ? (colorScheme == .dark ? Color(hex: "#F03E6E").opacity(0.15) : Color(hex: "#FFF0F4"))
-                : Color.clear
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .foregroundStyle(isActive ? EPTheme.primary : Color(.secondaryLabel))
+            .background(isActive ? EPTheme.primary.opacity(0.1) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
         }
         .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.2), value: isActive)
     }
     
     private func navigateTo(_ route: AppRoute) {
@@ -280,7 +281,7 @@ struct SidebarView: View {
         }
         
         // Close sidebar with animation
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+        withAnimation(EPTheme.spring) {
             isSidebarOpen = false
         }
     }
@@ -343,27 +344,5 @@ private struct BorderModifier: ViewModifier {
 private extension View {
     func border(width: CGFloat, edges: [Edge], color: Color) -> some View {
         modifier(BorderModifier(width: width, edges: edges, color: color))
-    }
-}
-
-// Color Hex helper
-private extension Color {
-    init(hex: String) {
-        let clean = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        guard clean.count == 6 else {
-            self = .pink
-            return
-        }
-
-        var value: UInt64 = 0
-        guard Scanner(string: clean).scanHexInt64(&value) else {
-            self = .pink
-            return
-        }
-
-        let red = Double((value >> 16) & 0xFF) / 255.0
-        let green = Double((value >> 8) & 0xFF) / 255.0
-        let blue = Double(value & 0xFF) / 255.0
-        self.init(red: red, green: green, blue: blue)
     }
 }

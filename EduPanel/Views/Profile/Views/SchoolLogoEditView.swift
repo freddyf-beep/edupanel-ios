@@ -32,9 +32,13 @@ struct SchoolLogoEditView: View {
                     VStack(spacing: 14) {
                         SchoolLogoView(base64: school.logoBase64)
                             .scaleEffect(1.4)
-                            .frame(width: 120, height: 120)
-                            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                            .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+                            .frame(width: 124, height: 124)
+                            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                                    .stroke(Color(.separator).opacity(0.1), lineWidth: 1)
+                            )
+                            .shadow(color: .black.opacity(0.08), radius: 12, y: 5)
 
                         Text(school.logoBase64 == nil ? "Sin logo personalizado" : "Logo del colegio configurado")
                             .font(.subheadline.weight(.black))
@@ -49,7 +53,7 @@ struct SchoolLogoEditView: View {
                                 .padding(.vertical, 12)
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(.pink)
+                        .tint(EPTheme.primary)
 
                         if school.logoBase64 != nil {
                             Button(role: .destructive) {
@@ -99,7 +103,7 @@ struct SchoolLogoEditView: View {
                     Task { await performSave() }
                 }
                 .font(.subheadline.weight(.black))
-                .tint(.pink)
+                .tint(EPTheme.primary)
                 .disabled(isLoading || saveStatus == .saving || school.nombre.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }

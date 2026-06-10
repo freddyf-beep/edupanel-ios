@@ -22,24 +22,26 @@ struct SidebarContainer<SidebarContent: View, MainContent: View>: View {
                         Group {
                             if isOpen {
                                 Color.black
-                                    .opacity(0.35)
+                                    .opacity(0.3)
                                     .ignoresSafeArea()
+                                    .transition(.opacity)
                                     .onTapGesture {
-                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                        withAnimation(EPTheme.spring) {
                                             isOpen = false
                                         }
                                     }
                             }
                         }
                     )
-                
+
                 // Sidebar Menu View
                 sidebar()
                     .frame(width: actualSidebarWidth)
-                    .offset(x: isOpen 
-                            ? max(-actualSidebarWidth, min(0, dragOffset)) 
+                    .clipShape(.rect(topTrailingRadius: 28, bottomTrailingRadius: 28))
+                    .offset(x: isOpen
+                            ? max(-actualSidebarWidth, min(0, dragOffset))
                             : -actualSidebarWidth + max(0, min(actualSidebarWidth, dragOffset)))
-                    .shadow(color: Color.black.opacity(isOpen ? 0.18 : 0.0), radius: 8, x: 4, y: 0)
+                    .shadow(color: Color.black.opacity(isOpen ? 0.22 : 0.0), radius: 24, x: 8, y: 0)
             }
             .gesture(
                 DragGesture()
@@ -61,14 +63,14 @@ struct SidebarContainer<SidebarContent: View, MainContent: View>: View {
                         if isOpen {
                             // Dragged to the left enough to close
                             if value.translation.width < -threshold {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                withAnimation(EPTheme.spring) {
                                     isOpen = false
                                 }
                             }
                         } else {
                             // Dragged to the right enough starting from the edge to open
                             if value.startLocation.x < 45 && value.translation.width > threshold {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                withAnimation(EPTheme.spring) {
                                     isOpen = true
                                 }
                             }

@@ -16,27 +16,30 @@ struct ProfileSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(.pink)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(EPTheme.primary)
+                    .frame(width: 28, height: 28)
+                    .background(EPTheme.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 Text(title)
-                    .font(.subheadline.weight(.black))
+                    .font(.system(size: 14, weight: .black))
                 if let hint {
                     Text(hint)
-                        .font(.caption.weight(.semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
             }
             content
         }
-        .padding(16)
-        .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(18)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color(.separator).opacity(0.28), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color(.separator).opacity(0.1), lineWidth: 1)
         )
+        .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
     }
 }
 
@@ -50,26 +53,27 @@ struct ProfileKPI: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.caption.weight(.black))
+                .font(.system(size: 13, weight: .black))
                 .foregroundStyle(color)
-                .frame(width: 34, height: 34)
-                .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .frame(width: 36, height: 36)
+                .background(color.opacity(0.13), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(label.uppercased())
                     .font(.system(size: 9, weight: .black))
+                    .tracking(0.5)
                     .foregroundStyle(.secondary)
                 Text(value)
-                    .font(.headline.weight(.black))
+                    .font(.system(size: 17, weight: .black, design: .rounded))
                 if let hint {
                     Text(hint)
-                        .font(.caption2.weight(.semibold))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 0)
         }
         .padding(12)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
@@ -79,12 +83,12 @@ struct ProfilePill: View {
 
     var body: some View {
         Label(text, systemImage: icon)
-            .font(.caption.weight(.black))
+            .font(.system(size: 11, weight: .black))
             .lineLimit(1)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
-            .foregroundStyle(.pink)
-            .background(.pink.opacity(0.12), in: Capsule())
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .foregroundStyle(EPTheme.primary)
+            .background(EPTheme.primary.opacity(0.12), in: Capsule())
     }
 }
 
@@ -117,7 +121,7 @@ struct AsyncUserAvatar: View {
 
     private var avatarFallback: some View {
         ZStack {
-            LinearGradient(colors: [.pink, .purple], startPoint: .topLeading, endPoint: .bottomTrailing)
+            EPTheme.heroGradient
             Text(String((user.displayName ?? "P").prefix(1)).uppercased())
                 .font(.title.weight(.black))
                 .foregroundStyle(.white)
@@ -164,7 +168,7 @@ struct ProfileTextField: View {
                 .textFieldStyle(.plain)
                 .font(.footnote.weight(.semibold))
                 .padding(12)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
         }
     }
 }
@@ -220,7 +224,7 @@ struct ConnectionStatusCard: View {
                 .background(isConnected ? Color.green.opacity(0.14) : Color(.tertiarySystemGroupedBackground), in: Capsule())
         }
         .padding(12)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
@@ -271,11 +275,11 @@ struct ProfileEmptyAction: View {
                     .font(.footnote.weight(.black))
             }
             .buttonStyle(.borderedProminent)
-            .tint(.pink)
+            .tint(EPTheme.primary)
         }
         .frame(maxWidth: .infinity)
-        .padding(24)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(26)
+        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 
@@ -299,7 +303,7 @@ struct ProfileShortcut: View {
                     .foregroundStyle(.secondary)
             }
             .padding(12)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
     }

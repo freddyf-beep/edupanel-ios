@@ -153,13 +153,13 @@ struct AppShell: View {
                         .toolbar {
                             ToolbarItem(placement: .navigationBarLeading) {
                                 Button {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                    withAnimation(EPTheme.spring) {
                                         isSidebarOpen.toggle()
                                     }
                                 } label: {
                                     Image(systemName: "line.3.horizontal")
                                         .font(.title3.weight(.bold))
-                                        .foregroundStyle(Color(hex: "#F03E6E"))
+                                        .foregroundStyle(EPTheme.primary)
                                 }
                             }
                             ToolbarItem(placement: .topBarTrailing) {
@@ -189,13 +189,15 @@ struct AppShell: View {
                         .toolbar {
                             ToolbarItem(placement: .navigationBarLeading) {
                                 Button {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                    withAnimation(EPTheme.spring) {
                                         isSidebarOpen.toggle()
                                     }
                                 } label: {
                                     Image(systemName: "line.3.horizontal")
-                                        .font(.title3.weight(.bold))
-                                        .foregroundStyle(Color(hex: "#F03E6E"))
+                                        .font(.system(size: 15, weight: .bold))
+                                        .foregroundStyle(EPTheme.primary)
+                                        .frame(width: 34, height: 34)
+                                        .background(EPTheme.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                                 }
                             }
                         }
@@ -214,13 +216,13 @@ struct AppShell: View {
                             .toolbar {
                                 ToolbarItem(placement: .navigationBarLeading) {
                                     Button {
-                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                        withAnimation(EPTheme.spring) {
                                             isSidebarOpen.toggle()
                                         }
                                     } label: {
                                         Image(systemName: "line.3.horizontal")
                                             .font(.title3.weight(.bold))
-                                            .foregroundStyle(Color(hex: "#F03E6E"))
+                                            .foregroundStyle(EPTheme.primary)
                                     }
                                 }
                             }
@@ -238,13 +240,13 @@ struct AppShell: View {
                             .toolbar {
                                 ToolbarItem(placement: .navigationBarLeading) {
                                     Button {
-                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                        withAnimation(EPTheme.spring) {
                                             isSidebarOpen.toggle()
                                         }
                                     } label: {
                                         Image(systemName: "line.3.horizontal")
                                             .font(.title3.weight(.bold))
-                                            .foregroundStyle(Color(hex: "#F03E6E"))
+                                            .foregroundStyle(EPTheme.primary)
                                     }
                                 }
                             }
@@ -262,13 +264,13 @@ struct AppShell: View {
                             .toolbar {
                                 ToolbarItem(placement: .navigationBarLeading) {
                                     Button {
-                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                        withAnimation(EPTheme.spring) {
                                             isSidebarOpen.toggle()
                                         }
                                     } label: {
                                         Image(systemName: "line.3.horizontal")
                                             .font(.title3.weight(.bold))
-                                            .foregroundStyle(Color(hex: "#F03E6E"))
+                                            .foregroundStyle(EPTheme.primary)
                                     }
                                 }
                             }
@@ -342,24 +344,3 @@ struct AppShell: View {
     }
 }
 
-// Private hex helper for toolbar custom color
-private extension Color {
-    init(hex: String) {
-        let clean = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        guard clean.count == 6 else {
-            self = .pink
-            return
-        }
-
-        var value: UInt64 = 0
-        guard Scanner(string: clean).scanHexInt64(&value) else {
-            self = .pink
-            return
-        }
-
-        let red = Double((value >> 16) & 0xFF) / 255.0
-        let green = Double((value >> 8) & 0xFF) / 255.0
-        let blue = Double(value & 0xFF) / 255.0
-        self.init(red: red, green: green, blue: blue)
-    }
-}
