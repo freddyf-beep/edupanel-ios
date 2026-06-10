@@ -37,7 +37,7 @@ struct SidebarContainer<SidebarContent: View, MainContent: View>: View {
                 // Sidebar Menu View
                 sidebar()
                     .frame(width: actualSidebarWidth)
-                    .clipShape(.rect(topTrailingRadius: 28, bottomTrailingRadius: 28))
+                    .clipShape(.rect(bottomTrailingRadius: 28, topTrailingRadius: 28))
                     .offset(x: isOpen
                             ? max(-actualSidebarWidth, min(0, dragOffset))
                             : -actualSidebarWidth + max(0, min(actualSidebarWidth, dragOffset)))
