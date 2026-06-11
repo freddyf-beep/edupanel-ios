@@ -8,6 +8,8 @@ struct VerUnidadClasesView: View {
     @State private var newMaterial = ""
     @State private var newTic = ""
 
+    @Environment(\.displayMode) private var displayMode
+
     var body: some View {
         VStack(spacing: 0) {
             classSelectorRail
@@ -18,9 +20,13 @@ struct VerUnidadClasesView: View {
                     objectivesCard
                     curriculumTransversalCard
                     editorFields
-                    externalPedagogyCard
+                    if !displayMode.isSimple {
+                        externalPedagogyCard
+                    }
                     resourcesSection
-                    placeholdersCard
+                    if !displayMode.isSimple {
+                        placeholdersCard
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)

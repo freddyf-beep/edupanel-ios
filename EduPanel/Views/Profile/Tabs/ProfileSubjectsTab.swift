@@ -4,6 +4,8 @@ struct ProfileSubjectsTab: View {
     @Bindable var viewModel: ProfileViewModel
     let snapshot: DashboardSnapshot
 
+    @Environment(\.displayMode) private var displayMode
+
     private let gridColumns = [GridItem(.adaptive(minimum: 150), spacing: 8)]
 
     var body: some View {
@@ -11,9 +13,11 @@ struct ProfileSubjectsTab: View {
             ProfileSection(title: "Asignaturas que enseño", icon: "book.closed.fill", hint: "Filtra el selector del header") {
                 ProfileSaveBadge(status: viewModel.savePreferencesStatus)
 
-                Text("Solo las marcadas aparecerán en el selector de asignatura. Si desmarcas todas, se mostrarán todas (compatibilidad). Tu elección se guarda automáticamente.")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+                if !displayMode.isSimple {
+                    Text("Solo las marcadas aparecerán en el selector de asignatura. Si desmarcas todas, se mostrarán todas (compatibilidad). Tu elección se guarda automáticamente.")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
 
                 let subjects = subjectCandidates(snapshot)
 
@@ -44,9 +48,11 @@ struct ProfileSubjectsTab: View {
             ProfileSection(title: "Mapeo de niveles curriculares", icon: "graduationcap.fill", hint: "Mineduc") {
                 ProfileSaveBadge(status: viewModel.saveMappingStatus)
 
-                Text("Esto permite que el copiloto IA y el currículum carguen los contenidos correctos al planificar. Se guarda automáticamente.")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+                if !displayMode.isSimple {
+                    Text("Esto permite que el copiloto IA y el currículum carguen los contenidos correctos al planificar. Se guarda automáticamente.")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
 
                 if snapshot.courses.isEmpty {
                     Text("Primero agrega cursos en Mi Semana.")

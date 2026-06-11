@@ -8,12 +8,16 @@ struct VerUnidadCronogramaView: View {
     @State private var classToEditOas: ClaseCronograma? = nil
     @State private var showingOaSheet = false
 
+    @Environment(\.displayMode) private var displayMode
+
     var body: some View {
         if let crono = viewModel.cronograma {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     controlsCard(crono)
-                    coverageCard(crono)
+                    if !displayMode.isSimple {
+                        coverageCard(crono)
+                    }
 
                     if isMatrixMode {
                         matrixEditor(crono)

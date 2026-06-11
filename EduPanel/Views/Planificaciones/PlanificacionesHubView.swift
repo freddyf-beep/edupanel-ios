@@ -8,6 +8,9 @@ struct PlanificacionesHubView: View {
     @State private var filtroCurso: Set<String> = []
     @State private var filtroEstado: Set<UnitPlanningState> = []
     @State private var mesActual = Calendar.current.startOfDay(for: Date())
+    @State private var filtrosVisibles = false
+
+    @Environment(\.displayMode) private var displayMode
 
     let dashboardRepository: DashboardRepository
     let planificacionRepository: PlanificacionRepository
@@ -89,7 +92,43 @@ struct PlanificacionesHubView: View {
                 emptyCoursesState
             } else {
                 kpiGrid
-                filtrosCard
+
+                if displayMode.isSimple {
+                    Button {
+                        withAnimation(EPTheme.spring) {
+                            filtrosVisibles.toggle()
+                        }
+                    } label: {
+                        HStack {
+                            Label("Filtros", systemImage: "slider.horizontal.3")
+                                .font(.footnote.weight(.black))
+                                .foregroundStyle(EPTheme.primary)
+                            Spacer()
+                            if hasActiveFilters {
+                                Text("activos")
+                                    .font(.caption2.weight(.black))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(EPTheme.primary, in: Capsule())
+                            } else {
+                                Image(systemName: filtrosVisibles ? "chevron.up" : "chevron.down")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(12)
+                        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+
+                    if filtrosVisibles {
+                        filtrosCard
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                } else {
+                    filtrosCard
+                }
 
                 EPWebTabBar(tabs: tabs, selected: $selectedVista)
 
@@ -127,9 +166,11 @@ struct PlanificacionesHubView: View {
                     .font(.title3.weight(.black))
                     .foregroundStyle(.white)
 
-                Text("Vista global de tus unidades didácticas: timeline anual, calendario de hitos y métricas en tiempo real.")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.85))
+                if !displayMode.isSimple {
+                    Text("Vista global de tus unidades didácticas: timeline anual, calendario de hitos y métricas en tiempo real.")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
             }
 
             HStack(spacing: 7) {
@@ -208,13 +249,15 @@ struct PlanificacionesHubView: View {
     // MARK: - KPIs
 
     private var kpiGrid: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: displayMode.isSimple ? 105 : 150), spacing: 10)], spacing: 10) {
             EPKPIBox(title: "Total unidades", value: "\(stats.total)", subtitle: "\(stats.totalHoras)h totales", icon: "square.stack.3d.up.fill", tint: EPTheme.primary)
             EPKPIBox(title: "En curso", value: "\(stats.enCurso)", subtitle: "ahora", icon: "play.circle.fill", tint: stats.enCurso > 0 ? .green : .gray)
-            EPKPIBox(title: "Próximas", value: "\(stats.proximas)", subtitle: "planificadas", icon: "calendar.badge.clock", tint: .blue)
             EPKPIBox(title: "Cobertura", value: "\(stats.cobertura)%", subtitle: "con fechas", icon: "checkmark.seal.fill", tint: coberturaTint(stats.cobertura))
-            EPKPIBox(title: "Sin fechas", value: "\(stats.incompletas)", subtitle: "por completar", icon: "exclamationmark.triangle.fill", tint: stats.incompletas == 0 ? .green : .orange)
-            EPKPIBox(title: "Cursos", value: "\(cursosInfo.count)", subtitle: "activos", icon: "person.3.fill", tint: EPTheme.primary)
+            if !displayMode.isSimple {
+                EPKPIBox(title: "Próximas", value: "\(stats.proximas)", subtitle: "planificadas", icon: "calendar.badge.clock", tint: .blue)
+                EPKPIBox(title: "Sin fechas", value: "\(stats.incompletas)", subtitle: "por completar", icon: "exclamationmark.triangle.fill", tint: stats.incompletas == 0 ? .green : .orange)
+                EPKPIBox(title: "Cursos", value: "\(cursosInfo.count)", subtitle: "activos", icon: "person.3.fill", tint: EPTheme.primary)
+            }
         }
     }
 

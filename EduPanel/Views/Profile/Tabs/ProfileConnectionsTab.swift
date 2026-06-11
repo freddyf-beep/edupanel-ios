@@ -14,6 +14,8 @@ struct ProfileConnectionsTab: View {
     @State private var trabajandoCarpeta = false
     @State private var driveMessage: String?
 
+    @Environment(\.displayMode) private var displayMode
+
     var body: some View {
         VStack(spacing: 18) {
             calendarSection
@@ -127,33 +129,35 @@ struct ProfileConnectionsTab: View {
                 isConnected: isConnected
             )
 
-            VStack(alignment: .leading, spacing: 6) {
-                Label("Privado por docente", systemImage: "checkmark.shield.fill")
-                    .font(.footnote.weight(.black))
-                    .foregroundStyle(.green)
-                Text("EduPanel crea carpetas solo en tu Drive personal cuando lo autorizas. Guarda IDs y enlaces mínimos, no contenido de documentos.")
+            if !displayMode.isSimple {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Privado por docente", systemImage: "checkmark.shield.fill")
+                        .font(.footnote.weight(.black))
+                        .foregroundStyle(.green)
+                    Text("EduPanel crea carpetas solo en tu Drive personal cuando lo autorizas. Guarda IDs y enlaces mínimos, no contenido de documentos.")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Antes de configurar Drive", systemImage: "info.circle.fill")
+                        .font(.footnote.weight(.black))
+                        .foregroundStyle(.orange)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Google pedirá permiso para crear archivos y carpetas que EduPanel gestione.", systemImage: "checkmark")
+                        Label("\"Crear / reparar\" genera una carpeta privada Edu-Panel con año, asignatura, curso y unidad.", systemImage: "checkmark")
+                        Label("Los archivos quedan en tu Drive; EduPanel guarda solo enlaces e IDs.", systemImage: "checkmark")
+                    }
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 6) {
-                Label("Antes de configurar Drive", systemImage: "info.circle.fill")
-                    .font(.footnote.weight(.black))
-                    .foregroundStyle(.orange)
-                VStack(alignment: .leading, spacing: 4) {
-                    Label("Google pedirá permiso para crear archivos y carpetas que EduPanel gestione.", systemImage: "checkmark")
-                    Label("\"Crear / reparar\" genera una carpeta privada Edu-Panel con año, asignatura, curso y unidad.", systemImage: "checkmark")
-                    Label("Los archivos quedan en tu Drive; EduPanel guarda solo enlaces e IDs.", systemImage: "checkmark")
                 }
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
 
             Button {
                 Task { await alternarDrive(!isConnected) }

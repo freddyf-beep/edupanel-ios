@@ -17,6 +17,8 @@ enum AppRoute: Hashable {
     case driveConnect
     case perfilAction(String)
     case module(AppTab)
+    case settings
+    case ayuda
     case coursePlanificaciones(curso: String, asignatura: String?)
     case verUnidad(curso: String, asignatura: String?, unidadId: String, unidadNombre: String, initialTab: String)
 
@@ -38,6 +40,8 @@ enum AppRoute: Hashable {
         case .driveConnect: return "Conectar Google Drive"
         case .perfilAction(let title): return title
         case .module(let tab): return tab.title
+        case .settings: return "Configuración"
+        case .ayuda: return "Ayuda"
         case .coursePlanificaciones(let course, _): return "Planificaciones - \(course)"
         case .verUnidad(_, _, _, let unidadNombre, _): return unidadNombre
         }
@@ -61,6 +65,8 @@ enum AppRoute: Hashable {
         case .driveConnect: return "externaldrive.badge.plus"
         case .perfilAction: return "arrow.right.circle.fill"
         case .module(let tab): return tab.systemImage
+        case .settings: return "gearshape.fill"
+        case .ayuda: return "questionmark.circle.fill"
         case .coursePlanificaciones: return "book.closed.fill"
         case .verUnidad: return "book.closed.fill"
         }
@@ -101,12 +107,14 @@ struct AppShell: View {
     let dashboardRepository: DashboardRepository
     private let planificacionRepository = PlanificacionRepository()
 
-    @State private var selectedTab: AppTab = .planificaciones
-    @State private var selectedRoute: AppRoute = .module(.planificaciones)
+    @State private var selectedTab: AppTab = .inicio
+    @State private var selectedRoute: AppRoute = .module(.inicio)
     @State private var isSidebarOpen = false
+    @State private var tabBadges: [AppTab: Int] = [:]
 
     @State private var inicioPath = NavigationPath()
     @State private var planificacionesPath = NavigationPath()
+    @State private var cronogramaPath = NavigationPath()
     @State private var evaluacionesPath = NavigationPath()
     @State private var clasesPath = NavigationPath()
     @State private var perfilPath = NavigationPath()
@@ -115,6 +123,7 @@ struct AppShell: View {
         switch selectedTab {
         case .inicio: return $inicioPath
         case .planificaciones: return $planificacionesPath
+        case .cronograma: return $cronogramaPath
         case .evaluaciones: return $evaluacionesPath
         case .clases: return $clasesPath
         case .perfil: return $perfilPath
@@ -136,177 +145,137 @@ struct AppShell: View {
                 )
             },
             content: {
-                TabView(selection: $selectedTab) {
-                    // Inicio Tab
-                    NavigationStack(path: $inicioPath) {
-                        DashboardView(
-                            repository: dashboardRepository,
-                            user: user,
-                            onOpenProfile: {
-                                withAnimation {
-                                    selectedTab = .perfil
-                                }
-                            }
-                        )
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Button {
-                                    withAnimation(EPTheme.spring) {
-                                        isSidebarOpen.toggle()
-                                    }
-                                } label: {
-                                    Image(systemName: "line.3.horizontal")
-                                        .font(.title3.weight(.bold))
-                                        .foregroundStyle(EPTheme.primary)
-                                }
-                            }
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button {
-                                    Task { await authSession.signOut() }
-                                } label: {
-                                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                                }
-                                .accessibilityLabel("Cerrar sesión")
-                            }
+                ZStack(alignment: .bottom) {
+                    tabContent
+                        .safeAreaInset(edge: .bottom, spacing: 0) {
+                            Color.clear.frame(height: 70)
                         }
-                        .navigationDestination(for: AppRoute.self) { route in
-                            destination(for: route)
+
+                    FloatingTabBar(selected: $selectedTab, badges: tabBadges) {
+                        withAnimation(EPTheme.spring) {
+                            isSidebarOpen = true
                         }
                     }
-                    .tabItem { Label(AppTab.inicio.title, systemImage: AppTab.inicio.systemImage) }
-                    .tag(AppTab.inicio)
-
-                    // Planificaciones Tab
-                    NavigationStack(path: $planificacionesPath) {
-                        PlanificacionesHubView(
-                            dashboardRepository: dashboardRepository,
-                            planificacionRepository: planificacionRepository
-                        )
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarLeading) {
-                                Button {
-                                    withAnimation(EPTheme.spring) {
-                                        isSidebarOpen.toggle()
-                                    }
-                                } label: {
-                                    Image(systemName: "line.3.horizontal")
-                                        .font(.system(size: 15, weight: .bold))
-                                        .foregroundStyle(EPTheme.primary)
-                                        .frame(width: 34, height: 34)
-                                        .background(EPTheme.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                                }
-                            }
-                        }
-                        .navigationDestination(for: AppRoute.self) { route in
-                            destination(for: route)
-                        }
-                    }
-                    .tabItem { Label(AppTab.planificaciones.title, systemImage: AppTab.planificaciones.systemImage) }
-                    .tag(AppTab.planificaciones)
-
-                    // Evaluaciones Tab
-                    NavigationStack(path: $evaluacionesPath) {
-                        PlaceholderModuleView(tab: .evaluaciones)
-                            .navigationBarTitleDisplayMode(.inline)
-                            .toolbar {
-                                ToolbarItem(placement: .navigationBarLeading) {
-                                    Button {
-                                        withAnimation(EPTheme.spring) {
-                                            isSidebarOpen.toggle()
-                                        }
-                                    } label: {
-                                        Image(systemName: "line.3.horizontal")
-                                            .font(.title3.weight(.bold))
-                                            .foregroundStyle(EPTheme.primary)
-                                    }
-                                }
-                            }
-                            .navigationDestination(for: AppRoute.self) { route in
-                                destination(for: route)
-                            }
-                    }
-                    .tabItem { Label(AppTab.evaluaciones.title, systemImage: AppTab.evaluaciones.systemImage) }
-                    .tag(AppTab.evaluaciones)
-
-                    // Clases Tab
-                    NavigationStack(path: $clasesPath) {
-                        PlaceholderModuleView(tab: .clases)
-                            .navigationBarTitleDisplayMode(.inline)
-                            .toolbar {
-                                ToolbarItem(placement: .navigationBarLeading) {
-                                    Button {
-                                        withAnimation(EPTheme.spring) {
-                                            isSidebarOpen.toggle()
-                                        }
-                                    } label: {
-                                        Image(systemName: "line.3.horizontal")
-                                            .font(.title3.weight(.bold))
-                                            .foregroundStyle(EPTheme.primary)
-                                    }
-                                }
-                            }
-                            .navigationDestination(for: AppRoute.self) { route in
-                                destination(for: route)
-                            }
-                    }
-                    .tabItem { Label(AppTab.clases.title, systemImage: AppTab.clases.systemImage) }
-                    .tag(AppTab.clases)
-
-                    // Perfil Tab
-                    NavigationStack(path: $perfilPath) {
-                        ProfileView(repository: dashboardRepository, user: user)
-                            .navigationBarTitleDisplayMode(.inline)
-                            .toolbar {
-                                ToolbarItem(placement: .navigationBarLeading) {
-                                    Button {
-                                        withAnimation(EPTheme.spring) {
-                                            isSidebarOpen.toggle()
-                                        }
-                                    } label: {
-                                        Image(systemName: "line.3.horizontal")
-                                            .font(.title3.weight(.bold))
-                                            .foregroundStyle(EPTheme.primary)
-                                    }
-                                }
-                            }
-                            .navigationDestination(for: AppRoute.self) { route in
-                                destination(for: route)
-                            }
-                    }
-                    .tabItem { Label(AppTab.perfil.title, systemImage: AppTab.perfil.systemImage) }
-                    .tag(AppTab.perfil)
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 14)
                 }
-                .onChange(of: selectedTab) { oldTab, newTab in
-                    // If they switch tabs manually (away from planificaciones), reset course selection route
-                    if newTab != .planificaciones {
-                        if case .coursePlanificaciones = selectedRoute {
-                            selectedRoute = .module(.inicio)
-                        }
+                .onChange(of: selectedTab) { _, newTab in
+                    if case .coursePlanificaciones = selectedRoute, newTab == .planificaciones {
+                        return
                     }
+                    selectedRoute = .module(newTab)
                 }
-                .onChange(of: selectedRoute) { oldRoute, newRoute in
+                .onChange(of: selectedRoute) { _, newRoute in
                     switch newRoute {
                     case .coursePlanificaciones(let course, let asignatura):
                         selectedTab = .planificaciones
                         planificacionesPath = NavigationPath([AppRoute.coursePlanificaciones(curso: course, asignatura: asignatura)])
                     case .module(let tab):
                         selectedTab = tab
-                        if tab == .planificaciones {
-                            planificacionesPath = NavigationPath()
-                        }
                     default:
                         break
                     }
+                }
+                .task {
+                    await loadBadges()
                 }
             }
         )
     }
 
     @ViewBuilder
+    private var tabContent: some View {
+        switch selectedTab {
+        case .inicio:
+            tabStack(path: $inicioPath) {
+                DashboardView(
+                    repository: dashboardRepository,
+                    user: user,
+                    onOpenProfile: {
+                        withAnimation(EPTheme.spring) {
+                            selectedTab = .perfil
+                        }
+                    }
+                )
+            }
+        case .planificaciones:
+            tabStack(path: $planificacionesPath) {
+                PlanificacionesHubView(
+                    dashboardRepository: dashboardRepository,
+                    planificacionRepository: planificacionRepository
+                )
+            }
+        case .cronograma:
+            tabStack(path: $cronogramaPath) {
+                CronogramaView(
+                    dashboardRepository: dashboardRepository,
+                    planificacionRepository: planificacionRepository
+                )
+            }
+        case .evaluaciones:
+            tabStack(path: $evaluacionesPath) {
+                PlaceholderModuleView(tab: .evaluaciones)
+            }
+        case .clases:
+            tabStack(path: $clasesPath) {
+                PlaceholderModuleView(tab: .clases)
+            }
+        case .perfil:
+            tabStack(path: $perfilPath) {
+                ProfileView(repository: dashboardRepository, user: user)
+            }
+        }
+    }
+
+    private func tabStack<Root: View>(path: Binding<NavigationPath>, @ViewBuilder root: () -> Root) -> some View {
+        NavigationStack(path: path) {
+            root()
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { shellToolbar }
+                .navigationDestination(for: AppRoute.self) { route in
+                    destination(for: route)
+                }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var shellToolbar: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            Button {
+                withAnimation(EPTheme.spring) {
+                    isSidebarOpen.toggle()
+                }
+            } label: {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(EPTheme.primary)
+                    .frame(width: 34, height: 34)
+                    .background(EPTheme.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            }
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            DisplayModeToggleButton()
+        }
+    }
+
+    private func loadBadges() async {
+        guard let snapshot = try? await dashboardRepository.fetchDashboard() else { return }
+        let pendientes = snapshot.pendingClasses.count
+        tabBadges[.inicio] = pendientes > 0 ? pendientes : nil
+    }
+
+    @ViewBuilder
     private func destination(for route: AppRoute) -> some View {
         switch route {
+        case .settings:
+            SettingsView(user: user, repository: dashboardRepository)
+        case .ayuda:
+            HelpView()
+        case .cronograma:
+            CronogramaView(
+                dashboardRepository: dashboardRepository,
+                planificacionRepository: planificacionRepository
+            )
         case .coursePlanificaciones(let course, let asignatura):
             PlanificacionesDetailView(
                 curso: course,
@@ -339,4 +308,3 @@ struct AppShell: View {
         }
     }
 }
-

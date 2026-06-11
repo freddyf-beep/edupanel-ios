@@ -5,6 +5,8 @@ struct ProfileSummaryTab: View {
     let snapshot: DashboardSnapshot
     @Binding var selectedTab: ProfileTabKey
 
+    @Environment(\.displayMode) private var displayMode
+
     var body: some View {
         VStack(spacing: 18) {
             ProfileSection(title: "Mis cursos", icon: "folder.fill", hint: snapshot.courses.isEmpty ? "Aún no agregas ninguno" : "\(snapshot.courses.count) cursos") {
@@ -58,13 +60,15 @@ struct ProfileSummaryTab: View {
                 }
             }
 
-            ProfileSection(title: "Atajos rápidos", icon: "bolt.fill", hint: nil) {
-                VStack(spacing: 8) {
-                    ProfileShortcut(title: "Editar mi semana", icon: "calendar") { selectedTab = .semana }
-                    ProfileShortcut(title: "Configurar mis cursos", icon: "folder.fill") { selectedTab = .cursos }
-                    ProfileShortcut(title: "Asignaturas y niveles", icon: "book.closed.fill") { selectedTab = .asignaturas }
-                    ProfileShortcut(title: "Datos del colegio", icon: "building.2.fill") { selectedTab = .identidad }
-                    ProfileShortcut(title: "Conectar Google Calendar", icon: "link") { selectedTab = .conexiones }
+            if !displayMode.isSimple {
+                ProfileSection(title: "Atajos rápidos", icon: "bolt.fill", hint: nil) {
+                    VStack(spacing: 8) {
+                        ProfileShortcut(title: "Editar mi semana", icon: "calendar") { selectedTab = .semana }
+                        ProfileShortcut(title: "Configurar mis cursos", icon: "folder.fill") { selectedTab = .cursos }
+                        ProfileShortcut(title: "Asignaturas y niveles", icon: "book.closed.fill") { selectedTab = .asignaturas }
+                        ProfileShortcut(title: "Datos del colegio", icon: "building.2.fill") { selectedTab = .identidad }
+                        ProfileShortcut(title: "Conectar Google Calendar", icon: "link") { selectedTab = .conexiones }
+                    }
                 }
             }
         }

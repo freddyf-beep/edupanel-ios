@@ -10,6 +10,8 @@ struct ProfileWeekTab: View {
     @State private var editingGrupo: ProfileNonTeachingGroup?
     @State private var bloqueAEliminar: ClaseHorario?
 
+    @Environment(\.displayMode) private var displayMode
+
     var body: some View {
         let nonTeachingList = nonTeachingGroups(snapshot)
 
@@ -68,6 +70,36 @@ struct ProfileWeekTab: View {
                 }
             }
 
+            if !displayMode.isSimple {
+                listaDetalladaSection
+            }
+        }
+        .sheet(isPresented: $showWizard) {
+            BloqueWizardSheet(viewModel: viewModel)
+        }
+        .sheet(item: $editingBloque) { bloque in
+            BloqueEditorSheet(viewModel: viewModel, bloque: bloque)
+        }
+        .sheet(item: $editingGrupo) { grupo in
+            GrupoNoLectivoSheet(viewModel: viewModel, grupo: grupo)
+        }
+        .alert("¿Eliminar bloque?", isPresented: Binding(
+            get: { bloqueAEliminar != nil },
+            set: { if !$0 { bloqueAEliminar = nil } }
+        ), presenting: bloqueAEliminar) { bloque in
+            Button("Eliminar", role: .destructive) {
+                viewModel.removeBloque(id: bloque.id)
+                bloqueAEliminar = nil
+            }
+            Button("Cancelar", role: .cancel) {
+                bloqueAEliminar = nil
+            }
+        } message: { bloque in
+            Text("Se quitará \"\(bloque.resumen)\" del \(bloque.dia) \(bloque.timeRange).")
+        }
+    }
+
+    private var listaDetalladaSection: some View {
             ProfileSection(title: "Lista detallada", icon: "clock.fill", hint: "Edita o elimina bloques uno por uno") {
                 if snapshot.horario.isEmpty {
                     Text("Sin bloques aún.")
@@ -101,30 +133,6 @@ struct ProfileWeekTab: View {
                     }
                 }
             }
-        }
-        .sheet(isPresented: $showWizard) {
-            BloqueWizardSheet(viewModel: viewModel)
-        }
-        .sheet(item: $editingBloque) { bloque in
-            BloqueEditorSheet(viewModel: viewModel, bloque: bloque)
-        }
-        .sheet(item: $editingGrupo) { grupo in
-            GrupoNoLectivoSheet(viewModel: viewModel, grupo: grupo)
-        }
-        .alert("¿Eliminar bloque?", isPresented: Binding(
-            get: { bloqueAEliminar != nil },
-            set: { if !$0 { bloqueAEliminar = nil } }
-        ), presenting: bloqueAEliminar) { bloque in
-            Button("Eliminar", role: .destructive) {
-                viewModel.removeBloque(id: bloque.id)
-                bloqueAEliminar = nil
-            }
-            Button("Cancelar", role: .cancel) {
-                bloqueAEliminar = nil
-            }
-        } message: { bloque in
-            Text("Se quitará \"\(bloque.resumen)\" del \(bloque.dia) \(bloque.timeRange).")
-        }
     }
 
     private func weekHourRange(_ snapshot: DashboardSnapshot) -> (minHour: Int, maxHour: Int, label: String) {

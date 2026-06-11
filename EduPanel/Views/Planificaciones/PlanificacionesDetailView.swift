@@ -21,6 +21,8 @@ struct PlanificacionesDetailView: View {
     @State private var unitToDelete: UnidadPlan? = nil
     @State private var showingDeleteAlert = false
 
+    @Environment(\.displayMode) private var displayMode
+
     private static let maxUnidades = 12
 
     init(curso: String, asignatura: String? = nil, dashboardRepository: DashboardRepository, planificacionRepository: PlanificacionRepository) {
@@ -121,18 +123,20 @@ struct PlanificacionesDetailView: View {
                 ProgressView(value: Double(coberturaGeneral) / 100.0)
                     .tint(estadoGeneral.tint)
 
-                HStack(spacing: 8) {
-                    EPPlaceholderActionButton(
-                        title: "Drive",
-                        icon: "externaldrive.fill",
-                        message: "El respaldo en Drive queda visible como en la web. La conexión nativa se implementará en una entrega posterior."
-                    )
-                    EPPlaceholderActionButton(
-                        title: "Exportar",
-                        icon: "square.and.arrow.up",
-                        message: "Las exportaciones DOCX/PDF quedan preparadas como placeholder nativo."
-                    )
-                    Spacer(minLength: 0)
+                if !displayMode.isSimple {
+                    HStack(spacing: 8) {
+                        EPPlaceholderActionButton(
+                            title: "Drive",
+                            icon: "externaldrive.fill",
+                            message: "El respaldo en Drive queda visible como en la web. La conexión nativa se implementará en una entrega posterior."
+                        )
+                        EPPlaceholderActionButton(
+                            title: "Exportar",
+                            icon: "square.and.arrow.up",
+                            message: "Las exportaciones DOCX/PDF quedan preparadas como placeholder nativo."
+                        )
+                        Spacer(minLength: 0)
+                    }
                 }
             }
         }
@@ -343,7 +347,18 @@ struct PlanificacionesDetailView: View {
 
     private var sidebarReplica: some View {
         VStack(alignment: .leading, spacing: 12) {
-            EPWebCard {
+            if !displayMode.isSimple {
+                proximasClasesCard
+                resumenCard
+                exportarCard
+            } else {
+                resumenCard
+            }
+        }
+    }
+
+    private var proximasClasesCard: some View {
+        EPWebCard {
                 VStack(alignment: .leading, spacing: 12) {
                     EPSectionHeader(title: "Próximas clases", subtitle: "Clases con fecha asignada hacia el futuro.", icon: "calendar.badge.clock")
 
@@ -381,31 +396,35 @@ struct PlanificacionesDetailView: View {
                 }
             }
 
-            EPWebCard {
-                VStack(alignment: .leading, spacing: 10) {
-                    EPSectionHeader(title: "Resumen", subtitle: nil, icon: "chart.pie.fill")
-                    summaryLine("Unidades", "\(units.count) / \(Self.maxUnidades)")
-                    summaryLine("Horas totales", "\(totalHoras)")
-                    summaryLine("Con fechas", "\(units.filter(\.hasDates).count)")
-                    summaryLine("Sin fechas", "\(units.filter { !$0.hasDates }.count)")
-                    summaryLine("Cobertura", "\(coberturaGeneral)%")
-                }
-            }
+    }
 
-            EPWebCard {
-                VStack(alignment: .leading, spacing: 10) {
-                    EPSectionHeader(title: "Exportar", subtitle: "Elige entre formato detallado o por tabla.", icon: "square.and.arrow.up")
-                    EPPlaceholderActionButton(
-                        title: "Descargar DOCX",
-                        icon: "doc.richtext",
-                        message: "La exportación DOCX se conectará cuando migremos el servicio web."
-                    )
-                    EPPlaceholderActionButton(
-                        title: "Resumen PDF",
-                        icon: "doc.text",
-                        message: "La exportación PDF se conectará en una entrega posterior."
-                    )
-                }
+    private var resumenCard: some View {
+        EPWebCard {
+            VStack(alignment: .leading, spacing: 10) {
+                EPSectionHeader(title: "Resumen", subtitle: nil, icon: "chart.pie.fill")
+                summaryLine("Unidades", "\(units.count) / \(Self.maxUnidades)")
+                summaryLine("Horas totales", "\(totalHoras)")
+                summaryLine("Con fechas", "\(units.filter(\.hasDates).count)")
+                summaryLine("Sin fechas", "\(units.filter { !$0.hasDates }.count)")
+                summaryLine("Cobertura", "\(coberturaGeneral)%")
+            }
+        }
+    }
+
+    private var exportarCard: some View {
+        EPWebCard {
+            VStack(alignment: .leading, spacing: 10) {
+                EPSectionHeader(title: "Exportar", subtitle: "Elige entre formato detallado o por tabla.", icon: "square.and.arrow.up")
+                EPPlaceholderActionButton(
+                    title: "Descargar DOCX",
+                    icon: "doc.richtext",
+                    message: "La exportación DOCX se conectará cuando migremos el servicio web."
+                )
+                EPPlaceholderActionButton(
+                    title: "Resumen PDF",
+                    icon: "doc.text",
+                    message: "La exportación PDF se conectará en una entrega posterior."
+                )
             }
         }
     }

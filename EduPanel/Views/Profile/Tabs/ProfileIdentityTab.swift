@@ -8,6 +8,8 @@ struct ProfileIdentityTab: View {
     @State private var logoPrincipalItem: PhotosPickerItem?
     @State private var logoDerechoItem: PhotosPickerItem?
 
+    @Environment(\.displayMode) private var displayMode
+
     var body: some View {
         VStack(spacing: 18) {
             ProfileSection(title: "Datos profesionales", icon: "briefcase.fill", hint: nil) {
@@ -210,7 +212,9 @@ struct ProfileIdentityTab: View {
                             .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
 
-                    encabezadoPreview
+                    if !displayMode.isSimple {
+                        encabezadoPreview
+                    }
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }

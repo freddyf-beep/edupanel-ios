@@ -11,6 +11,8 @@ struct VerUnidadDashboardView: View {
     @State private var viewModel: VerUnidadViewModel
     @State private var selectedTab: String
 
+    @Environment(\.displayMode) private var displayMode
+
     private let tabs = [
         EPWebTab(id: "unidad", title: "Unidad", icon: "text.alignleft"),
         EPWebTab(id: "cronograma", title: "Cronograma", icon: "calendar"),
@@ -104,11 +106,13 @@ struct VerUnidadDashboardView: View {
                         .tracking(1.0)
                         .foregroundStyle(EPTheme.primary)
                     Text(unidadNombre)
-                        .font(.system(size: 17, weight: .black))
+                        .font(.system(size: displayMode.isSimple ? 15 : 17, weight: .black))
                         .lineLimit(2)
-                    Text(headerSubtitle)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                    if !displayMode.isSimple {
+                        Text(headerSubtitle)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Spacer(minLength: 8)

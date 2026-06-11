@@ -42,6 +42,7 @@ final class SidebarViewModel {
 
 struct SidebarView: View {
     @Environment(AuthSession.self) private var authSession
+    @Environment(\.displayMode) private var displayMode
 
     let repository: DashboardRepository
     let user: AuthenticatedUser
@@ -138,8 +139,9 @@ struct SidebarView: View {
                     navButton(route: .calificaciones, label: "Calificaciones", systemName: "checkmark.clipboard.fill")
                     navButton(route: .module(.evaluaciones), label: "Evaluaciones", systemName: "checklist.checked")
                     navButton(route: .perfil360, label: "Perfil 360", systemName: "person.2.fill")
-                    navButton(route: .perfilAction("Ayuda"), label: "Ayuda", systemName: "questionmark.circle.fill")
+                    navButton(route: .ayuda, label: "Ayuda", systemName: "questionmark.circle.fill")
                     navButton(route: .module(.perfil), label: "Mi Perfil", systemName: "person.crop.circle.fill")
+                    navButton(route: .settings, label: "Configuración", systemName: "gearshape.fill")
                     
                     // Courses Header
                     Text("Mis cursos")
@@ -227,7 +229,7 @@ struct SidebarView: View {
                 Spacer()
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.vertical, displayMode.isSimple ? 4 : 7)
             .foregroundStyle(isActive ? EPTheme.primary : Color(.label))
             .background(isActive ? EPTheme.primary.opacity(0.1) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))

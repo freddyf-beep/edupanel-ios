@@ -5,6 +5,7 @@ struct ProfileView: View {
     @State private var selectedTab: ProfileTabKey = .resumen
     @State private var showBannerPicker = false
     @Namespace private var profileTabNamespace
+    @Environment(\.displayMode) private var displayMode
 
     let user: AuthenticatedUser
 
@@ -52,7 +53,7 @@ struct ProfileView: View {
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
-                .frame(height: 132)
+                .frame(height: displayMode.isSimple ? 88 : 132)
 
                 Button {
                     showBannerPicker = true
@@ -104,13 +105,8 @@ struct ProfileView: View {
                         .foregroundStyle(snapshot.setupProgress == 100 ? .green : EPTheme.primary)
                 }
 
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                    ProfileKPI(label: "Cursos", value: "\(snapshot.courses.count)", icon: "folder.fill", color: EPTheme.primary)
-                    ProfileKPI(label: "Bloques clase", value: "\(snapshot.academicClasses.count)", icon: "clock.fill", color: .blue, hint: "\(formatMinutes(snapshot.totalAcademicMinutes)) semanales")
-                    ProfileKPI(label: "Estudiantes", value: "\(snapshot.totalStudents)", icon: "person.2.fill", color: .green)
-                    ProfileKPI(label: "PIE", value: "\(snapshot.totalPIEStudents)", icon: "number", color: .orange, hint: snapshot.totalStudents > 0 ? "\(Int(round(Double(snapshot.totalPIEStudents) / Double(snapshot.totalStudents) * 100)))% del total" : nil)
-                    ProfileKPI(label: "Bloques libres", value: "\(snapshot.nonTeachingBlocks.count)", icon: "cup.and.saucer.fill", color: .purple, hint: "\(formatMinutes(snapshot.totalFreeMinutes)) sem.")
-                    ProfileKPI(label: "Tu perfil", value: "\(snapshot.setupProgress)%", icon: "sparkles", color: snapshot.setupProgress == 100 ? .green : .teal, hint: snapshot.setupProgress == 100 ? "Perfil completo" : "completado")
+                if !displayMode.isSimple {
+                    kpiGrid(snapshot)
                 }
             }
             .padding(18)
@@ -122,6 +118,17 @@ struct ProfileView: View {
                 .stroke(Color(.separator).opacity(0.1), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.05), radius: 12, y: 4)
+    }
+
+    private func kpiGrid(_ snapshot: DashboardSnapshot) -> some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+            ProfileKPI(label: "Cursos", value: "\(snapshot.courses.count)", icon: "folder.fill", color: EPTheme.primary)
+                    ProfileKPI(label: "Bloques clase", value: "\(snapshot.academicClasses.count)", icon: "clock.fill", color: .blue, hint: "\(formatMinutes(snapshot.totalAcademicMinutes)) semanales")
+                    ProfileKPI(label: "Estudiantes", value: "\(snapshot.totalStudents)", icon: "person.2.fill", color: .green)
+                    ProfileKPI(label: "PIE", value: "\(snapshot.totalPIEStudents)", icon: "number", color: .orange, hint: snapshot.totalStudents > 0 ? "\(Int(round(Double(snapshot.totalPIEStudents) / Double(snapshot.totalStudents) * 100)))% del total" : nil)
+                    ProfileKPI(label: "Bloques libres", value: "\(snapshot.nonTeachingBlocks.count)", icon: "cup.and.saucer.fill", color: .purple, hint: "\(formatMinutes(snapshot.totalFreeMinutes)) sem.")
+                    ProfileKPI(label: "Tu perfil", value: "\(snapshot.setupProgress)%", icon: "sparkles", color: snapshot.setupProgress == 100 ? .green : .teal, hint: snapshot.setupProgress == 100 ? "Perfil completo" : "completado")
+        }
     }
 
     private var profileTabs: some View {

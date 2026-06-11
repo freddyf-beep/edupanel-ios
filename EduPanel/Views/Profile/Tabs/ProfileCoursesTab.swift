@@ -49,6 +49,8 @@ private struct CursoConfigCard: View {
     let viewModel: ProfileViewModel
     let course: ProfileCourseSummary
 
+    @Environment(\.displayMode) private var displayMode
+
     @State private var renombrando = false
     @State private var nuevoNombre = ""
     @State private var mostrandoEstudiantes = false
@@ -435,6 +437,22 @@ private struct CursoConfigCard: View {
                 .buttonStyle(.plain)
             }
 
+            if !displayMode.isSimple {
+                bloquesRows(bloques)
+            }
+        }
+        .padding(11)
+        .background(
+            sinAsignatura ? Color.orange.opacity(0.08) : Color(.tertiarySystemGroupedBackground),
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(sinAsignatura ? Color.orange.opacity(0.3) : Color(.separator).opacity(0.1), lineWidth: 1)
+        )
+    }
+
+    private func bloquesRows(_ bloques: [ClaseHorario]) -> some View {
             VStack(spacing: 6) {
                 ForEach(bloques) { bloque in
                     HStack(spacing: 8) {
@@ -473,16 +491,6 @@ private struct CursoConfigCard: View {
                     .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                 }
             }
-        }
-        .padding(11)
-        .background(
-            sinAsignatura ? Color.orange.opacity(0.08) : Color(.tertiarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(sinAsignatura ? Color.orange.opacity(0.3) : Color(.separator).opacity(0.1), lineWidth: 1)
-        )
     }
 
     // MARK: - Estudiantes

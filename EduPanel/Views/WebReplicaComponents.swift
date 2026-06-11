@@ -71,14 +71,16 @@ struct EPSectionHeader: View {
     var subtitle: String?
     var icon: String?
 
+    @Environment(\.displayMode) private var displayMode
+
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: displayMode.isSimple ? 10 : 12, weight: .bold))
                     .foregroundStyle(EPTheme.primary)
-                    .frame(width: 28, height: 28)
-                    .background(EPTheme.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .frame(width: displayMode.isSimple ? 24 : 28, height: displayMode.isSimple ? 24 : 28)
+                    .background(EPTheme.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
 
             VStack(alignment: .leading, spacing: 3) {
@@ -86,7 +88,7 @@ struct EPSectionHeader: View {
                     .font(.system(size: 10, weight: .black))
                     .tracking(0.8)
                     .foregroundStyle(.secondary)
-                if let subtitle, !subtitle.isEmpty {
+                if let subtitle, !subtitle.isEmpty, !displayMode.isSimple {
                     Text(subtitle)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.secondary)
@@ -106,15 +108,17 @@ struct EPKPIBox: View {
     var icon: String? = nil
     var tint: Color = EPTheme.primary
 
+    @Environment(\.displayMode) private var displayMode
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: displayMode.isSimple ? 6 : 10) {
             HStack(spacing: 8) {
                 if let icon {
                     Image(systemName: icon)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: displayMode.isSimple ? 10 : 12, weight: .bold))
                         .foregroundStyle(tint)
-                        .frame(width: 28, height: 28)
-                        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        .frame(width: displayMode.isSimple ? 22 : 28, height: displayMode.isSimple ? 22 : 28)
+                        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 Text(title.uppercased())
                     .font(.system(size: 9, weight: .black))
@@ -124,20 +128,22 @@ struct EPKPIBox: View {
             }
 
             Text(value)
-                .font(.system(size: 26, weight: .black, design: .rounded))
+                .font(.system(size: displayMode.isSimple ? 21 : 26, weight: .black, design: .rounded))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .contentTransition(.numericText())
 
-            Text(subtitle)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            if !displayMode.isSimple {
+                Text(subtitle)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .frame(maxWidth: .infinity, minHeight: 108, alignment: .topLeading)
-        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: displayMode.isSimple ? 66 : 108, alignment: .topLeading)
+        .padding(displayMode.isSimple ? 11 : 14)
         .background(EPTheme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)

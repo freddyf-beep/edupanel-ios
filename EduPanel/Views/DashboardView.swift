@@ -3,9 +3,6 @@ import SwiftUI
 
 private enum DashboardTabKey: String, CaseIterable, Identifiable {
     case hoy
-    case semana
-    case mes
-    case insights
     case pendientes
 
     var id: String { rawValue }
@@ -13,19 +10,13 @@ private enum DashboardTabKey: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .hoy: return "Hoy"
-        case .semana: return "Semana"
-        case .mes: return "Mes"
-        case .insights: return "Insights"
         case .pendientes: return "Pendientes"
         }
     }
 
     var systemImage: String {
         switch self {
-        case .hoy: return "clock.fill"
-        case .semana: return "calendar"
-        case .mes: return "calendar.badge.clock"
-        case .insights: return "chart.bar.fill"
+        case .hoy: return "sun.max.fill"
         case .pendientes: return "bell.fill"
         }
     }
@@ -34,11 +25,11 @@ private enum DashboardTabKey: String, CaseIterable, Identifiable {
 struct DashboardView: View {
     @State private var viewModel: DashboardViewModel
     @State private var selectedTab: DashboardTabKey = .hoy
-    @State private var selectedDay = DateHelpers.weekdayName(for: Date()) ?? "Lunes"
-    @State private var displayedMonthOffset = 0
     @State private var newReminder = ""
     @State private var reminderColor: ReminderColor = .amarillo
     @AppStorage("edupanel_dashboard_reminders") private var remindersData = "[]"
+
+    @Environment(\.displayMode) private var displayMode
 
     let user: AuthenticatedUser
     let onOpenProfile: () -> Void
@@ -66,8 +57,28 @@ struct DashboardView: View {
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Inicio")
+        .toolbar {
+            if displayMode.isSimple {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    NavigationLink(value: AppRoute.calificaciones) {
+                        toolbarIcon("checkmark.clipboard")
+                    }
+                    NavigationLink(value: AppRoute.cronograma) {
+                        toolbarIcon("calendar.badge.clock")
+                    }
+                }
+            }
+        }
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
+    }
+
+    private func toolbarIcon(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(EPTheme.primary)
+            .frame(width: 32, height: 32)
+            .background(EPTheme.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private func dashboardContent(_ snapshot: DashboardSnapshot) -> some View {
@@ -80,75 +91,27 @@ struct DashboardView: View {
 
             if snapshot.horario.isEmpty {
                 noScheduleCard
+            } else if displayMode.isSimple {
+                todayTimeline(snapshot)
             } else {
                 dashboardTabs(snapshot)
-                dashboardTabContent(snapshot)
-            }
-        }
-    }
 
-    private func dashboardTabs(_ snapshot: DashboardSnapshot) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(DashboardTabKey.allCases) { tab in
-                    Button {
-                        withAnimation(EPTheme.spring) {
-                            selectedTab = tab
-                        }
-                    } label: {
-                        HStack(spacing: 7) {
-                            Image(systemName: tab.systemImage)
-                                .font(.system(size: 11, weight: .black))
-                            Text(tab.title)
-                                .font(.system(size: 12, weight: .black))
-                            if tab == .pendientes && !snapshot.pendingClasses.isEmpty {
-                                Text("\(snapshot.pendingClasses.count)")
-                                    .font(.system(size: 9, weight: .black))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(.red, in: Capsule())
-                            }
-                        }
-                        .padding(.horizontal, 13)
-                        .padding(.vertical, 10)
-                        .foregroundStyle(selectedTab == tab ? .white : .secondary)
-                        .background(selectedTab == tab ? AnyShapeStyle(EPTheme.primary) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)), in: Capsule())
+                switch selectedTab {
+                case .hoy:
+                    todayTimeline(snapshot)
+                    quickActions
+                    if !decodedReminders.isEmpty {
+                        remindersReadCard
                     }
-                    .buttonStyle(.plain)
+                case .pendientes:
+                    pendingPanel(snapshot)
+                    remindersEditorCard
                 }
             }
         }
-        .sensoryFeedback(.selection, trigger: selectedTab)
     }
 
-    @ViewBuilder
-    private func dashboardTabContent(_ snapshot: DashboardSnapshot) -> some View {
-        switch selectedTab {
-        case .hoy:
-            VStack(alignment: .leading, spacing: 18) {
-                quickActions(snapshot)
-                courseStats(snapshot)
-                todayTimeline(snapshot)
-                remindersPanel
-                InsightsPanel(snapshot: snapshot, courses: courseSummaries(snapshot))
-            }
-        case .semana:
-            weekOverview(snapshot)
-        case .mes:
-            monthOverview(snapshot)
-        case .insights:
-            VStack(alignment: .leading, spacing: 18) {
-                InsightsPanel(snapshot: snapshot, courses: courseSummaries(snapshot))
-                courseStats(snapshot)
-            }
-        case .pendientes:
-            VStack(alignment: .leading, spacing: 18) {
-                pendingPanel(snapshot)
-                remindersPanel
-            }
-        }
-    }
+    // MARK: - Hero
 
     private func heroCard(_ snapshot: DashboardSnapshot) -> some View {
         let greeting = greetingInfo
@@ -156,173 +119,165 @@ struct DashboardView: View {
         let isCurrent = currentOrNext.map { isClassCurrent($0, now: Date()) } ?? false
         let progress = currentOrNext.map { blockProgress($0, now: Date()) } ?? 0
 
-        return VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top, spacing: 14) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("\(greeting.greet), \(user.firstName)", systemImage: greeting.icon)
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.white.opacity(0.92))
-
-                    Text(greeting.mood)
-                        .font(.system(size: 28, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.76)
-
-                    Text(formattedHeroDate)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.82))
-                }
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 10) {
+                Label("\(greeting.greet), \(user.firstName)", systemImage: greeting.icon)
+                    .font(.system(size: 16, weight: .black))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
 
                 Spacer(minLength: 0)
 
-                Image("Logo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 54, height: 54)
-                    .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-                    .shadow(color: .black.opacity(0.16), radius: 12, y: 6)
+                Text(formattedHeroDate)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.8))
             }
 
-            VStack(alignment: .leading, spacing: 10) {
-                Label(isCurrent ? "Bloque actual" : "Proximo bloque", systemImage: isCurrent ? "flame.fill" : "clock.fill")
-                    .font(.caption.weight(.black))
-                    .textCase(.uppercase)
-                    .foregroundStyle(.white.opacity(0.9))
-
+            VStack(alignment: .leading, spacing: 8) {
                 if let item = currentOrNext {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(item.resumen.isEmpty ? item.tipo.label : item.resumen)
-                            .font(.title3.weight(.black))
+                    HStack(spacing: 10) {
+                        Image(systemName: isCurrent ? "flame.fill" : "clock.fill")
+                            .font(.system(size: 13, weight: .black))
                             .foregroundStyle(.white)
-                            .lineLimit(2)
+                            .frame(width: 32, height: 32)
+                            .background(.white.opacity(0.2), in: Circle())
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(isCurrent ? "BLOQUE ACTUAL" : "PRÓXIMO BLOQUE")
+                                .font(.system(size: 8.5, weight: .black))
+                                .tracking(0.8)
+                                .foregroundStyle(.white.opacity(0.75))
+                            Text(item.resumen.isEmpty ? item.tipo.label : item.resumen)
+                                .font(.system(size: 15, weight: .black))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                        }
+
+                        Spacer(minLength: 6)
+
                         Text(item.timeRange)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.84))
+                            .font(.system(size: 11, weight: .black))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(.white.opacity(0.18), in: Capsule())
                     }
 
                     if isCurrent {
                         ProgressView(value: progress)
                             .tint(.white)
                             .background(.white.opacity(0.22), in: Capsule())
-                        Text(item.tipo.isFreeBlock ? "Bloque no lectivo" : "\(Int(progress * 100))% completado")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(.white.opacity(0.78))
-                    }
-
-                    if item.isAcademic {
-                        NavigationLink(value: AppRoute.classDetail(id: item.id, title: routeTitle(for: item))) {
-                            Label("Abrir", systemImage: "arrow.right")
-                                .font(.caption.weight(.black))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 7)
-                                .foregroundStyle(.white)
-                                .background(.white.opacity(0.2), in: Capsule())
-                        }
-                        .buttonStyle(.plain)
                     }
                 } else {
-                    Text(snapshot.academicTodayClasses.isEmpty ? "Hoy no tienes clases programadas." : "Jornada finalizada - todas las clases registradas.")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.88))
+                    Label(
+                        snapshot.academicTodayClasses.isEmpty ? "Hoy no tienes clases programadas." : "Jornada finalizada — todas las clases registradas.",
+                        systemImage: snapshot.academicTodayClasses.isEmpty ? "moon.zzz.fill" : "checkmark.seal.fill"
+                    )
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
                 }
             }
-            .padding(14)
-            .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .padding(12)
+            .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
 
-            LazyVGrid(columns: dashboardGrid, spacing: 10) {
-                HeroKPI(label: "Clases hoy", value: "\(snapshot.completedAcademicCount)/\(snapshot.totalAcademicCount)", subtitle: "\(Int(snapshot.progress * 100))% completadas")
-                HeroKPI(label: "Pendientes", value: "\(snapshot.pendingClasses.count)", subtitle: snapshot.pendingClasses.isEmpty ? "todo en orden" : "abrir lista")
-                HeroKPI(label: "Hora actual", value: currentTimeText, subtitle: DateHelpers.weekdayName(for: Date()) ?? "Fin de semana")
-                HeroKPI(label: "Asignatura", value: activeSubject(from: snapshot), subtitle: "activa")
+            if !displayMode.isSimple {
+                HStack(spacing: 10) {
+                    HeroKPI(
+                        label: "Clases hoy",
+                        value: "\(snapshot.completedAcademicCount)/\(snapshot.totalAcademicCount)",
+                        subtitle: "\(Int(snapshot.progress * 100))% completadas"
+                    )
+                    HeroKPI(
+                        label: "Pendientes",
+                        value: "\(snapshot.pendingClasses.count)",
+                        subtitle: snapshot.pendingClasses.isEmpty ? "todo en orden" : "por registrar"
+                    )
+                }
             }
         }
-        .padding(18)
+        .padding(16)
         .background(
-            ZStack {
-                LinearGradient(colors: greeting.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
-                Circle()
-                    .fill(.black.opacity(0.12))
-                    .frame(width: 190, height: 190)
-                    .offset(x: -130, y: 130)
-                    .blur(radius: 10)
-            }
+            LinearGradient(colors: greeting.colors, startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .shadow(color: .black.opacity(0.1), radius: 14, y: 7)
     }
 
-    private func quickActions(_ snapshot: DashboardSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Label("Acciones rapidas", systemImage: "bolt.fill")
-                    .font(.subheadline.weight(.black))
-                Spacer()
-                Text("\(courseSummaries(snapshot).count) cursos - \(totalStudents(snapshot)) estudiantes")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
+    // MARK: - Tabs internos
 
-            LazyVGrid(columns: dashboardGrid, spacing: 10) {
-                GradientAction(title: "Calificar", icon: "checkmark.clipboard.fill", colors: [.green, .teal], route: .calificaciones)
-                GradientAction(title: "Ver cronograma", icon: "calendar.badge.clock", colors: [.cyan, .blue], route: .cronograma)
-                GradientAction(title: "Editar clase", icon: "lightbulb.fill", colors: [.purple, .pink], route: .actividades)
-                GradientAction(title: "Perfil 360", icon: "person.crop.circle.fill", colors: [.indigo, .purple], route: .perfil360)
-            }
-        }
-        .webCard()
-    }
-
-    private func courseStats(_ snapshot: DashboardSnapshot) -> some View {
-        let courses = courseSummaries(snapshot)
-
-        return VStack(alignment: .leading, spacing: 12) {
-            Label("Tus cursos", systemImage: "graduationcap.fill")
-                .font(.subheadline.weight(.black))
-
-            if courses.isEmpty {
-                Text("Aun no hay cursos con clases regulares en tu horario.")
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(14)
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            } else {
-                LazyVGrid(columns: dashboardGrid, spacing: 10) {
-                    ForEach(courses) { course in
-                        CourseMiniCard(course: course)
+    private func dashboardTabs(_ snapshot: DashboardSnapshot) -> some View {
+        HStack(spacing: 6) {
+            ForEach(DashboardTabKey.allCases) { tab in
+                let isSelected = selectedTab == tab
+                Button {
+                    withAnimation(EPTheme.spring) {
+                        selectedTab = tab
                     }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: tab.systemImage)
+                            .font(.system(size: 11, weight: .black))
+                        Text(tab.title)
+                            .font(.system(size: 12, weight: .black))
+                        if tab == .pendientes && !snapshot.pendingClasses.isEmpty {
+                            Text("\(snapshot.pendingClasses.count)")
+                                .font(.system(size: 9, weight: .black))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(isSelected ? .white.opacity(0.3) : .red, in: Capsule())
+                        }
+                    }
+                    .foregroundStyle(isSelected ? .white : .secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(
+                        isSelected ? AnyShapeStyle(EPTheme.primary) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)),
+                        in: Capsule()
+                    )
                 }
+                .buttonStyle(.plain)
             }
         }
+        .sensoryFeedback(.selection, trigger: selectedTab)
     }
+
+    // MARK: - Timeline de hoy
 
     private func todayTimeline(_ snapshot: DashboardSnapshot) -> some View {
-        let classes = classes(for: selectedDay, in: snapshot)
+        let today = DateHelpers.weekdayName(for: Date())
+        let classes = today.map { dia in
+            snapshot.horario.filter { $0.dia == dia }.sorted { $0.horaInicio < $1.horaInicio }
+        } ?? []
 
-        return VStack(alignment: .leading, spacing: 14) {
-            daySelector
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Tu día", systemImage: "sun.max.fill")
+                    .font(.subheadline.weight(.black))
+                Spacer()
+                Text(today ?? "Fin de semana")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
 
             if classes.isEmpty {
-                VStack(spacing: 10) {
+                VStack(spacing: 8) {
                     Image(systemName: "cup.and.saucer.fill")
                         .font(.title2)
                         .foregroundStyle(.secondary)
-                    Text("Sin clases programadas el \(selectedDay.lowercased()).")
-                        .font(.subheadline.weight(.bold))
-                    Text("Configura tu horario en la web para que aparezca aqui.")
-                        .font(.caption.weight(.medium))
+                    Text(today == nil ? "Es fin de semana. Descansa." : "Sin bloques programados para hoy.")
+                        .font(.footnote.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(28)
-                .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .padding(.vertical, 22)
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(classes) { item in
                         TimelineClassRow(
                             item: item,
-                            isToday: selectedDay == DateHelpers.weekdayName(for: Date()),
+                            isToday: true,
                             isCompleted: snapshot.classState[item.id] == true,
                             studentCount: snapshot.studentCounts[item.resumen] ?? 0,
                             route: AppRoute.classDetail(id: item.id, title: routeTitle(for: item))
@@ -333,145 +288,32 @@ struct DashboardView: View {
                 }
             }
         }
+        .webCard()
     }
 
-    private func weekOverview(_ snapshot: DashboardSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Label("Resumen semanal", systemImage: "calendar")
-                    .font(.subheadline.weight(.black))
-                Spacer()
-                Text("\(snapshot.academicClasses.count) bloques")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
-            }
+    // MARK: - Acciones rápidas
 
-            LazyVGrid(columns: dashboardGrid, spacing: 10) {
-                DashboardMetricTile(label: "Horas lectivas", value: formatDuration(snapshot.totalAcademicMinutes), icon: "clock.fill", color: .blue)
-                DashboardMetricTile(label: "Bloques libres", value: "\(snapshot.nonTeachingBlocks.count)", icon: "cup.and.saucer.fill", color: .purple)
-                DashboardMetricTile(label: "Cursos activos", value: "\(snapshot.courses.count)", icon: "folder.fill", color: EPTheme.primary)
-                DashboardMetricTile(label: "Estudiantes", value: "\(snapshot.totalStudents)", icon: "person.2.fill", color: .green)
-            }
+    private var quickActions: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Acciones rápidas", systemImage: "bolt.fill")
+                .font(.subheadline.weight(.black))
 
-            VStack(spacing: 10) {
-                ForEach(DateHelpers.workdays, id: \.self) { day in
-                    DashboardWeekDayRow(day: day, items: classes(for: day, in: snapshot))
-                }
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                QuickAction(title: "Calificar", icon: "checkmark.clipboard.fill", colors: [.green, .teal], kind: .route(.calificaciones))
+                QuickAction(title: "Cronograma", icon: "calendar.badge.clock", colors: [.cyan, .blue], kind: .route(.cronograma))
+                QuickAction(title: "Planificar", icon: "lightbulb.fill", colors: [.purple, EPTheme.primary], kind: .route(.actividades))
+                QuickAction(title: "Mi Perfil", icon: "person.crop.circle.fill", colors: [.indigo, .purple], kind: .action(onOpenProfile))
             }
         }
         .webCard()
     }
 
-    private func monthOverview(_ snapshot: DashboardSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Label("Vista mensual", systemImage: "calendar.badge.clock")
-                    .font(.subheadline.weight(.black))
-                Spacer()
-                HStack(spacing: 6) {
-                    Button {
-                        displayedMonthOffset -= 1
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.caption.weight(.black))
-                            .frame(width: 30, height: 30)
-                    }
-                    .buttonStyle(.plain)
-
-                    Text(currentMonthTitle)
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .frame(minWidth: 104)
-
-                    Button {
-                        displayedMonthOffset += 1
-                    } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.black))
-                            .frame(width: 30, height: 30)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            LazyVGrid(columns: dashboardGrid, spacing: 10) {
-                DashboardMetricTile(label: "Proyeccion clases", value: "\(snapshot.academicClasses.count * 4)", icon: "chart.line.uptrend.xyaxis", color: EPTheme.primary)
-                DashboardMetricTile(label: "Horas aprox.", value: formatDuration(snapshot.totalAcademicMinutes * 4), icon: "clock.badge.checkmark.fill", color: .green)
-                DashboardMetricTile(label: "Pendientes hoy", value: "\(snapshot.pendingClasses.count)", icon: "bell.fill", color: .orange)
-                DashboardMetricTile(label: "Avance de hoy", value: "\(Int(snapshot.progress * 100))%", icon: "target", color: .blue)
-            }
-
-            HStack {
-                ForEach(Array(["D", "L", "M", "M", "J", "V", "S"].enumerated()), id: \.offset) { item in
-                    Text(item.element)
-                        .font(.caption2.weight(.black))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                }
-            }
-
-            LazyVGrid(columns: monthGrid, spacing: 7) {
-                ForEach(Array(currentMonthGrid().enumerated()), id: \.offset) { item in
-                    let date = item.element
-                    let isToday = date.map { Calendar.current.isDate($0, inSameDayAs: Date()) } ?? false
-                    DashboardMonthDayCell(
-                        day: dayNumber(for: date),
-                        hasClasses: hasScheduledClasses(on: date, snapshot: snapshot),
-                        isToday: isToday,
-                        hasPending: isToday && !snapshot.pendingClasses.isEmpty
-                    )
-                }
-            }
-
-            if displayedMonthOffset != 0 {
-                Button {
-                    displayedMonthOffset = 0
-                } label: {
-                    Label("Volver al mes actual", systemImage: "calendar")
-                        .font(.caption.weight(.black))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .tint(EPTheme.primary)
-            }
-
-            Label("El mes usa tu horario semanal como proyeccion hasta que conectemos calendario real.", systemImage: "info.circle.fill")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-        }
-        .webCard()
-    }
-
-    private var daySelector: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(DateHelpers.workdays, id: \.self) { day in
-                    let isSelected = selectedDay == day
-                    Button {
-                        withAnimation(EPTheme.spring) {
-                            selectedDay = day
-                        }
-                    } label: {
-                        Text(String(day.prefix(3)))
-                            .font(.caption.weight(.black))
-                            .frame(minWidth: 48)
-                            .padding(.vertical, 9)
-                            .background(isSelected ? AnyShapeStyle(EPTheme.primary) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                            .foregroundStyle(isSelected ? Color.white : Color.primary)
-                            .shadow(color: isSelected ? EPTheme.primary.opacity(0.3) : .clear, radius: 6, y: 3)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
+    // MARK: - Pendientes
 
     private func pendingPanel(_ snapshot: DashboardSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Pendientes", systemImage: "bell.fill")
+                Label("Pendientes de hoy", systemImage: "bell.fill")
                     .font(.subheadline.weight(.black))
                 Spacer()
                 Text("\(snapshot.pendingClasses.count)")
@@ -519,14 +361,33 @@ struct DashboardView: View {
         .webCard()
     }
 
-    private func remindersAndInsights(_ snapshot: DashboardSnapshot) -> some View {
-        VStack(spacing: 18) {
-            remindersPanel
-            InsightsPanel(snapshot: snapshot, courses: courseSummaries(snapshot))
+    // MARK: - Recordatorios
+
+    private var remindersReadCard: some View {
+        let reminders = decodedReminders
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Recordatorios", systemImage: "note.text")
+                    .font(.subheadline.weight(.black))
+                Spacer()
+                Text("\(reminders.count)")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(spacing: 8) {
+                ForEach(reminders) { reminder in
+                    ReminderRow(reminder: reminder) {
+                        removeReminder(reminder.id)
+                    }
+                }
+            }
         }
+        .webCard()
     }
 
-    private var remindersPanel: some View {
+    private var remindersEditorCard: some View {
         let reminders = decodedReminders
 
         return VStack(alignment: .leading, spacing: 12) {
@@ -575,7 +436,7 @@ struct DashboardView: View {
             }
 
             if reminders.isEmpty {
-                Text("Sin recordatorios. Agregalos para tenerlos a mano durante el dia.")
+                Text("Sin recordatorios. Agrégalos para tenerlos a mano durante el día.")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
@@ -593,6 +454,8 @@ struct DashboardView: View {
         .webCard()
     }
 
+    // MARK: - Estados
+
     private func errorBanner(_ message: String) -> some View {
         Label(message, systemImage: "exclamationmark.triangle.fill")
             .font(.footnote.weight(.semibold))
@@ -609,7 +472,7 @@ struct DashboardView: View {
                 .foregroundStyle(EPTheme.primary)
             Text("Configura tu horario")
                 .font(.title3.bold())
-            Text("Cuando agregues tus bloques en la web, EduPanel los mostrara aqui para seguir tu jornada.")
+            Text("Cuando agregues tus bloques en Mi Perfil, EduPanel los mostrará aquí para seguir tu jornada.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             Button {
@@ -649,51 +512,24 @@ struct DashboardView: View {
         .padding(32)
     }
 
+    // MARK: - Helpers
+
     private var greetingInfo: GreetingInfo {
         let hour = Calendar.current.component(.hour, from: Date())
         if hour >= 5 && hour < 12 {
-            return GreetingInfo(greet: "Buenos dias", mood: "Empieza la jornada con energia", icon: "sunrise.fill", colors: [.orange, .pink])
+            return GreetingInfo(greet: "Buenos días", icon: "sunrise.fill", colors: [.orange, .pink])
         }
-        if hour >= 12 && hour < 14 {
-            return GreetingInfo(greet: "Buenas tardes", mood: "Manten el ritmo del aula", icon: "sun.max.fill", colors: [.orange, .yellow])
+        if hour >= 12 && hour < 19 {
+            return GreetingInfo(greet: "Buenas tardes", icon: "sun.max.fill", colors: [.purple, .pink])
         }
-        if hour >= 14 && hour < 19 {
-            return GreetingInfo(greet: "Buenas tardes", mood: "Ultima recta del dia", icon: "cup.and.saucer.fill", colors: [.purple, .pink])
-        }
-        return GreetingInfo(greet: "Buenas noches", mood: "Tiempo de planificar manana", icon: "moon.fill", colors: [.purple, .indigo, .blue])
+        return GreetingInfo(greet: "Buenas noches", icon: "moon.fill", colors: [.purple, .indigo, .blue])
     }
 
     private var formattedHeroDate: String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "es_CL")
-        formatter.dateFormat = "EEEE d 'de' MMMM - HH:mm"
-        return formatter.string(from: Date()).lowercased()
-    }
-
-    private var currentTimeText: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "es_CL")
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: Date())
-    }
-
-    private var currentMonthTitle: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "es_CL")
-        formatter.dateFormat = "MMMM yyyy"
-        return formatter.string(from: displayedMonthDate).capitalized
-    }
-
-    private var displayedMonthDate: Date {
-        Calendar.current.date(byAdding: .month, value: displayedMonthOffset, to: Date()) ?? Date()
-    }
-
-    private var dashboardGrid: [GridItem] {
-        [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
-    }
-
-    private var monthGrid: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 7), count: 7)
+        formatter.dateFormat = "EEEE d 'de' MMMM"
+        return formatter.string(from: Date()).capitalized
     }
 
     private var decodedReminders: [ReminderNote] {
@@ -725,80 +561,9 @@ struct DashboardView: View {
         storeReminders(decodedReminders.filter { $0.id != id })
     }
 
-    private func activeSubject(from snapshot: DashboardSnapshot) -> String {
-        if let asignatura = snapshot.academicTodayClasses.compactMap(\.asignatura).first, !asignatura.isEmpty {
-            return String(asignatura.prefix(8))
-        }
-        if !snapshot.profile.especialidad.isEmpty {
-            return String(snapshot.profile.especialidad.prefix(8))
-        }
-        return String(snapshot.profile.tipoProfesor.prefix(8))
-    }
-
     private func routeTitle(for item: ClaseHorario) -> String {
         let title = item.resumen.trimmingCharacters(in: .whitespacesAndNewlines)
         return title.isEmpty ? item.tipo.label : title
-    }
-
-    private func formatDuration(_ minutes: Int) -> String {
-        guard minutes > 0 else { return "0 h" }
-        let hours = Double(minutes) / 60
-        if minutes % 60 == 0 {
-            return "\(minutes / 60) h"
-        }
-        return String(format: "%.1f h", hours)
-    }
-
-    private func totalStudents(_ snapshot: DashboardSnapshot) -> Int {
-        snapshot.studentCounts.values.reduce(0, +)
-    }
-
-    private func classes(for day: String, in snapshot: DashboardSnapshot) -> [ClaseHorario] {
-        snapshot.horario
-            .filter { $0.dia == day }
-            .sorted { $0.horaInicio < $1.horaInicio }
-    }
-
-    private func courseSummaries(_ snapshot: DashboardSnapshot) -> [CourseSummary] {
-        let academic = snapshot.horario.filter(\.isAcademic)
-        let names = Array(Set(academic.map(\.resumen))).sorted()
-        return names.map { name in
-            let blocks = academic.filter { $0.resumen == name }
-            let color = blocks.first?.colorHex ?? "#F43F5E"
-            let todayBlocks = snapshot.academicTodayClasses.filter { $0.resumen == name }.count
-            return CourseSummary(course: name, colorHex: color, students: snapshot.studentCounts[name] ?? 0, todayBlocks: todayBlocks)
-        }
-    }
-
-    private func currentMonthGrid() -> [Date?] {
-        let calendar = Calendar.current
-        var components = calendar.dateComponents([.year, .month], from: displayedMonthDate)
-        components.day = 1
-        guard let firstDay = calendar.date(from: components),
-              let dayRange = calendar.range(of: .day, in: .month, for: firstDay) else {
-            return []
-        }
-
-        let leadingSpaces = calendar.component(.weekday, from: firstDay) - 1
-        var result: [Date?] = Array(repeating: nil, count: leadingSpaces)
-        for day in dayRange {
-            components.day = day
-            result.append(calendar.date(from: components))
-        }
-        while result.count % 7 != 0 {
-            result.append(nil)
-        }
-        return result
-    }
-
-    private func dayNumber(for date: Date?) -> String {
-        guard let date else { return "" }
-        return "\(Calendar.current.component(.day, from: date))"
-    }
-
-    private func hasScheduledClasses(on date: Date?, snapshot: DashboardSnapshot) -> Bool {
-        guard let date, let weekday = DateHelpers.weekdayName(for: date) else { return false }
-        return classes(for: weekday, in: snapshot).contains { $0.isAcademic }
     }
 
     private func isClassCurrent(_ item: ClaseHorario, now: Date) -> Bool {
@@ -817,19 +582,12 @@ struct DashboardView: View {
     }
 }
 
+// MARK: - Subvistas
+
 private struct GreetingInfo {
     let greet: String
-    let mood: String
     let icon: String
     let colors: [Color]
-}
-
-private struct CourseSummary: Identifiable {
-    var id: String { course }
-    let course: String
-    let colorHex: String
-    let students: Int
-    let todayBlocks: Int
 }
 
 private struct HeroKPI: View {
@@ -840,10 +598,11 @@ private struct HeroKPI: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label.uppercased())
-                .font(.system(size: 10, weight: .black))
+                .font(.system(size: 9, weight: .black))
+                .tracking(0.6)
                 .foregroundStyle(.white.opacity(0.78))
             Text(value)
-                .font(.title3.weight(.black))
+                .font(.system(size: 19, weight: .black, design: .rounded))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
@@ -853,193 +612,60 @@ private struct HeroKPI: View {
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(11)
+        .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
-private struct GradientAction: View {
+private struct QuickAction: View {
+    enum Kind {
+        case route(AppRoute)
+        case action(() -> Void)
+    }
+
     let title: String
     let icon: String
     let colors: [Color]
-    let route: AppRoute
+    let kind: Kind
 
     var body: some View {
-        NavigationLink(value: route) {
-            VStack(alignment: .leading, spacing: 10) {
-                Image(systemName: icon)
-                    .font(.headline.weight(.bold))
-                Text(title)
-                    .font(.subheadline.weight(.black))
-                    .lineLimit(2)
-                Spacer(minLength: 0)
-                Image(systemName: "arrow.right")
-                    .font(.caption.weight(.black))
-                    .opacity(0.8)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+        switch kind {
+        case .route(let route):
+            NavigationLink(value: route) {
+                label
             }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
-            .padding(14)
-            .background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct CourseMiniCard: View {
-    let course: CourseSummary
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Text(String(course.course.prefix(3)).uppercased())
-                .font(.caption.weight(.black))
-                .foregroundStyle(.white)
-                .frame(width: 42, height: 42)
-                .background(Color(hex: course.colorHex), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(course.course)
-                    .font(.footnote.weight(.black))
-                    .lineLimit(1)
-                HStack(spacing: 6) {
-                    Label("\(course.students)", systemImage: "person.2.fill")
-                    if course.todayBlocks > 0 {
-                        Text("hoy \(course.todayBlocks)b")
-                            .foregroundStyle(EPTheme.primary)
-                    }
-                }
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
+            .buttonStyle(.plain)
+        case .action(let action):
+            Button(action: action) {
+                label
             }
-
-            Spacer(minLength: 0)
+            .buttonStyle(.plain)
         }
-        .padding(13)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color(.separator).opacity(0.1), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
     }
-}
 
-private struct DashboardMetricTile: View {
-    let label: String
-    let value: String
-    let icon: String
-    let color: Color
-
-    var body: some View {
-        HStack(spacing: 10) {
+    private var label: some View {
+        VStack(alignment: .leading, spacing: 8) {
             Image(systemName: icon)
-                .font(.caption.weight(.black))
-                .foregroundStyle(color)
-                .frame(width: 32, height: 32)
-                .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label.uppercased())
-                    .font(.system(size: 9, weight: .black))
-                    .foregroundStyle(.secondary)
-                Text(value)
-                    .font(.subheadline.weight(.black))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-}
-
-private struct DashboardWeekDayRow: View {
-    let day: String
-    let items: [ClaseHorario]
-
-    private var academicItems: [ClaseHorario] {
-        items.filter(\.isAcademic)
-    }
-
-    private var freeItems: [ClaseHorario] {
-        items.filter { $0.tipo.isFreeBlock }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+                .font(.system(size: 17, weight: .bold))
+            Text(title)
+                .font(.system(size: 13, weight: .black))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             HStack {
-                Text(day)
-                    .font(.footnote.weight(.black))
                 Spacer()
-                Text(items.isEmpty ? "Sin bloques" : "\(academicItems.count) clases - \(freeItems.count) libres")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-
-            if items.isEmpty {
-                Text("No hay bloques programados.")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-            } else {
-                VStack(spacing: 7) {
-                    ForEach(Array(items.prefix(3))) { item in
-                        HStack(spacing: 9) {
-                            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .fill(Color(hex: item.colorHex))
-                                .frame(width: 5, height: 34)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(item.resumen.isEmpty ? item.tipo.label : item.resumen)
-                                    .font(.caption.weight(.black))
-                                    .lineLimit(1)
-                                Text(item.timeRange)
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            if item.tipo.isFreeBlock {
-                                BadgeLabel(text: "Libre", color: .secondary)
-                            }
-                        }
-                    }
-
-                    if items.count > 3 {
-                        Text("+\(items.count - 3) bloques mas")
-                            .font(.caption2.weight(.black))
-                            .foregroundStyle(EPTheme.primary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 10, weight: .black))
+                    .opacity(0.8)
             }
         }
-        .padding(12)
-        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-}
-
-private struct DashboardMonthDayCell: View {
-    let day: String
-    let hasClasses: Bool
-    let isToday: Bool
-    let hasPending: Bool
-
-    var body: some View {
-        VStack(spacing: 3) {
-            Text(day.isEmpty ? "0" : day)
-                .font(.caption.weight(.black))
-                .foregroundStyle(day.isEmpty ? Color.clear : (isToday ? Color.white : Color.primary))
-                .frame(maxWidth: .infinity)
-
-            Circle()
-                .fill(hasPending ? Color.orange : (hasClasses ? EPTheme.primary : Color.clear))
-                .frame(width: 5, height: 5)
-        }
-        .frame(maxWidth: .infinity)
-        .aspectRatio(1, contentMode: .fit)
-        .padding(4)
-        .background(isToday ? AnyShapeStyle(EPTheme.primary) : AnyShapeStyle(Color(.tertiarySystemGroupedBackground)), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .opacity(day.isEmpty ? 0.35 : 1)
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(13)
+        .background(
+            LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+        )
+        .shadow(color: colors.first?.opacity(0.25) ?? .clear, radius: 7, y: 4)
     }
 }
 
@@ -1058,109 +684,64 @@ private struct TimelineClassRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(spacing: 0) {
-                Circle()
-                    .fill(circleFill)
-                    .frame(width: 18, height: 18)
-                    .overlay(Circle().stroke(Color(hex: item.colorHex), lineWidth: isCompleted || isCurrent ? 0 : 2))
-                    .padding(.top, 18)
-                Rectangle()
-                    .fill(Color(.separator).opacity(0.45))
-                    .frame(width: 2)
-                    .frame(maxHeight: .infinity)
-            }
-            .frame(width: 28)
+        HStack(spacing: 12) {
+            Text(String(item.horaInicio.prefix(5)))
+                .font(.system(size: 11, weight: .black))
+                .foregroundStyle(.white)
+                .frame(width: 48, height: 44)
+                .background(Color(hex: item.colorHex), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 12) {
-                    Text(String(item.horaInicio.prefix(2)))
-                        .font(.caption.weight(.black))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .background(Color(hex: item.colorHex), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(item.resumen.isEmpty ? item.tipo.label : item.resumen)
+                        .font(.footnote.weight(.black))
+                        .lineLimit(1)
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 6) {
-                            Text(item.resumen.isEmpty ? item.tipo.label : item.resumen)
-                                .font(.subheadline.weight(.black))
-                                .lineLimit(1)
-
-                            if item.tipo.isFreeBlock {
-                                BadgeLabel(text: "No lectivo", color: .secondary)
-                            } else if isCompleted {
-                                BadgeLabel(text: "Dictada", color: .green)
-                            } else if isCurrent {
-                                BadgeLabel(text: "EN CURSO", color: EPTheme.primary)
-                            }
-                        }
-
-                        HStack(spacing: 6) {
-                            Image(systemName: "clock")
-                            Text(item.timeRange)
-                            if item.tipo != .clase {
-                                Text("- \(item.tipo.label)")
-                            }
-                        }
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
+                    if item.tipo.isFreeBlock {
+                        BadgeLabel(text: "No lectivo", color: .secondary)
+                    } else if isCompleted {
+                        BadgeLabel(text: "Dictada", color: .green)
+                    } else if isCurrent {
+                        BadgeLabel(text: "EN CURSO", color: EPTheme.primary)
                     }
-
-                    Spacer(minLength: 0)
                 }
-                .padding(14)
 
-                HStack {
+                HStack(spacing: 6) {
+                    Text(item.timeRange)
                     if item.isAcademic {
                         Label("\(studentCount)", systemImage: "person.2.fill")
-                            .font(.caption.weight(.black))
-                            .foregroundStyle(.secondary)
-
-                        Spacer()
-
-                        NavigationLink(value: route) {
-                            Text("Abrir")
-                                .font(.caption.weight(.black))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 7)
-                                .foregroundStyle(EPTheme.primary)
-                                .background(EPTheme.primary.opacity(0.12), in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-
-                        Button(action: onToggle) {
-                            Text(isCompleted ? "Hecha" : "Marcar")
-                                .font(.caption.weight(.black))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 7)
-                                .foregroundStyle(isCompleted ? Color.green : Color.primary)
-                                .background(isCompleted ? Color.green.opacity(0.14) : Color(.tertiarySystemGroupedBackground), in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                    } else {
-                        Text("Sin registro")
-                            .font(.caption.weight(.black))
-                            .foregroundStyle(.secondary)
-                        Spacer()
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.bottom, 14)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
             }
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(isCurrent ? EPTheme.primary : Color(.separator).opacity(0.1), lineWidth: isCurrent ? 1.5 : 1)
-            )
-            .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
-            .padding(.bottom, 12)
-        }
-    }
 
-    private var circleFill: Color {
-        if isCompleted { return .green }
-        if isCurrent { return EPTheme.primary }
-        return Color(.systemGroupedBackground)
+            Spacer(minLength: 6)
+
+            if item.isAcademic {
+                Button(action: onToggle) {
+                    Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(isCompleted ? .green : Color(.systemGray3))
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .buttonStyle(.plain)
+
+                NavigationLink(value: route) {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.black))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 26, height: 26)
+                        .background(Color(.systemGray5), in: Circle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 9)
+        .overlay(alignment: .bottom) {
+            Divider()
+                .opacity(0.5)
+        }
     }
 }
 
@@ -1201,74 +782,6 @@ private struct ReminderRow: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(reminder.color.foreground.opacity(0.18), lineWidth: 1)
         )
-    }
-}
-
-private struct InsightsPanel: View {
-    let snapshot: DashboardSnapshot
-    let courses: [CourseSummary]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Label("Tu dia en numeros", systemImage: "chart.line.uptrend.xyaxis")
-                .font(.subheadline.weight(.black))
-
-            VStack(spacing: 12) {
-                InsightRow(icon: "person.2.fill", label: "Alumnos totales", value: "\(courses.reduce(0) { $0 + $1.students })", color: EPTheme.primary)
-                InsightRow(icon: "clock.fill", label: "Horas/semana", value: String(format: "%.1f h", weeklyHours), color: .green)
-                InsightRow(icon: "book.closed.fill", label: "Libro de clases", value: "Prototipo", color: .blue)
-                InsightRow(icon: "flame.fill", label: "Restantes hoy", value: "\(snapshot.pendingClasses.count)", color: .orange)
-            }
-
-            Text(insightMessage)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(EPTheme.primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
-                .background(EPTheme.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-        .webCard()
-    }
-
-    private var weeklyHours: Double {
-        snapshot.horario.filter(\.isAcademic).reduce(0) { total, item in
-            let minutes = max(0, DateHelpers.minutes(from: item.horaFin) - DateHelpers.minutes(from: item.horaInicio))
-            return total + Double(minutes) / 60
-        }
-    }
-
-    private var insightMessage: String {
-        if snapshot.academicTodayClasses.isEmpty {
-            return "Dia tranquilo. Aprovecha para planificar la proxima semana."
-        }
-        if snapshot.pendingClasses.isEmpty {
-            return "Tremendo. Completaste tus clases del dia."
-        }
-        let count = snapshot.pendingClasses.count
-        return "Te queda\(count == 1 ? "" : "n") \(count) clase\(count == 1 ? "" : "s"). Tu puedes."
-    }
-}
-
-private struct InsightRow: View {
-    let icon: String
-    let label: String
-    let value: String
-    let color: Color
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.caption.weight(.black))
-                .foregroundStyle(color)
-                .frame(width: 30, height: 30)
-                .background(color.opacity(0.14), in: Circle())
-
-            Text(label)
-                .font(.footnote.weight(.semibold))
-            Spacer()
-            Text(value)
-                .font(.footnote.weight(.black))
-        }
     }
 }
 
