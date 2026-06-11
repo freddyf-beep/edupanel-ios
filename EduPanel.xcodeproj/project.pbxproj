@@ -7,6 +7,23 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		445338F8B5666B8B9BAC92B7 /* FloatingTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 449F462A164495012A2700B4 /* FloatingTabBar.swift */; };
+		442B01AC756AB7E3B158A220 /* CronogramaRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443B548B642897ACDA7F5B2F /* CronogramaRepository.swift */; };
+		445DC4E3D37D709B200EBDF4 /* DisplayMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A39F058927059BF1558D45 /* DisplayMode.swift */; };
+		446F2C8F336DD4446E98B2DB /* CronogramaViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 442E7208A3536B93C795E9FC /* CronogramaViewModel.swift */; };
+		44A129DCEC7D6F1020BD495B /* CronogramaDiaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A3CDAF999E981ED91CB913 /* CronogramaDiaView.swift */; };
+		447E660E04517FE9E9A5B20A /* CronogramaGanttView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4492B33B06EA9DBF6E099D40 /* CronogramaGanttView.swift */; };
+		44B1B49A34D74FFDF5A404AB /* CronogramaHeatmapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44EC26AB22B7C41F477C99E4 /* CronogramaHeatmapView.swift */; };
+		4428F9E5EEE2D5E5A237DD02 /* CronogramaListaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 446D233EA052412AEC86E22C /* CronogramaListaView.swift */; };
+		44B09A78E4E4126E8B3AAB01 /* CronogramaMesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44ADC7CFA317A903061EF12B /* CronogramaMesView.swift */; };
+		4481C0FD23062E25DCBC7003 /* CronogramaSemanaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44BC41F3C49ACFC84A7DEFFF /* CronogramaSemanaView.swift */; };
+		4414D94A5CB877E05676C65C /* CronogramaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 448C0D3DAD9DD5F06C2F6557 /* CronogramaView.swift */; };
+		440BCEE79080142D26D4B1DA /* HelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44BCB48BC51BBD6B74BFC677 /* HelpView.swift */; };
+		443BDC08744EF48C71D11CCB /* SettingsAccountSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44F73879818DE3B8BFD93C49 /* SettingsAccountSection.swift */; };
+		441632AE1A972EA2EAB070FC /* SettingsAppearanceSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D211D24493F741D29F3A14 /* SettingsAppearanceSection.swift */; };
+		440C8B5DF27BE0980117F3F6 /* SettingsDataSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44942CCF1ED6D4DA7671EEE4 /* SettingsDataSection.swift */; };
+		44279E192C94D14AA39C22B5 /* SettingsInfoSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44B59830448406848CAF3DE2 /* SettingsInfoSection.swift */; };
+		44C81CE9BAD494238EE5130C /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 447CD1CD99017CDBFD2FA481 /* SettingsView.swift */; };
 		100000000000000000000040 /* EduPanelApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000020 /* EduPanelApp.swift */; };
 		100000000000000000000041 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000021 /* RootView.swift */; };
 		100000000000000000000042 /* AppTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000022 /* AppTab.swift */; };
@@ -59,6 +76,23 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		449F462A164495012A2700B4 /* FloatingTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingTabBar.swift; sourceTree = "<group>"; };
+		443B548B642897ACDA7F5B2F /* CronogramaRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronogramaRepository.swift; sourceTree = "<group>"; };
+		44A39F058927059BF1558D45 /* DisplayMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayMode.swift; sourceTree = "<group>"; };
+		442E7208A3536B93C795E9FC /* CronogramaViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronogramaViewModel.swift; sourceTree = "<group>"; };
+		44A3CDAF999E981ED91CB913 /* CronogramaDiaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronogramaDiaView.swift; sourceTree = "<group>"; };
+		4492B33B06EA9DBF6E099D40 /* CronogramaGanttView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronogramaGanttView.swift; sourceTree = "<group>"; };
+		44EC26AB22B7C41F477C99E4 /* CronogramaHeatmapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronogramaHeatmapView.swift; sourceTree = "<group>"; };
+		446D233EA052412AEC86E22C /* CronogramaListaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronogramaListaView.swift; sourceTree = "<group>"; };
+		44ADC7CFA317A903061EF12B /* CronogramaMesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronogramaMesView.swift; sourceTree = "<group>"; };
+		44BC41F3C49ACFC84A7DEFFF /* CronogramaSemanaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronogramaSemanaView.swift; sourceTree = "<group>"; };
+		448C0D3DAD9DD5F06C2F6557 /* CronogramaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronogramaView.swift; sourceTree = "<group>"; };
+		44BCB48BC51BBD6B74BFC677 /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
+		44F73879818DE3B8BFD93C49 /* SettingsAccountSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAccountSection.swift; sourceTree = "<group>"; };
+		44D211D24493F741D29F3A14 /* SettingsAppearanceSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAppearanceSection.swift; sourceTree = "<group>"; };
+		44942CCF1ED6D4DA7671EEE4 /* SettingsDataSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsDataSection.swift; sourceTree = "<group>"; };
+		44B59830448406848CAF3DE2 /* SettingsInfoSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsInfoSection.swift; sourceTree = "<group>"; };
+		447CD1CD99017CDBFD2FA481 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		100000000000000000000005 /* EduPanel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EduPanel.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		100000000000000000000020 /* EduPanelApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EduPanelApp.swift; sourceTree = "<group>"; };
 		100000000000000000000021 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -148,6 +182,7 @@
 		100000000000000000000010 /* EduPanel */ = {
 			isa = PBXGroup;
 			children = (
+				4486B30826509D60ACFBFFFE /* Components */,
 				100000000000000000000011 /* App */,
 				100000000000000000000012 /* Models */,
 				100000000000000000000013 /* Services */,
@@ -181,6 +216,8 @@
 		100000000000000000000013 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				443B548B642897ACDA7F5B2F /* CronogramaRepository.swift */,
+				44A39F058927059BF1558D45 /* DisplayMode.swift */,
 				200000000000000000000002 /* PlanificacionRepository.swift */,
 				100000000000000000000025 /* APIClient.swift */,
 				100000000000000000000026 /* AppConfig.swift */,
@@ -194,6 +231,7 @@
 		100000000000000000000014 /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				442E7208A3536B93C795E9FC /* CronogramaViewModel.swift */,
 				200000000000000000000003 /* PlanificacionesViewModel.swift */,
 				200000000000000000000004 /* VerUnidadViewModel.swift */,
 				10000000000000000000002A /* AuthSession.swift */,
@@ -205,6 +243,9 @@
 		100000000000000000000015 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				443A6D15AA5486619142AEBB /* Cronograma */,
+				443C5D20AB4D92EB7CDDF60A /* Help */,
+				44D0CA17BBA4161446FC3D6E /* Settings */,
 				200000000000000000000020 /* Planificaciones */,
 				200000000000000000000030 /* VerUnidad */,
 				300000000000000000000040 /* Profile */,
@@ -286,6 +327,48 @@
 				30000000000000000000000E /* GoogleConnectionView.swift */,
 			);
 			path = Profile;
+			sourceTree = "<group>";
+		};
+		4486B30826509D60ACFBFFFE /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				449F462A164495012A2700B4 /* FloatingTabBar.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		443A6D15AA5486619142AEBB /* Cronograma */ = {
+			isa = PBXGroup;
+			children = (
+				44A3CDAF999E981ED91CB913 /* CronogramaDiaView.swift */,
+				4492B33B06EA9DBF6E099D40 /* CronogramaGanttView.swift */,
+				44EC26AB22B7C41F477C99E4 /* CronogramaHeatmapView.swift */,
+				446D233EA052412AEC86E22C /* CronogramaListaView.swift */,
+				44ADC7CFA317A903061EF12B /* CronogramaMesView.swift */,
+				44BC41F3C49ACFC84A7DEFFF /* CronogramaSemanaView.swift */,
+				448C0D3DAD9DD5F06C2F6557 /* CronogramaView.swift */,
+			);
+			path = Cronograma;
+			sourceTree = "<group>";
+		};
+		443C5D20AB4D92EB7CDDF60A /* Help */ = {
+			isa = PBXGroup;
+			children = (
+				44BCB48BC51BBD6B74BFC677 /* HelpView.swift */,
+			);
+			path = Help;
+			sourceTree = "<group>";
+		};
+		44D0CA17BBA4161446FC3D6E /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				44F73879818DE3B8BFD93C49 /* SettingsAccountSection.swift */,
+				44D211D24493F741D29F3A14 /* SettingsAppearanceSection.swift */,
+				44942CCF1ED6D4DA7671EEE4 /* SettingsDataSection.swift */,
+				44B59830448406848CAF3DE2 /* SettingsInfoSection.swift */,
+				447CD1CD99017CDBFD2FA481 /* SettingsView.swift */,
+			);
+			path = Settings;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -370,6 +453,23 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				445338F8B5666B8B9BAC92B7 /* FloatingTabBar.swift in Sources */,
+				442B01AC756AB7E3B158A220 /* CronogramaRepository.swift in Sources */,
+				445DC4E3D37D709B200EBDF4 /* DisplayMode.swift in Sources */,
+				446F2C8F336DD4446E98B2DB /* CronogramaViewModel.swift in Sources */,
+				44A129DCEC7D6F1020BD495B /* CronogramaDiaView.swift in Sources */,
+				447E660E04517FE9E9A5B20A /* CronogramaGanttView.swift in Sources */,
+				44B1B49A34D74FFDF5A404AB /* CronogramaHeatmapView.swift in Sources */,
+				4428F9E5EEE2D5E5A237DD02 /* CronogramaListaView.swift in Sources */,
+				44B09A78E4E4126E8B3AAB01 /* CronogramaMesView.swift in Sources */,
+				4481C0FD23062E25DCBC7003 /* CronogramaSemanaView.swift in Sources */,
+				4414D94A5CB877E05676C65C /* CronogramaView.swift in Sources */,
+				440BCEE79080142D26D4B1DA /* HelpView.swift in Sources */,
+				443BDC08744EF48C71D11CCB /* SettingsAccountSection.swift in Sources */,
+				441632AE1A972EA2EAB070FC /* SettingsAppearanceSection.swift in Sources */,
+				440C8B5DF27BE0980117F3F6 /* SettingsDataSection.swift in Sources */,
+				44279E192C94D14AA39C22B5 /* SettingsInfoSection.swift in Sources */,
+				44C81CE9BAD494238EE5130C /* SettingsView.swift in Sources */,
 				100000000000000000000040 /* EduPanelApp.swift in Sources */,
 				100000000000000000000041 /* RootView.swift in Sources */,
 				100000000000000000000042 /* AppTab.swift in Sources */,
