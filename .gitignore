@@ -14,3 +14,6 @@ docs/check_run_*.py
 docs/get_jobs_*.py
 docs/sync_project.py
 docs/*.log
+
+# Logs sueltos
+job_log.txt
