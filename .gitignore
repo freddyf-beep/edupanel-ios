@@ -8,3 +8,9 @@ GoogleService-Info.plist
 *.app
 *.dSYM
 
+
+# Scripts y logs temporales de build/CI
+docs/check_run_*.py
+docs/get_jobs_*.py
+docs/sync_project.py
+docs/*.log

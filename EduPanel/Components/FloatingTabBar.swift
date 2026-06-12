@@ -21,7 +21,14 @@ struct FloatingTabBar: View {
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(
             Capsule()
-                .stroke(Color(.separator).opacity(0.18), lineWidth: 1)
+                .stroke(
+                    LinearGradient(
+                        colors: [.white.opacity(0.35), Color(.separator).opacity(0.12)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
         )
         .shadow(color: .black.opacity(0.15), radius: 20, y: 8)
         .sensoryFeedback(.selection, trigger: selected)
@@ -40,6 +47,7 @@ struct FloatingTabBar: View {
                 Image(systemName: tab.systemImage)
                     .font(.system(size: 21, weight: .semibold))
                     .symbolVariant(isSelected ? .fill : .none)
+                    .symbolEffect(.bounce, value: isSelected)
                     .overlay(alignment: .topTrailing) {
                         if badge > 0 {
                             Text(badge > 99 ? "99+" : "\(badge)")

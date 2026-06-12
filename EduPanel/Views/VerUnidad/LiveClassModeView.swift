@@ -107,23 +107,35 @@ struct LiveClassModeView: View {
             Spacer()
             
             // Timer Display
-            HStack(spacing: 7) {
-                Image(systemName: isTimerRunning ? "hourglass" : "pause.fill")
-                    .font(.footnote.weight(.bold))
-                    .foregroundStyle(EPTheme.primary)
-                Text(formatTimeString(timeRemaining))
-                    .font(.system(size: 24, weight: .black, design: .monospaced))
-                    .foregroundStyle(timeRemaining < 5 * 60 ? .red : Color(.label))
-                    .contentTransition(.numericText(countsDown: true))
-                    .animation(.linear(duration: 0.3), value: timeRemaining)
+            Menu {
+                ForEach([45, 60, 90], id: \.self) { minutos in
+                    Button {
+                        timeRemaining = minutos * 60
+                        isTimerRunning = true
+                    } label: {
+                        Label("Reiniciar a \(minutos) min", systemImage: "arrow.counterclockwise")
+                    }
+                }
+            } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: isTimerRunning ? "hourglass" : "pause.fill")
+                        .font(.footnote.weight(.bold))
+                        .foregroundStyle(EPTheme.primary)
+                    Text(formatTimeString(timeRemaining))
+                        .font(.system(size: 24, weight: .black, design: .monospaced))
+                        .foregroundStyle(timeRemaining < 5 * 60 ? .red : Color(.label))
+                        .contentTransition(.numericText(countsDown: true))
+                        .animation(.linear(duration: 0.3), value: timeRemaining)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(EPTheme.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(EPTheme.primary.opacity(0.2), lineWidth: 1)
+                )
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .background(EPTheme.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(EPTheme.primary.opacity(0.2), lineWidth: 1)
-            )
+            .buttonStyle(.plain)
         }
         .padding(16)
         .background(.ultraThinMaterial)

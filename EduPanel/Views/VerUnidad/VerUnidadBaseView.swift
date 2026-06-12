@@ -222,13 +222,43 @@ struct VerUnidadBaseView: View {
                 let selectedIndicators = verUnidad.oas.flatMap(\.indicadores).filter(\.seleccionado).count
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    EPKPIBox(title: "Horas", value: "\(verUnidad.horas)", subtitle: "planificadas", icon: "clock.fill", tint: .blue)
-                    EPKPIBox(title: "Clases", value: "\(verUnidad.clases)", subtitle: "estimadas", icon: "calendar", tint: .purple)
                     EPKPIBox(title: "OA", value: "\(selectedOAs)", subtitle: "seleccionados", icon: "checkmark.square.fill", tint: EPTheme.primary)
                     EPKPIBox(title: "Indicadores", value: "\(selectedIndicators)", subtitle: "activos", icon: "list.bullet.clipboard", tint: .green)
                 }
+
+                HStack(spacing: 10) {
+                    stepperCard(titulo: "Horas de la unidad", valor: verUnidad.horas) { nuevo in
+                        viewModel.verUnidad?.horas = nuevo
+                    }
+                    stepperCard(titulo: "Clases estimadas", valor: verUnidad.clases) { nuevo in
+                        viewModel.verUnidad?.clases = nuevo
+                        if var crono = viewModel.cronograma {
+                            let minimo = crono.clases.map(\.numero).max() ?? 0
+                            crono.totalClases = max(nuevo, minimo)
+                            viewModel.cronograma = crono
+                        }
+                    }
+                }
             }
         }
+    }
+
+    private func stepperCard(titulo: String, valor: Int, onChange: @escaping (Int) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(titulo.uppercased())
+                .font(.system(size: 9, weight: .black))
+                .tracking(0.5)
+                .foregroundStyle(.secondary)
+            Stepper(value: Binding(get: { valor }, set: onChange), in: 1...60) {
+                Text("\(valor)")
+                    .font(.system(size: 19, weight: .black, design: .rounded))
+                    .contentTransition(.numericText())
+            }
+        }
+        .padding(11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.systemGray6).opacity(0.7), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .sensoryFeedback(.increase, trigger: valor)
     }
 
     private func actividadesUnidadCard(_ verUnidad: VerUnidadGuardada) -> some View {

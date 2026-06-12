@@ -214,11 +214,19 @@ struct AppShell: View {
             }
         case .evaluaciones:
             tabStack(path: $evaluacionesPath) {
-                PlaceholderModuleView(tab: .evaluaciones)
+                PlaceholderModuleView(tab: .evaluaciones) {
+                    withAnimation(EPTheme.spring) {
+                        selectedTab = .inicio
+                    }
+                }
             }
         case .clases:
             tabStack(path: $clasesPath) {
-                PlaceholderModuleView(tab: .clases)
+                PlaceholderModuleView(tab: .clases) {
+                    withAnimation(EPTheme.spring) {
+                        selectedTab = .inicio
+                    }
+                }
             }
         case .perfil:
             tabStack(path: $perfilPath) {

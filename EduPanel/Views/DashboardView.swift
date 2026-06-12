@@ -122,7 +122,7 @@ struct DashboardView: View {
         return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 10) {
                 Label("\(greeting.greet), \(user.firstName)", systemImage: greeting.icon)
-                    .font(.system(size: 16, weight: .black))
+                    .font(.system(size: 17, weight: .black, design: .rounded))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -201,7 +201,12 @@ struct DashboardView: View {
             LinearGradient(colors: greeting.colors, startPoint: .topLeading, endPoint: .bottomTrailing),
             in: RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous)
         )
-        .shadow(color: .black.opacity(0.1), radius: 14, y: 7)
+        .shadow(color: (greeting.colors.first ?? .black).opacity(0.25), radius: 14, y: 7)
+        .scrollTransition(axis: .vertical) { content, phase in
+            content
+                .scaleEffect(phase.isIdentity ? 1 : 0.95)
+                .opacity(phase.isIdentity ? 1 : 0.75)
+        }
     }
 
     // MARK: - Tabs internos
@@ -602,10 +607,11 @@ private struct HeroKPI: View {
                 .tracking(0.6)
                 .foregroundStyle(.white.opacity(0.78))
             Text(value)
-                .font(.system(size: 19, weight: .black, design: .rounded))
+                .font(.system(size: 21, weight: .black, design: .rounded))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
+                .contentTransition(.numericText())
             Text(subtitle)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.72))

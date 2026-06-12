@@ -200,6 +200,7 @@ struct EPWebTabBar: View {
                         HStack(spacing: 7) {
                             Image(systemName: tab.icon)
                                 .font(.system(size: 11, weight: .black))
+                                .symbolEffect(.bounce, value: isSelected)
                             Text(tab.title)
                                 .font(.system(size: 12, weight: .black))
                         }

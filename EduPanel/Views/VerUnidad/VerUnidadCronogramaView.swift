@@ -75,8 +75,47 @@ struct VerUnidadCronogramaView: View {
                     Spacer(minLength: 0)
                 }
                 .buttonStyle(.plain)
+
+                Stepper(value: clasesBinding(crono), in: clasesMinimas(crono)...60) {
+                    HStack(spacing: 7) {
+                        Text("Clases en secuencia")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.secondary)
+                        Text("\(safeClassNumbers(crono).count)")
+                            .font(.system(size: 17, weight: .black, design: .rounded))
+                            .contentTransition(.numericText())
+                    }
+                }
+                .padding(.horizontal, 11)
+                .padding(.vertical, 8)
+                .background(Color(.systemGray6).opacity(0.7), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
         }
+    }
+
+    private func clasesMinimas(_ crono: CronogramaUnidadData) -> Int {
+        let conDatos = crono.clases
+            .filter { !$0.fecha.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !$0.oaIds.isEmpty }
+            .map(\.numero)
+            .max() ?? 1
+        return max(1, conDatos)
+    }
+
+    private func clasesBinding(_ crono: CronogramaUnidadData) -> Binding<Int> {
+        Binding(
+            get: { max(crono.totalClases, crono.clases.map(\.numero).max() ?? 0) },
+            set: { nuevo in
+                guard var actual = viewModel.cronograma else { return }
+                actual.totalClases = nuevo
+                actual.clases.removeAll { clase in
+                    clase.numero > nuevo &&
+                    clase.fecha.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                    clase.oaIds.isEmpty
+                }
+                viewModel.cronograma = actual
+                Task { await viewModel.saveAll() }
+            }
+        )
     }
 
     private func coverageCard(_ crono: CronogramaUnidadData) -> some View {
