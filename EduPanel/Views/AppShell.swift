@@ -21,6 +21,12 @@ enum AppRoute: Hashable {
     case ayuda
     case coursePlanificaciones(curso: String, asignatura: String?)
     case verUnidad(curso: String, asignatura: String?, unidadId: String, unidadNombre: String, initialTab: String)
+    case listaCotejoEditor(listaId: String?, curso: String, asignatura: String)
+    case listaEvaluacion(listaId: String)
+    case listaResultados(listaId: String)
+    case rubricaEditor(rubricaId: String?, curso: String, asignatura: String)
+    case rubricaEvaluacion(rubricaId: String)
+    case rubricaResultados(rubricaId: String)
 
     var title: String {
         switch self {
@@ -44,6 +50,12 @@ enum AppRoute: Hashable {
         case .ayuda: return "Ayuda"
         case .coursePlanificaciones(let course, _): return "Planificaciones - \(course)"
         case .verUnidad(_, _, _, let unidadNombre, _): return unidadNombre
+        case .listaCotejoEditor(let listaId, _, _): return listaId == nil ? "Nueva lista" : "Editar lista"
+        case .listaEvaluacion: return "Evaluar lista"
+        case .listaResultados: return "Resultados de lista"
+        case .rubricaEditor(let rubricaId, _, _): return rubricaId == nil ? "Nueva rúbrica" : "Editar rúbrica"
+        case .rubricaEvaluacion: return "Evaluar rúbrica"
+        case .rubricaResultados: return "Resultados de rúbrica"
         }
     }
 
@@ -69,6 +81,12 @@ enum AppRoute: Hashable {
         case .ayuda: return "questionmark.circle.fill"
         case .coursePlanificaciones: return "book.closed.fill"
         case .verUnidad: return "book.closed.fill"
+        case .listaCotejoEditor: return "checklist"
+        case .listaEvaluacion: return "checkmark.circle.fill"
+        case .listaResultados: return "chart.bar.fill"
+        case .rubricaEditor: return "square.grid.2x2"
+        case .rubricaEvaluacion: return "checkmark.circle.fill"
+        case .rubricaResultados: return "chart.bar.fill"
         }
     }
 
@@ -214,11 +232,7 @@ struct AppShell: View {
             }
         case .evaluaciones:
             tabStack(path: $evaluacionesPath) {
-                PlaceholderModuleView(tab: .evaluaciones) {
-                    withAnimation(EPTheme.spring) {
-                        selectedTab = .inicio
-                    }
-                }
+                EvaluacionesShell(dashboardRepository: dashboardRepository)
             }
         case .clases:
             tabStack(path: $clasesPath) {
@@ -311,6 +325,28 @@ struct AppShell: View {
             GoogleConnectionView(connectionType: "calendar", repository: dashboardRepository)
         case .driveConnect:
             GoogleConnectionView(connectionType: "drive", repository: dashboardRepository)
+        case .listaCotejoEditor(let listaId, let curso, let asignatura):
+            ListaCotejoEditorView(
+                listaId: listaId,
+                curso: curso,
+                asignatura: asignatura,
+                dashboardRepository: dashboardRepository
+            )
+        case .listaEvaluacion(let listaId):
+            ListaEvaluacionView(listaId: listaId, dashboardRepository: dashboardRepository)
+        case .listaResultados(let listaId):
+            ListaResultadosView(listaId: listaId)
+        case .rubricaEditor(let rubricaId, let curso, let asignatura):
+            RubricaEditorView(
+                rubricaId: rubricaId,
+                curso: curso,
+                asignatura: asignatura,
+                dashboardRepository: dashboardRepository
+            )
+        case .rubricaEvaluacion(let rubricaId):
+            RubricaEvaluacionView(rubricaId: rubricaId, dashboardRepository: dashboardRepository)
+        case .rubricaResultados(let rubricaId):
+            RubricaResultadosView(rubricaId: rubricaId)
         default:
             RoutePlaceholderView(route: route)
         }

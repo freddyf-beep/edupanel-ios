@@ -73,6 +73,18 @@
 		30000000000000000000010C /* EditCourseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000C /* EditCourseView.swift */; };
 		30000000000000000000010D /* SchoolLogoEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000D /* SchoolLogoEditView.swift */; };
 		30000000000000000000010E /* GoogleConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000E /* GoogleConnectionView.swift */; };
+		400000000000000000000101 /* EvaluacionesModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000001 /* EvaluacionesModels.swift */; };
+		400000000000000000000102 /* EvaluacionesRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000002 /* EvaluacionesRepository.swift */; };
+		400000000000000000000103 /* EvaluacionesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000003 /* EvaluacionesViewModel.swift */; };
+		400000000000000000000104 /* EvaluacionesShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000004 /* EvaluacionesShell.swift */; };
+		400000000000000000000105 /* ListasHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000005 /* ListasHubView.swift */; };
+		400000000000000000000106 /* ListaCotejoEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000006 /* ListaCotejoEditorView.swift */; };
+		400000000000000000000107 /* ListaEvaluacionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000007 /* ListaEvaluacionView.swift */; };
+		400000000000000000000108 /* ListaResultadosView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000008 /* ListaResultadosView.swift */; };
+		400000000000000000000109 /* RubricasHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000009 /* RubricasHubView.swift */; };
+		40000000000000000000010A /* RubricaEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40000000000000000000000A /* RubricaEditorView.swift */; };
+		40000000000000000000010B /* RubricaEvaluacionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40000000000000000000000B /* RubricaEvaluacionView.swift */; };
+		40000000000000000000010C /* RubricaResultadosView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40000000000000000000000C /* RubricaResultadosView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -144,6 +156,18 @@
 		30000000000000000000000C /* EditCourseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/EditCourseView.swift; sourceTree = "<group>"; };
 		30000000000000000000000D /* SchoolLogoEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/SchoolLogoEditView.swift; sourceTree = "<group>"; };
 		30000000000000000000000E /* GoogleConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/GoogleConnectionView.swift; sourceTree = "<group>"; };
+		400000000000000000000001 /* EvaluacionesModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvaluacionesModels.swift; sourceTree = "<group>"; };
+		400000000000000000000002 /* EvaluacionesRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvaluacionesRepository.swift; sourceTree = "<group>"; };
+		400000000000000000000003 /* EvaluacionesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvaluacionesViewModel.swift; sourceTree = "<group>"; };
+		400000000000000000000004 /* EvaluacionesShell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvaluacionesShell.swift; sourceTree = "<group>"; };
+		400000000000000000000005 /* ListasHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Listas/ListasHubView.swift; sourceTree = "<group>"; };
+		400000000000000000000006 /* ListaCotejoEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Listas/ListaCotejoEditorView.swift; sourceTree = "<group>"; };
+		400000000000000000000007 /* ListaEvaluacionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Listas/ListaEvaluacionView.swift; sourceTree = "<group>"; };
+		400000000000000000000008 /* ListaResultadosView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Listas/ListaResultadosView.swift; sourceTree = "<group>"; };
+		400000000000000000000009 /* RubricasHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rubricas/RubricasHubView.swift; sourceTree = "<group>"; };
+		40000000000000000000000A /* RubricaEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rubricas/RubricaEditorView.swift; sourceTree = "<group>"; };
+		40000000000000000000000B /* RubricaEvaluacionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rubricas/RubricaEvaluacionView.swift; sourceTree = "<group>"; };
+		40000000000000000000000C /* RubricaResultadosView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rubricas/RubricaResultadosView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -205,6 +229,7 @@
 		100000000000000000000012 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				400000000000000000000001 /* EvaluacionesModels.swift */,
 				200000000000000000000001 /* PlanificacionModels.swift */,
 				100000000000000000000022 /* AppTab.swift */,
 				100000000000000000000023 /* DashboardModels.swift */,
@@ -217,6 +242,7 @@
 			isa = PBXGroup;
 			children = (
 				443B548B642897ACDA7F5B2F /* CronogramaRepository.swift */,
+				400000000000000000000002 /* EvaluacionesRepository.swift */,
 				44A39F058927059BF1558D45 /* DisplayMode.swift */,
 				200000000000000000000002 /* PlanificacionRepository.swift */,
 				100000000000000000000025 /* APIClient.swift */,
@@ -232,6 +258,7 @@
 			isa = PBXGroup;
 			children = (
 				442E7208A3536B93C795E9FC /* CronogramaViewModel.swift */,
+				400000000000000000000003 /* EvaluacionesViewModel.swift */,
 				200000000000000000000003 /* PlanificacionesViewModel.swift */,
 				200000000000000000000004 /* VerUnidadViewModel.swift */,
 				10000000000000000000002A /* AuthSession.swift */,
@@ -244,6 +271,7 @@
 			isa = PBXGroup;
 			children = (
 				443A6D15AA5486619142AEBB /* Cronograma */,
+				400000000000000000000040 /* Evaluaciones */,
 				443C5D20AB4D92EB7CDDF60A /* Help */,
 				44D0CA17BBA4161446FC3D6E /* Settings */,
 				200000000000000000000020 /* Planificaciones */,
@@ -349,6 +377,22 @@
 				448C0D3DAD9DD5F06C2F6557 /* CronogramaView.swift */,
 			);
 			path = Cronograma;
+			sourceTree = "<group>";
+		};
+		400000000000000000000040 /* Evaluaciones */ = {
+			isa = PBXGroup;
+			children = (
+				400000000000000000000004 /* EvaluacionesShell.swift */,
+				400000000000000000000005 /* ListasHubView.swift */,
+				400000000000000000000006 /* ListaCotejoEditorView.swift */,
+				400000000000000000000007 /* ListaEvaluacionView.swift */,
+				400000000000000000000008 /* ListaResultadosView.swift */,
+				400000000000000000000009 /* RubricasHubView.swift */,
+				40000000000000000000000A /* RubricaEditorView.swift */,
+				40000000000000000000000B /* RubricaEvaluacionView.swift */,
+				40000000000000000000000C /* RubricaResultadosView.swift */,
+			);
+			path = Evaluaciones;
 			sourceTree = "<group>";
 		};
 		443C5D20AB4D92EB7CDDF60A /* Help */ = {
@@ -513,6 +557,18 @@
 				30000000000000000000010C /* EditCourseView.swift in Sources */,
 				30000000000000000000010D /* SchoolLogoEditView.swift in Sources */,
 				30000000000000000000010E /* GoogleConnectionView.swift in Sources */,
+				400000000000000000000101 /* EvaluacionesModels.swift in Sources */,
+				400000000000000000000102 /* EvaluacionesRepository.swift in Sources */,
+				400000000000000000000103 /* EvaluacionesViewModel.swift in Sources */,
+				400000000000000000000104 /* EvaluacionesShell.swift in Sources */,
+				400000000000000000000105 /* ListasHubView.swift in Sources */,
+				400000000000000000000106 /* ListaCotejoEditorView.swift in Sources */,
+				400000000000000000000107 /* ListaEvaluacionView.swift in Sources */,
+				400000000000000000000108 /* ListaResultadosView.swift in Sources */,
+				400000000000000000000109 /* RubricasHubView.swift in Sources */,
+				40000000000000000000010A /* RubricaEditorView.swift in Sources */,
+				40000000000000000000010B /* RubricaEvaluacionView.swift in Sources */,
+				40000000000000000000010C /* RubricaResultadosView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
