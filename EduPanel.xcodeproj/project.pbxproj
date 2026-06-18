@@ -174,10 +174,10 @@
 		40000000000000000000000B /* RubricaEvaluacionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rubricas/RubricaEvaluacionView.swift; sourceTree = "<group>"; };
 		40000000000000000000000C /* RubricaResultadosView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rubricas/RubricaResultadosView.swift; sourceTree = "<group>"; };
 		400000000000000000000020 /* CurriculoRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurriculoRepository.swift; sourceTree = "<group>"; };
-		400000000000000000000021 /* OAEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/OAEditorView.swift; sourceTree = "<group>"; };
-		400000000000000000000022 /* EvaluacionesCurriculoSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/EvaluacionesCurriculoSection.swift; sourceTree = "<group>"; };
-		400000000000000000000023 /* SincronizarCalificacionesButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/SincronizarCalificacionesButton.swift; sourceTree = "<group>"; };
-		400000000000000000000024 /* HistogramaNotasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/HistogramaNotasView.swift; sourceTree = "<group>"; };
+		400000000000000000000021 /* OAEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAEditorView.swift; sourceTree = "<group>"; };
+		400000000000000000000022 /* EvaluacionesCurriculoSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvaluacionesCurriculoSection.swift; sourceTree = "<group>"; };
+		400000000000000000000023 /* SincronizarCalificacionesButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SincronizarCalificacionesButton.swift; sourceTree = "<group>"; };
+		400000000000000000000024 /* HistogramaNotasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistogramaNotasView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
