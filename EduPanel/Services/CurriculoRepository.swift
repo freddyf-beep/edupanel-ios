@@ -197,8 +197,8 @@ enum CurriculoNivel {
             return nivel
         }
 
-        if let grado = grado(de: limpio),
-           let key = mapping.keys.first(where: { grado(de: $0) == grado }),
+        if let gradoCurso = grado(de: limpio),
+           let key = mapping.keys.first(where: { grado(de: $0) == gradoCurso }),
            let nivel = mapping[key], !nivel.isEmpty {
             return nivel
         }
