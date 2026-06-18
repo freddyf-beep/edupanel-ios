@@ -8,6 +8,7 @@ struct RubricaEditorView: View {
 
     @State private var rubrica: RubricaTemplate?
     @State private var cursos: [String] = []
+    @State private var nivelMapping: [String: String] = [:]
     @State private var isLoading = true
     @State private var isSaving = false
     @State private var saveOk = false
@@ -111,6 +112,17 @@ struct RubricaEditorView: View {
                     }
                 }
             }
+        }
+
+        if let actual = rubrica {
+            EvaluacionesCurriculoSection(
+                asignatura: actual.asignatura,
+                curso: actual.curso,
+                nivelMapping: nivelMapping,
+                unidadId: Binding(get: { rubrica?.unidadId }, set: { rubrica?.unidadId = $0 }),
+                unidadNombre: Binding(get: { rubrica?.unidadNombre }, set: { rubrica?.unidadNombre = $0 }),
+                oas: Binding(get: { rubrica?.oas }, set: { rubrica?.oas = $0 })
+            )
         }
 
         if let rubrica {
@@ -328,6 +340,7 @@ struct RubricaEditorView: View {
         do {
             let snapshot = try await dashboardRepository.fetchDashboard()
             cursos = snapshot.courses
+            nivelMapping = snapshot.nivelMapping
 
             if let rubricaId {
                 guard let existente = try await repository.cargarRubrica(id: rubricaId) else {

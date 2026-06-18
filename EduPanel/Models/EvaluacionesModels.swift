@@ -51,6 +51,7 @@ struct ListaCotejoTemplate: Codable, Identifiable, Hashable {
     var unidadId: String?
     var unidadNombre: String?
     var metadatosCurriculares: ListaCotejoMetadatos?
+    var oas: [OAEditado]?
     var secciones: [SeccionListaCotejo]
     var puntajePorSi: Double
     var puntajeMaximo: Double
@@ -63,7 +64,7 @@ struct ListaCotejoTemplate: Codable, Identifiable, Hashable {
     var fechaActualizacion: Date? = nil
 
     private enum CodingKeys: String, CodingKey {
-        case id, nombre, asignatura, curso, unidadId, unidadNombre, metadatosCurriculares
+        case id, nombre, asignatura, curso, unidadId, unidadNombre, metadatosCurriculares, oas
         case secciones, puntajePorSi, puntajeMaximo, instruccionesMetodologicas
         case escalaDicotomica, rbd, nombreEstablecimiento, docenteNombre
     }
@@ -310,6 +311,7 @@ struct RubricaTemplate: Codable, Identifiable, Hashable {
     var unidadNombre: String?
     var usaPonderaciones: Bool?
     var metadatosCurriculares: ListaCotejoMetadatos?
+    var oas: [OAEditado]?
     var gruposConfig: [RubricaGrupoConfig]?
     var partes: [RubricaParte]
     var puntajeMaximo: Double
@@ -318,7 +320,7 @@ struct RubricaTemplate: Codable, Identifiable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case id, nombre, asignatura, curso, unidadId, unidadNombre, usaPonderaciones
-        case metadatosCurriculares, gruposConfig, partes, puntajeMaximo
+        case metadatosCurriculares, oas, gruposConfig, partes, puntajeMaximo
     }
 
     var criteriosTotales: [CriterioRubrica] {
@@ -542,6 +544,26 @@ enum NotaChilena {
         guard let nota else { return "—" }
         return String(format: "%.1f", nota)
     }
+}
+
+// MARK: - Sincronización con Calificaciones
+
+struct SyncConflicto: Identifiable, Hashable {
+    var estudianteId: String
+    var nombre: String
+    var anterior: String
+    var nueva: String
+
+    var id: String { estudianteId }
+}
+
+struct SyncCalificacionesResultado {
+    var evaluacionId: String
+    var notasSincronizadas: Int
+    var estudiantesSinNota: Int
+    var evaluacionExistia: Bool
+    var requiereConfirmacion: Bool
+    var conflictos: [SyncConflicto]
 }
 
 enum EvaluacionesIDs {

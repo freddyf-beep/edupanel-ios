@@ -85,6 +85,11 @@
 		40000000000000000000010A /* RubricaEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40000000000000000000000A /* RubricaEditorView.swift */; };
 		40000000000000000000010B /* RubricaEvaluacionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40000000000000000000000B /* RubricaEvaluacionView.swift */; };
 		40000000000000000000010C /* RubricaResultadosView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40000000000000000000000C /* RubricaResultadosView.swift */; };
+		400000000000000000000120 /* CurriculoRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000020 /* CurriculoRepository.swift */; };
+		400000000000000000000121 /* OAEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000021 /* OAEditorView.swift */; };
+		400000000000000000000122 /* EvaluacionesCurriculoSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000022 /* EvaluacionesCurriculoSection.swift */; };
+		400000000000000000000123 /* SincronizarCalificacionesButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000023 /* SincronizarCalificacionesButton.swift */; };
+		400000000000000000000124 /* HistogramaNotasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000024 /* HistogramaNotasView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -168,6 +173,11 @@
 		40000000000000000000000A /* RubricaEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rubricas/RubricaEditorView.swift; sourceTree = "<group>"; };
 		40000000000000000000000B /* RubricaEvaluacionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rubricas/RubricaEvaluacionView.swift; sourceTree = "<group>"; };
 		40000000000000000000000C /* RubricaResultadosView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rubricas/RubricaResultadosView.swift; sourceTree = "<group>"; };
+		400000000000000000000020 /* CurriculoRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurriculoRepository.swift; sourceTree = "<group>"; };
+		400000000000000000000021 /* OAEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/OAEditorView.swift; sourceTree = "<group>"; };
+		400000000000000000000022 /* EvaluacionesCurriculoSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/EvaluacionesCurriculoSection.swift; sourceTree = "<group>"; };
+		400000000000000000000023 /* SincronizarCalificacionesButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/SincronizarCalificacionesButton.swift; sourceTree = "<group>"; };
+		400000000000000000000024 /* HistogramaNotasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/HistogramaNotasView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -243,6 +253,7 @@
 			children = (
 				443B548B642897ACDA7F5B2F /* CronogramaRepository.swift */,
 				400000000000000000000002 /* EvaluacionesRepository.swift */,
+				400000000000000000000020 /* CurriculoRepository.swift */,
 				44A39F058927059BF1558D45 /* DisplayMode.swift */,
 				200000000000000000000002 /* PlanificacionRepository.swift */,
 				100000000000000000000025 /* APIClient.swift */,
@@ -391,8 +402,20 @@
 				40000000000000000000000A /* RubricaEditorView.swift */,
 				40000000000000000000000B /* RubricaEvaluacionView.swift */,
 				40000000000000000000000C /* RubricaResultadosView.swift */,
+				400000000000000000000041 /* Shared */,
 			);
 			path = Evaluaciones;
+			sourceTree = "<group>";
+		};
+		400000000000000000000041 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				400000000000000000000021 /* OAEditorView.swift */,
+				400000000000000000000022 /* EvaluacionesCurriculoSection.swift */,
+				400000000000000000000023 /* SincronizarCalificacionesButton.swift */,
+				400000000000000000000024 /* HistogramaNotasView.swift */,
+			);
+			path = Shared;
 			sourceTree = "<group>";
 		};
 		443C5D20AB4D92EB7CDDF60A /* Help */ = {
@@ -569,6 +592,11 @@
 				40000000000000000000010A /* RubricaEditorView.swift in Sources */,
 				40000000000000000000010B /* RubricaEvaluacionView.swift in Sources */,
 				40000000000000000000010C /* RubricaResultadosView.swift in Sources */,
+				400000000000000000000120 /* CurriculoRepository.swift in Sources */,
+				400000000000000000000121 /* OAEditorView.swift in Sources */,
+				400000000000000000000122 /* EvaluacionesCurriculoSection.swift in Sources */,
+				400000000000000000000123 /* SincronizarCalificacionesButton.swift in Sources */,
+				400000000000000000000124 /* HistogramaNotasView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

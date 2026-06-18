@@ -98,24 +98,24 @@ struct EvaluacionesShell: View {
                     seleccionado: Binding(
                         get: { viewModel.selectedCurso },
                         set: { nuevo in
-                            viewModel.selectedCurso = nuevo
-                            Task { await viewModel.loadContenido() }
+                            Task { await viewModel.seleccionarCurso(nuevo) }
                         }
                     )
                 )
 
-                if viewModel.availableSubjects.count > 1 {
-                    Menu {
-                        ForEach(viewModel.availableSubjects, id: \.self) { subject in
-                            Button(subject) {
-                                viewModel.selectedSubject = subject
-                                Task { await viewModel.loadContenido() }
+                Menu {
+                    ForEach(viewModel.availableSubjects, id: \.self) { subject in
+                        Button {
+                            Task { await viewModel.seleccionarAsignatura(subject) }
+                        } label: {
+                            if subject == viewModel.activeSubject {
+                                Label(subject, systemImage: "checkmark")
+                            } else {
+                                Text(subject)
                             }
                         }
-                    } label: {
-                        EPStatusPill(text: viewModel.activeSubject, icon: "book.closed.fill")
                     }
-                } else {
+                } label: {
                     EPStatusPill(text: viewModel.activeSubject, icon: "book.closed.fill")
                 }
 

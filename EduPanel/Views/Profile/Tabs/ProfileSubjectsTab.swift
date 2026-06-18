@@ -107,7 +107,11 @@ struct ProfileSubjectsTab: View {
     }
 
     private func subjectCandidates(_ snapshot: DashboardSnapshot) -> [String] {
-        Array(Set(snapshot.academicClasses.compactMap(\.asignatura) + viewModel.draftPreferences.asignaturasHabilitadas))
+        let especialidad = snapshot.profile.especialidad
+        let crudas = snapshot.academicClasses.compactMap(\.asignatura)
+            + viewModel.draftPreferences.asignaturasHabilitadas
+            + [especialidad]
+        return Array(Set(crudas))
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }

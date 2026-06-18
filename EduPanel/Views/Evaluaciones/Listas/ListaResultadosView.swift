@@ -2,9 +2,11 @@ import SwiftUI
 
 struct ListaResultadosView: View {
     let listaId: String
+    var dashboardRepository: DashboardRepository = DashboardRepository()
 
     @State private var lista: ListaCotejoTemplate?
     @State private var evaluacion: ListaCotejoEvaluacion?
+    @State private var roster: [EstudiantePerfil] = []
     @State private var incluirAusentes = false
     @State private var isLoading = true
     @State private var errorMessage: String?
@@ -67,7 +69,19 @@ struct ListaResultadosView: View {
             }
 
             kpis
+            HistogramaNotasView(bins: NotaBin.bins(notas: activos.compactMap(\.nota)))
             tablaResultados
+
+            if let lista, let evaluacion {
+                SincronizarCalificacionesButton { sobrescribir in
+                    try await repository.sincronizarListaConCalificaciones(
+                        lista: lista,
+                        evaluacion: evaluacion,
+                        roster: roster,
+                        sobrescribir: sobrescribir
+                    )
+                }
+            }
         }
     }
 
@@ -185,6 +199,10 @@ struct ListaResultadosView: View {
                 return
             }
             lista = listaCargada
+
+            if let snapshot = try? await dashboardRepository.fetchDashboard() {
+                roster = (snapshot.studentsByCourse[listaCargada.curso] ?? []).sorted { $0.orden < $1.orden }
+            }
 
             if var evaluacionCargada = try await repository.cargarEvaluacionLista(listaId: listaId) {
                 for grupoIndex in evaluacionCargada.grupos.indices {

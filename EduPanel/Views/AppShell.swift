@@ -335,7 +335,7 @@ struct AppShell: View {
         case .listaEvaluacion(let listaId):
             ListaEvaluacionView(listaId: listaId, dashboardRepository: dashboardRepository)
         case .listaResultados(let listaId):
-            ListaResultadosView(listaId: listaId)
+            ListaResultadosView(listaId: listaId, dashboardRepository: dashboardRepository)
         case .rubricaEditor(let rubricaId, let curso, let asignatura):
             RubricaEditorView(
                 rubricaId: rubricaId,
@@ -346,7 +346,7 @@ struct AppShell: View {
         case .rubricaEvaluacion(let rubricaId):
             RubricaEvaluacionView(rubricaId: rubricaId, dashboardRepository: dashboardRepository)
         case .rubricaResultados(let rubricaId):
-            RubricaResultadosView(rubricaId: rubricaId)
+            RubricaResultadosView(rubricaId: rubricaId, dashboardRepository: dashboardRepository)
         default:
             RoutePlaceholderView(route: route)
         }

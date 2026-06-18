@@ -13,10 +13,22 @@ struct ListaEvaluacionView: View {
     @State private var errorMessage: String?
     @State private var mostrarDistribucion = false
     @State private var tamanoGrupo = 2
+    @State private var cantidadGrupos = 4
+    @State private var distribucionPorCantidad = false
     @State private var confirmandoBloqueo = false
     @State private var autosaveTask: Task<Void, Never>?
+    @State private var busqueda = ""
+    @State private var filtro: FiltroAlumno = .todos
+    @State private var vistaPorIndicador = false
+    @State private var indicadorActivoId: String?
 
     private let repository = EvaluacionesRepository()
+
+    enum FiltroAlumno: String, CaseIterable {
+        case todos = "Todos"
+        case pendientes = "Pendientes"
+        case completados = "Completados"
+    }
 
     private var bloqueada: Bool {
         evaluacion?.bloqueada == true
@@ -96,18 +108,24 @@ struct ListaEvaluacionView: View {
             distribucionCard
         }
 
-        selectorAlumnos
+        controlesEvaluacion
 
-        if let alumno = alumnoSeleccionado {
-            indicadoresCard(alumno: alumno)
-            observacionesCard(alumno: alumno)
+        if vistaPorIndicador {
+            vistaPorIndicadorCard
         } else {
-            EPWebCard {
-                EPEmptyState(
-                    icon: "person.crop.circle.badge.questionmark",
-                    title: "Sin alumno seleccionado",
-                    message: "Elige un estudiante del grupo para registrar S\u{00ED}/No."
-                )
+            selectorAlumnos
+
+            if let alumno = alumnoSeleccionado {
+                indicadoresCard(alumno: alumno)
+                observacionesCard(alumno: alumno)
+            } else {
+                EPWebCard {
+                    EPEmptyState(
+                        icon: "person.crop.circle.badge.questionmark",
+                        title: "Sin alumno seleccionado",
+                        message: "Elige un estudiante del grupo para registrar S\u{00ED}/No."
+                    )
+                }
             }
         }
 
@@ -198,13 +216,26 @@ struct ListaEvaluacionView: View {
                     icon: "shuffle"
                 )
 
-                Stepper(value: $tamanoGrupo, in: 2...10) {
-                    Text("\(tamanoGrupo) estudiantes por grupo")
-                        .font(.system(size: 13, weight: .bold))
+                Picker("Modo", selection: $distribucionPorCantidad) {
+                    Text("Por tama\u{00F1}o").tag(false)
+                    Text("Cantidad de grupos").tag(true)
+                }
+                .pickerStyle(.segmented)
+
+                if distribucionPorCantidad {
+                    Stepper(value: $cantidadGrupos, in: 1...12) {
+                        Text("\(cantidadGrupos) grupos")
+                            .font(.system(size: 13, weight: .bold))
+                    }
+                } else {
+                    Stepper(value: $tamanoGrupo, in: 2...10) {
+                        Text("\(tamanoGrupo) estudiantes por grupo")
+                            .font(.system(size: 13, weight: .bold))
+                    }
                 }
 
                 Button {
-                    distribuir(tamano: tamanoGrupo)
+                    distribuir()
                 } label: {
                     Label("Distribuir ahora", systemImage: "wand.and.stars")
                         .font(.system(size: 12.5, weight: .black))
@@ -218,10 +249,73 @@ struct ListaEvaluacionView: View {
         }
     }
 
+    private var controlesEvaluacion: some View {
+        VStack(spacing: 8) {
+            Picker("Vista", selection: $vistaPorIndicador) {
+                Text("Por alumno").tag(false)
+                Text("Por indicador").tag(true)
+            }
+            .pickerStyle(.segmented)
+
+            if !vistaPorIndicador {
+                HStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.secondary)
+                        TextField("Buscar alumno...", text: $busqueda)
+                            .font(.system(size: 12.5))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(Color(.systemGray6), in: Capsule())
+
+                    Menu {
+                        ForEach(FiltroAlumno.allCases, id: \.self) { opcion in
+                            Button {
+                                filtro = opcion
+                            } label: {
+                                if filtro == opcion {
+                                    Label(opcion.rawValue, systemImage: "checkmark")
+                                } else {
+                                    Text(opcion.rawValue)
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                                .font(.system(size: 11, weight: .black))
+                            Text(filtro.rawValue)
+                                .font(.system(size: 11.5, weight: .black))
+                        }
+                        .foregroundStyle(EPTheme.primary)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 8)
+                        .background(EPTheme.primary.opacity(0.1), in: Capsule())
+                    }
+                }
+            }
+        }
+    }
+
+    private var estudiantesFiltrados: [EstudianteListaCotejo] {
+        (grupoActual?.estudiantes ?? []).filter { est in
+            let coincideBusqueda = busqueda.isEmpty || est.nombre.localizedCaseInsensitiveContains(busqueda)
+            let coincideFiltro: Bool
+            switch filtro {
+            case .todos: coincideFiltro = true
+            case .pendientes: coincideFiltro = !est.completado
+            case .completados: coincideFiltro = est.completado
+            }
+            return coincideBusqueda && coincideFiltro
+        }
+    }
+
     private var selectorAlumnos: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 7) {
-                ForEach(grupoActual?.estudiantes ?? []) { estudiante in
+                ForEach(estudiantesFiltrados) { estudiante in
                     Button {
                         alumnoActivo = estudiante.estudianteId
                     } label: {
@@ -265,6 +359,99 @@ struct ListaEvaluacionView: View {
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 10)
                 }
+            }
+        }
+    }
+
+    private var indicadoresPlanos: [(seccion: String, indicador: IndicadorListaCotejo)] {
+        (lista?.secciones ?? []).flatMap { seccion in
+            seccion.indicadores.map { (seccion.nombre, $0) }
+        }
+    }
+
+    private var indicadorActivo: IndicadorListaCotejo? {
+        let planos = indicadoresPlanos
+        if let id = indicadorActivoId, let encontrado = planos.first(where: { $0.indicador.id == id }) {
+            return encontrado.indicador
+        }
+        return planos.first?.indicador
+    }
+
+    private var vistaPorIndicadorCard: some View {
+        EPWebCard {
+            VStack(alignment: .leading, spacing: 12) {
+                EPSectionHeader(title: "Marcar por indicador", icon: "checklist")
+
+                Menu {
+                    ForEach(indicadoresPlanos, id: \.indicador.id) { item in
+                        Button {
+                            indicadorActivoId = item.indicador.id
+                        } label: {
+                            if item.indicador.id == indicadorActivo?.id {
+                                Label(item.indicador.texto.isEmpty ? "Indicador" : item.indicador.texto, systemImage: "checkmark")
+                            } else {
+                                Text(item.indicador.texto.isEmpty ? "Indicador" : item.indicador.texto)
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "list.number")
+                            .font(.system(size: 11, weight: .black))
+                        Text(indicadorActivo?.texto.isEmpty == false ? indicadorActivo!.texto : "Selecciona un indicador")
+                            .font(.system(size: 12.5, weight: .bold))
+                            .lineLimit(2)
+                        Spacer()
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .black))
+                    }
+                    .foregroundStyle(EPTheme.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(EPTheme.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+
+                if let indicador = indicadorActivo {
+                    ForEach(estudiantesFiltrados) { estudiante in
+                        let respuesta = estudiante.respuestas[indicador.id]
+                        HStack(spacing: 8) {
+                            Text(estudiante.nombre)
+                                .font(.system(size: 13, weight: .bold))
+                                .lineLimit(1)
+                            if estudiante.hasPie {
+                                Text("PIE")
+                                    .font(.system(size: 8, weight: .black))
+                                    .padding(.horizontal, 4).padding(.vertical, 1)
+                                    .background(Color.purple.opacity(0.18), in: Capsule())
+                                    .foregroundStyle(.purple)
+                            }
+                            Spacer(minLength: 8)
+                            BotonSiNo(titulo: lista?.etiquetaSi ?? "S\u{00ED}", activo: respuesta == true, tint: .green) {
+                                toggleRespuesta(estudianteId: estudiante.estudianteId, indicadorId: indicador.id, valor: true)
+                            }
+                            BotonSiNo(titulo: lista?.etiquetaNo ?? "No", activo: respuesta == false, tint: .red) {
+                                toggleRespuesta(estudianteId: estudiante.estudianteId, indicadorId: indicador.id, valor: false)
+                            }
+                        }
+                        .padding(.vertical, 7)
+                        Divider()
+                    }
+                } else {
+                    Text("Esta lista no tiene indicadores.")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func toggleRespuesta(estudianteId: String, indicadorId: String, valor: Bool) {
+        let actual = grupoActual?.estudiantes.first { $0.estudianteId == estudianteId }?.respuestas[indicadorId]
+        actualizarAlumno(estudianteId) { est in
+            if actual == valor {
+                est.respuestas.removeValue(forKey: indicadorId)
+            } else {
+                est.respuestas[indicadorId] = valor
             }
         }
     }
@@ -427,14 +614,16 @@ struct ListaEvaluacionView: View {
         programarAutosave()
     }
 
-    private func distribuir(tamano: Int) {
+    private func distribuir() {
         guard var actual = evaluacion, !bloqueada else { return }
 
         let grupoAusentes = actual.grupos.first(where: \.esAusentes)
         let aDistribuir = actual.grupos.filter { !$0.esAusentes }.flatMap(\.estudiantes)
         guard !aDistribuir.isEmpty else { return }
 
-        let numGrupos = max(1, Int((Double(aDistribuir.count) / Double(tamano)).rounded(.up)))
+        let numGrupos = distribucionPorCantidad
+            ? max(1, cantidadGrupos)
+            : max(1, Int((Double(aDistribuir.count) / Double(tamanoGrupo)).rounded(.up)))
         var nuevos = (1...numGrupos).map {
             GrupoListaCotejo(id: EvaluacionesIDs.uid(prefix: "grupo"), nombre: "Grupo \($0)", estudiantes: [])
         }

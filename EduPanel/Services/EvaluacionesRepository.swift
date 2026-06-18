@@ -140,6 +140,266 @@ struct EvaluacionesRepository {
         try await setData(dict, at: try userDoc(col: "rubricas_evaluaciones", id: evaluacion.id), merge: true)
     }
 
+    // MARK: - Sincronización con Calificaciones
+
+    func sincronizarRubricaConCalificaciones(
+        rubrica: RubricaTemplate,
+        evaluacion: EvaluacionRubrica,
+        roster: [EstudiantePerfil],
+        sobrescribir: Bool
+    ) async throws -> SyncCalificacionesResultado {
+        let evaluacionId = EvaluacionesIDs.buildRubricaEvaluacionId(rubricaId: rubrica.id)
+        var notasCalculadas: [String: (nombre: String, nota: String)] = [:]
+        var estudiantesSinNota = 0
+
+        for est in evaluacion.todosLosEstudiantes {
+            let tienePuntajes = !est.puntajes.isEmpty
+            guard tienePuntajes || est.completado else {
+                estudiantesSinNota += 1
+                continue
+            }
+            let puntaje = rubrica.calcularPuntaje(puntajes: est.puntajes)
+            let nota = NotaChilena.calcular(puntaje: puntaje, puntajeMaximo: rubrica.puntajeMaximo, exigencia: est.hasPie ? 0.5 : 0.6)
+            notasCalculadas[est.estudianteId] = (est.nombre, String(format: "%.1f", nota))
+        }
+
+        return try await aplicarSincronizacion(
+            asignatura: rubrica.asignatura,
+            curso: rubrica.curso,
+            evaluacionId: evaluacionId,
+            label: rubrica.nombre.isEmpty ? (evaluacion.rubricaNombre.isEmpty ? "R\u{00FA}brica" : evaluacion.rubricaNombre) : rubrica.nombre,
+            unidadId: rubrica.unidadId,
+            oaIds: Self.oaIds(oas: rubrica.oas, refs: rubrica.partes.flatMap(\.oasVinculados)),
+            notasCalculadas: notasCalculadas,
+            estudiantesSinNota: estudiantesSinNota,
+            roster: roster,
+            sobrescribir: sobrescribir
+        )
+    }
+
+    func sincronizarListaConCalificaciones(
+        lista: ListaCotejoTemplate,
+        evaluacion: ListaCotejoEvaluacion,
+        roster: [EstudiantePerfil],
+        sobrescribir: Bool
+    ) async throws -> SyncCalificacionesResultado {
+        let evaluacionId = EvaluacionesIDs.buildListaEvaluacionId(listaId: lista.id)
+        var notasCalculadas: [String: (nombre: String, nota: String)] = [:]
+        var estudiantesSinNota = 0
+
+        for est in evaluacion.todosLosEstudiantes {
+            let tieneRespuestas = !est.respuestas.isEmpty
+            guard tieneRespuestas || est.completado else {
+                estudiantesSinNota += 1
+                continue
+            }
+            var temp = est
+            temp.recalcular(con: lista)
+            let nota = temp.nota ?? NotaChilena.calcular(puntaje: 0, puntajeMaximo: lista.puntajeMaximo, exigencia: est.hasPie ? 0.5 : 0.6)
+            notasCalculadas[est.estudianteId] = (est.nombre, String(format: "%.1f", nota))
+        }
+
+        return try await aplicarSincronizacion(
+            asignatura: lista.asignatura,
+            curso: lista.curso,
+            evaluacionId: evaluacionId,
+            label: lista.nombre.isEmpty ? (evaluacion.listaNombre.isEmpty ? "Lista de cotejo" : evaluacion.listaNombre) : lista.nombre,
+            unidadId: lista.unidadId,
+            oaIds: Self.oaIds(oas: lista.oas, refs: lista.secciones.flatMap(\.oasVinculados)),
+            notasCalculadas: notasCalculadas,
+            estudiantesSinNota: estudiantesSinNota,
+            roster: roster,
+            sobrescribir: sobrescribir
+        )
+    }
+
+    private func aplicarSincronizacion(
+        asignatura: String,
+        curso: String,
+        evaluacionId: String,
+        label: String,
+        unidadId: String?,
+        oaIds: [String],
+        notasCalculadas: [String: (nombre: String, nota: String)],
+        estudiantesSinNota: Int,
+        roster: [EstudiantePerfil],
+        sobrescribir: Bool
+    ) async throws -> SyncCalificacionesResultado {
+        let calId = Self.buildCalificacionesId(asignatura: asignatura, curso: curso)
+        let ref = try userDoc(col: "calificaciones", id: calId)
+        let snapshot = try await getDocument(ref)
+        let data = snapshot.data() ?? [:]
+        let estudiantesBase = data["estudiantes"] as? [[String: Any]] ?? []
+        let evaluacionesBase = data["evaluaciones"] as? [[String: Any]] ?? []
+        let evaluacionExistia = evaluacionesBase.contains { ($0["id"] as? String) == evaluacionId }
+
+        var estudiantesMap: [String: [String: Any]] = [:]
+        for (index, est) in roster.enumerated() {
+            estudiantesMap[est.id] = [
+                "id": est.id,
+                "name": est.nombre,
+                "orden": est.orden > 0 ? est.orden : index + 1,
+                "notas": [String: Any](),
+                "hasPie": est.pie,
+                "pieDiagnostico": est.pieDiagnostico
+            ]
+        }
+        for est in estudiantesBase {
+            guard let id = est["id"] as? String else { continue }
+            var merged = estudiantesMap[id] ?? [:]
+            for (key, value) in est { merged[key] = value }
+            let name = (est["name"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                ?? (estudiantesMap[id]?["name"] as? String)
+                ?? (est["nombre"] as? String)
+                ?? ""
+            merged["name"] = name
+            var notas = (estudiantesMap[id]?["notas"] as? [String: Any]) ?? [:]
+            if let estNotas = est["notas"] as? [String: Any] {
+                for (key, value) in estNotas { notas[key] = value }
+            }
+            merged["notas"] = notas
+            estudiantesMap[id] = merged
+        }
+        for (id, val) in notasCalculadas where estudiantesMap[id] == nil {
+            estudiantesMap[id] = ["id": id, "name": val.nombre, "notas": [String: Any](), "hasPie": false]
+        }
+
+        var conflictos: [SyncConflicto] = []
+        for (id, val) in notasCalculadas {
+            let anterior = Self.normalizarNota((estudiantesMap[id]?["notas"] as? [String: Any])?[evaluacionId])
+            if !anterior.isEmpty && anterior != val.nota {
+                conflictos.append(SyncConflicto(estudianteId: id, nombre: val.nombre, anterior: anterior, nueva: val.nota))
+            }
+        }
+
+        if !conflictos.isEmpty && !sobrescribir {
+            return SyncCalificacionesResultado(
+                evaluacionId: evaluacionId,
+                notasSincronizadas: notasCalculadas.count,
+                estudiantesSinNota: estudiantesSinNota,
+                evaluacionExistia: evaluacionExistia,
+                requiereConfirmacion: true,
+                conflictos: conflictos
+            )
+        }
+
+        for (id, val) in notasCalculadas {
+            guard var est = estudiantesMap[id] else { continue }
+            var notas = (est["notas"] as? [String: Any]) ?? [:]
+            notas[evaluacionId] = val.nota
+            est["notas"] = notas
+            estudiantesMap[id] = est
+        }
+
+        var evalEntry: [String: Any] = [
+            "id": evaluacionId,
+            "label": label,
+            "tipo": "sumativa",
+            "periodo": Self.periodoActual(),
+            "oaIds": oaIds
+        ]
+        if let unidadId, !unidadId.isEmpty { evalEntry["unidadId"] = unidadId }
+
+        let evaluacionesActualizadas: [[String: Any]] = evaluacionExistia
+            ? evaluacionesBase.map { ev in
+                (ev["id"] as? String) == evaluacionId ? ev.merging(evalEntry) { _, nuevo in nuevo } : ev
+            }
+            : evaluacionesBase + [evalEntry]
+
+        let estudiantesOrdenados = estudiantesMap.values.sorted {
+            (Self.asInt($0["orden"]) ?? 999) < (Self.asInt($1["orden"]) ?? 999)
+        }
+
+        try await setData([
+            "asignatura": asignatura,
+            "curso": curso,
+            "estudiantes": estudiantesOrdenados,
+            "evaluaciones": evaluacionesActualizadas,
+            "updatedAt": FieldValue.serverTimestamp()
+        ], at: ref, merge: true)
+
+        return SyncCalificacionesResultado(
+            evaluacionId: evaluacionId,
+            notasSincronizadas: notasCalculadas.count,
+            estudiantesSinNota: estudiantesSinNota,
+            evaluacionExistia: evaluacionExistia,
+            requiereConfirmacion: false,
+            conflictos: conflictos
+        )
+    }
+
+    // MARK: - Helpers de Calificaciones
+
+    static func buildCalificacionesId(asignatura: String, curso: String) -> String {
+        let combinado = "calif_\(asignatura)_\(curso)"
+        return combinado
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL"))
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "_")
+            .replacingOccurrences(of: "[^a-z0-9_]", with: "", options: .regularExpression)
+    }
+
+    static func periodoActual(now: Date = Date()) -> String {
+        let mes = Calendar.current.component(.month, from: now)
+        return mes <= 7 ? "s1" : "s2"
+    }
+
+    static func oaIds(oas: [OAEditado]?, refs: [String]) -> [String] {
+        var ids: [String] = []
+        var vistos = Set<String>()
+        func agregar(_ valor: String) {
+            guard !valor.isEmpty, !vistos.contains(valor) else { return }
+            vistos.insert(valor)
+            ids.append(valor)
+        }
+        (oas ?? []).filter(\.seleccionado).forEach { agregar($0.id) }
+        let regex = try? NSRegularExpression(pattern: "\\bOA\\s*(\\d+)\\b", options: .caseInsensitive)
+        for ref in refs {
+            let limpio = ref.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !limpio.isEmpty else { continue }
+            if let regex,
+               let match = regex.firstMatch(in: limpio, range: NSRange(limpio.startIndex..., in: limpio)),
+               let numeroRange = Range(match.range(at: 1), in: limpio) {
+                agregar("OA\(limpio[numeroRange])")
+            } else {
+                agregar(limpio)
+            }
+        }
+        return ids
+    }
+
+    static func normalizarNota(_ value: Any?) -> String {
+        guard let value else { return "" }
+        if let numero = asDouble(value) {
+            return String(format: "%.1f", numero)
+        }
+        let str = "\(value)".trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !str.isEmpty else { return "" }
+        if let numero = Double(str.replacingOccurrences(of: ",", with: ".")) {
+            return String(format: "%.1f", numero)
+        }
+        return str
+    }
+
+    private static func asInt(_ value: Any?) -> Int? {
+        switch value {
+        case let int as Int: return int
+        case let number as NSNumber: return number.intValue
+        case let double as Double: return Int(double)
+        case let string as String: return Int(string)
+        default: return nil
+        }
+    }
+
+    private static func asDouble(_ value: Any?) -> Double? {
+        switch value {
+        case let double as Double: return double
+        case let int as Int: return Double(int)
+        case let number as NSNumber: return number.doubleValue
+        default: return nil
+        }
+    }
+
     // MARK: - Decodificación
 
     private func decode<T: Decodable>(_ type: T.Type, from snapshot: DocumentSnapshot) -> T? {

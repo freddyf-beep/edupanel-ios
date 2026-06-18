@@ -8,6 +8,7 @@ struct ListaCotejoEditorView: View {
 
     @State private var lista: ListaCotejoTemplate?
     @State private var cursos: [String] = []
+    @State private var nivelMapping: [String: String] = [:]
     @State private var isLoading = true
     @State private var isSaving = false
     @State private var saveOk = false
@@ -94,20 +95,19 @@ struct ListaCotejoEditorView: View {
                     .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
 
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("ESCALA")
-                            .font(.system(size: 10, weight: .black))
-                            .tracking(0.8)
-                            .foregroundStyle(.secondary)
-                        HStack(spacing: 6) {
-                            EPStatusPill(text: lista?.etiquetaSi ?? "S\u{00ED}", icon: "checkmark", tint: .green)
-                            EPStatusPill(text: lista?.etiquetaNo ?? "No", icon: "xmark", tint: .red)
-                        }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("ESCALA DICOT\u{00D3}MICA")
+                        .font(.system(size: 10, weight: .black))
+                        .tracking(0.8)
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        escalaCampo(titulo: "Logrado", icono: "checkmark", tint: .green, texto: bindingEscala(0, def: "S\u{00ED}"))
+                        escalaCampo(titulo: "No logrado", icono: "xmark", tint: .red, texto: bindingEscala(1, def: "No"))
                     }
+                }
 
+                HStack {
                     Spacer()
-
                     VStack(alignment: .trailing, spacing: 6) {
                         Text("PUNTAJE M\u{00C1}XIMO")
                             .font(.system(size: 10, weight: .black))
@@ -119,6 +119,17 @@ struct ListaCotejoEditorView: View {
                     }
                 }
             }
+        }
+
+        if let actual = lista {
+            EvaluacionesCurriculoSection(
+                asignatura: actual.asignatura,
+                curso: actual.curso,
+                nivelMapping: nivelMapping,
+                unidadId: Binding(get: { lista?.unidadId }, set: { lista?.unidadId = $0 }),
+                unidadNombre: Binding(get: { lista?.unidadNombre }, set: { lista?.unidadNombre = $0 }),
+                oas: Binding(get: { lista?.oas }, set: { lista?.oas = $0 })
+            )
         }
 
         if let lista {
@@ -173,39 +184,76 @@ struct ListaCotejoEditorView: View {
                 )
 
                 ForEach(seccion.indicadores) { indicador in
-                    HStack(alignment: .top, spacing: 8) {
-                        Text("\(indicador.orden)")
-                            .font(.system(size: 11, weight: .black, design: .rounded))
-                            .foregroundStyle(EPTheme.primary)
-                            .frame(width: 24, height: 24)
-                            .background(EPTheme.primary.opacity(0.1), in: Circle())
-
-                        TextField(
-                            "Indicador observable (ej: nombra, se\u{00F1}ala, ejecuta...)",
-                            text: bindingIndicador(seccion.id, indicador.id),
-                            axis: .vertical
-                        )
-                        .lineLimit(1...4)
-                        .font(.system(size: 13))
-                        .padding(9)
-                        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-
-                        Button {
-                            actualizarSeccion(seccion.id) { sec in
-                                guard sec.indicadores.count > 1 else { return }
-                                sec.indicadores.removeAll { $0.id == indicador.id }
-                                for index in sec.indicadores.indices {
-                                    sec.indicadores[index].orden = index + 1
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 10, weight: .black))
-                                .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .top, spacing: 8) {
+                            Text("\(indicador.orden)")
+                                .font(.system(size: 11, weight: .black, design: .rounded))
+                                .foregroundStyle(EPTheme.primary)
                                 .frame(width: 24, height: 24)
-                                .background(Color(.systemGray6), in: Circle())
+                                .background(EPTheme.primary.opacity(0.1), in: Circle())
+
+                            TextField(
+                                "Indicador observable (ej: nombra, se\u{00F1}ala, ejecuta...)",
+                                text: bindingIndicador(seccion.id, indicador.id),
+                                axis: .vertical
+                            )
+                            .lineLimit(1...4)
+                            .font(.system(size: 13))
+                            .padding(9)
+                            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+
+                            Button {
+                                actualizarSeccion(seccion.id) { sec in
+                                    guard sec.indicadores.count > 1 else { return }
+                                    sec.indicadores.removeAll { $0.id == indicador.id }
+                                    for index in sec.indicadores.indices {
+                                        sec.indicadores[index].orden = index + 1
+                                    }
+                                }
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 10, weight: .black))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 24, height: 24)
+                                    .background(Color(.systemGray6), in: Circle())
+                            }
+                            .padding(.top, 5)
                         }
-                        .padding(.top, 5)
+
+                        if let aviso = Self.avisoVerbo(indicador.texto) {
+                            Label(aviso, systemImage: "exclamationmark.triangle.fill")
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .foregroundStyle(.orange)
+                                .padding(.leading, 32)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        HStack(spacing: 6) {
+                            indicadorChip("Transversal", "arrow.triangle.branch", activo: indicador.esTransversal == true, tint: .purple) {
+                                actualizarIndicadorCampo(seccion.id, indicador.id) { $0.esTransversal = !($0.esTransversal ?? false) }
+                            }
+                            indicadorChip("Puedo filmarlo", "video.fill", activo: indicador.puedoFilmarloConfirmado == true, tint: .blue) {
+                                actualizarIndicadorCampo(seccion.id, indicador.id) { $0.puedoFilmarloConfirmado = !($0.puedoFilmarloConfirmado ?? false) }
+                            }
+                            indicadorChip("Foco PIE", "target", activo: indicador.focoDiferenciadoActivo == true, tint: EPTheme.primary) {
+                                actualizarIndicadorCampo(seccion.id, indicador.id) { $0.focoDiferenciadoActivo = !($0.focoDiferenciadoActivo ?? false) }
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.leading, 32)
+
+                        if indicador.focoDiferenciadoActivo == true {
+                            TextField(
+                                "Foco diferenciado para estudiantes PIE...",
+                                text: bindingFocoTexto(seccion.id, indicador.id),
+                                axis: .vertical
+                            )
+                            .lineLimit(1...3)
+                            .font(.system(size: 12))
+                            .padding(8)
+                            .background(EPTheme.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .padding(.leading, 32)
+                        }
                     }
                 }
 
@@ -266,10 +314,90 @@ struct ListaCotejoEditorView: View {
         )
     }
 
+    private func actualizarIndicadorCampo(_ seccionId: String, _ indicadorId: String, _ transform: (inout IndicadorListaCotejo) -> Void) {
+        actualizarSeccion(seccionId) { sec in
+            if let index = sec.indicadores.firstIndex(where: { $0.id == indicadorId }) {
+                transform(&sec.indicadores[index])
+            }
+        }
+    }
+
+    private func bindingFocoTexto(_ seccionId: String, _ indicadorId: String) -> Binding<String> {
+        Binding(
+            get: { seccionActual(seccionId)?.indicadores.first { $0.id == indicadorId }?.focoDiferenciadoTexto ?? "" },
+            set: { nuevo in actualizarIndicadorCampo(seccionId, indicadorId) { $0.focoDiferenciadoTexto = nuevo } }
+        )
+    }
+
+    private func indicadorChip(_ titulo: String, _ icono: String, activo: Bool, tint: Color, accion: @escaping () -> Void) -> some View {
+        Button(action: accion) {
+            HStack(spacing: 4) {
+                Image(systemName: icono)
+                    .font(.system(size: 8.5, weight: .black))
+                Text(titulo)
+                    .font(.system(size: 9.5, weight: .black))
+            }
+            .foregroundStyle(activo ? .white : tint)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(activo ? AnyShapeStyle(tint) : AnyShapeStyle(tint.opacity(0.12)), in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
     private static func parseRefs(_ value: String) -> [String] {
         value.split(whereSeparator: { ",;/|".contains($0) })
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+    private func escalaCampo(titulo: String, icono: String, tint: Color, texto: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label(titulo, systemImage: icono)
+                .font(.system(size: 9.5, weight: .black))
+                .foregroundStyle(tint)
+            TextField(titulo, text: texto)
+                .font(.system(size: 13, weight: .bold))
+                .padding(9)
+                .background(tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func bindingEscala(_ index: Int, def: String) -> Binding<String> {
+        Binding(
+            get: {
+                let escala = lista?.escalaDicotomica ?? ["S\u{00ED}", "No"]
+                return index < escala.count ? escala[index] : def
+            },
+            set: { nuevo in
+                var escala = lista?.escalaDicotomica ?? ["S\u{00ED}", "No"]
+                while escala.count < 2 { escala.append(escala.isEmpty ? "S\u{00ED}" : "No") }
+                escala[index] = nuevo
+                lista?.escalaDicotomica = escala
+            }
+        )
+    }
+
+    /// Verbos cognitivos inobservables: en una lista de cotejo conviene evitarlos (igual que la web).
+    private static let verbosMentalistas: Set<String> = [
+        "comprende", "comprender", "comprenden", "comprendio",
+        "entiende", "entender", "entienden", "entendio",
+        "sabe", "saber", "saben", "sabia",
+        "conoce", "conocer", "conocen", "conocio",
+        "reflexiona", "reflexionar", "reflexionan",
+        "valora", "valorar", "valoran", "valoro",
+        "aprecia", "apreciar", "aprecian",
+        "asimila", "asimilar", "asimilacion",
+        "piensa", "pensar", "piensan",
+        "razona", "razonar", "razonan"
+    ]
+
+    static func avisoVerbo(_ texto: String) -> String? {
+        let limpio = texto.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_CL")).lowercased()
+        let palabras = limpio.split { !($0.isLetter) }.map(String.init)
+        guard let coincidencia = palabras.first(where: { verbosMentalistas.contains($0) }) else { return nil }
+        return "Evita verbos no observables como \u{201C}\(coincidencia)\u{201D}. Usa verbos observables (nombra, se\u{00F1}ala, ejecuta...)."
     }
 
     // MARK: - Datos
@@ -279,6 +407,7 @@ struct ListaCotejoEditorView: View {
         do {
             let snapshot = try await dashboardRepository.fetchDashboard()
             cursos = snapshot.courses
+            nivelMapping = snapshot.nivelMapping
 
             if let listaId {
                 guard let existente = try await repository.cargarListaCotejo(id: listaId) else {

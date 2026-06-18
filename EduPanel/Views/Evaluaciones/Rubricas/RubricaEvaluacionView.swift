@@ -14,6 +14,8 @@ struct RubricaEvaluacionView: View {
     @State private var errorMessage: String?
     @State private var mostrarDistribucion = false
     @State private var tamanoGrupo = 2
+    @State private var cantidadGrupos = 4
+    @State private var distribucionPorCantidad = false
     @State private var confirmandoBloqueo = false
     @State private var autosaveTask: Task<Void, Never>?
 
@@ -200,13 +202,26 @@ struct RubricaEvaluacionView: View {
                     icon: "shuffle"
                 )
 
-                Stepper(value: $tamanoGrupo, in: 2...10) {
-                    Text("\(tamanoGrupo) estudiantes por grupo")
-                        .font(.system(size: 13, weight: .bold))
+                Picker("Modo", selection: $distribucionPorCantidad) {
+                    Text("Por tama\u{00F1}o").tag(false)
+                    Text("Cantidad de grupos").tag(true)
+                }
+                .pickerStyle(.segmented)
+
+                if distribucionPorCantidad {
+                    Stepper(value: $cantidadGrupos, in: 1...12) {
+                        Text("\(cantidadGrupos) grupos")
+                            .font(.system(size: 13, weight: .bold))
+                    }
+                } else {
+                    Stepper(value: $tamanoGrupo, in: 2...10) {
+                        Text("\(tamanoGrupo) estudiantes por grupo")
+                            .font(.system(size: 13, weight: .bold))
+                    }
                 }
 
                 Button {
-                    distribuir(tamano: tamanoGrupo)
+                    distribuir()
                 } label: {
                     Label("Distribuir ahora", systemImage: "wand.and.stars")
                         .font(.system(size: 12.5, weight: .black))
@@ -508,14 +523,16 @@ struct RubricaEvaluacionView: View {
         programarAutosave()
     }
 
-    private func distribuir(tamano: Int) {
+    private func distribuir() {
         guard var actual = evaluacion, !bloqueada else { return }
 
         let grupoAusentes = actual.grupos.first(where: \.esAusentes)
         let aDistribuir = actual.grupos.filter { !$0.esAusentes }.flatMap(\.estudiantes)
         guard !aDistribuir.isEmpty else { return }
 
-        let numGrupos = max(1, Int((Double(aDistribuir.count) / Double(tamano)).rounded(.up)))
+        let numGrupos = distribucionPorCantidad
+            ? max(1, cantidadGrupos)
+            : max(1, Int((Double(aDistribuir.count) / Double(tamanoGrupo)).rounded(.up)))
         var nuevos = (1...numGrupos).map {
             GrupoRubrica(id: EvaluacionesIDs.uid(prefix: "grupo"), nombre: "Grupo \($0)", estudiantes: [])
         }

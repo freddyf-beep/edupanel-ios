@@ -23,20 +23,66 @@ final class EvaluacionesViewModel {
     }
 
     var activeSubject: String {
-        selectedSubject ?? availableSubjects.first ?? Self.defaultSubject
+        if let selectedSubject, !selectedSubject.isEmpty { return selectedSubject }
+        if let delCurso = asignaturasDelCurso(selectedCurso).first { return delCurso }
+        if let habilitada = asignaturasHabilitadas.first { return habilitada }
+        let especialidad = snapshot?.profile.especialidad.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return especialidad.isEmpty ? Self.defaultSubject : especialidad
     }
 
+    /// Asignaturas para el selector: las del curso elegido, las habilitadas en perfil y la especialidad.
+    /// Esto da una escotilla de escape: aunque la asignatura guardada no coincida con la derivada,
+    /// el docente puede cambiarla a mano y recuperar sus evaluaciones.
     var availableSubjects: [String] {
-        let habilitadas = snapshot?.preferences.asignaturasHabilitadas
+        var resultado: [String] = []
+        var vistos = Set<String>()
+        func agregar(_ valor: String) {
+            let limpio = valor.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !limpio.isEmpty, !vistos.contains(limpio) else { return }
+            vistos.insert(limpio)
+            resultado.append(limpio)
+        }
+        asignaturasDelCurso(selectedCurso).forEach(agregar)
+        asignaturasHabilitadas.forEach(agregar)
+        agregar(snapshot?.profile.especialidad ?? "")
+        if resultado.isEmpty { agregar(Self.defaultSubject) }
+        return resultado
+    }
+
+    private var asignaturasHabilitadas: [String] {
+        (snapshot?.preferences.asignaturasHabilitadas ?? [])
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty } ?? []
-        if !habilitadas.isEmpty { return habilitadas }
-        let especialidad = snapshot?.profile.especialidad.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return [especialidad.isEmpty ? Self.defaultSubject : especialidad]
+            .filter { !$0.isEmpty }
+    }
+
+    /// Asignaturas que el docente enseña en un curso, leídas de los bloques del horario.
+    func asignaturasDelCurso(_ curso: String) -> [String] {
+        guard !curso.isEmpty, let horario = snapshot?.horario else { return [] }
+        var resultado: [String] = []
+        var vistos = Set<String>()
+        for clase in horario where clase.resumen == curso {
+            guard let asignatura = clase.asignatura?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !asignatura.isEmpty, !vistos.contains(asignatura) else { continue }
+            vistos.insert(asignatura)
+            resultado.append(asignatura)
+        }
+        return resultado
     }
 
     var cursos: [String] {
         snapshot?.courses ?? []
+    }
+
+    /// Cambia de curso reseteando la asignatura elegida para que se re-derive del nuevo curso.
+    func seleccionarCurso(_ curso: String) async {
+        selectedCurso = curso
+        selectedSubject = nil
+        await loadContenido()
+    }
+
+    func seleccionarAsignatura(_ asignatura: String) async {
+        selectedSubject = asignatura
+        await loadContenido()
     }
 
     func estudiantes(curso: String) -> [EstudiantePerfil] {

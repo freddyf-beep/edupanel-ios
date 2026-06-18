@@ -2,9 +2,11 @@ import SwiftUI
 
 struct RubricaResultadosView: View {
     let rubricaId: String
+    var dashboardRepository: DashboardRepository = DashboardRepository()
 
     @State private var rubrica: RubricaTemplate?
     @State private var evaluacion: EvaluacionRubrica?
+    @State private var roster: [EstudiantePerfil] = []
     @State private var incluirAusentes = false
     @State private var isLoading = true
     @State private var errorMessage: String?
@@ -70,6 +72,17 @@ struct RubricaResultadosView: View {
             histogramaCard
             criteriosCard
             tablaResultados
+
+            if let rubrica, let evaluacion {
+                SincronizarCalificacionesButton { sobrescribir in
+                    try await repository.sincronizarRubricaConCalificaciones(
+                        rubrica: rubrica,
+                        evaluacion: evaluacion,
+                        roster: roster,
+                        sobrescribir: sobrescribir
+                    )
+                }
+            }
         }
     }
 
@@ -89,32 +102,7 @@ struct RubricaResultadosView: View {
     }
 
     private var histogramaCard: some View {
-        EPWebCard {
-            VStack(alignment: .leading, spacing: 14) {
-                EPSectionHeader(title: "Distribuci\u{00F3}n de notas", icon: "chart.bar.fill")
-
-                let bins = histograma
-                let maximo = max(bins.map(\.cantidad).max() ?? 1, 1)
-
-                HStack(alignment: .bottom, spacing: 8) {
-                    ForEach(bins, id: \.rango) { bin in
-                        VStack(spacing: 5) {
-                            Text(bin.cantidad > 0 ? "\(bin.cantidad)" : "")
-                                .font(.system(size: 10, weight: .black, design: .rounded))
-                                .foregroundStyle(.secondary)
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(bin.aprobado ? Color.green.opacity(0.75) : Color.red.opacity(0.65))
-                                .frame(height: max(CGFloat(bin.cantidad) / CGFloat(maximo) * 90, bin.cantidad > 0 ? 8 : 3))
-                            Text(bin.rango)
-                                .font(.system(size: 8.5, weight: .bold))
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                }
-                .frame(height: 130, alignment: .bottom)
-            }
-        }
+        HistogramaNotasView(bins: NotaBin.bins(notas: activos.compactMap(\.nota)))
     }
 
     private var criteriosCard: some View {
@@ -211,12 +199,6 @@ struct RubricaResultadosView: View {
 
     // MARK: - Estadísticas
 
-    private struct BinHistograma {
-        let rango: String
-        let cantidad: Int
-        let aprobado: Bool
-    }
-
     private struct CriterioStat {
         let id: String
         let nombre: String
@@ -255,19 +237,6 @@ struct RubricaResultadosView: View {
         return suma / Double(activos.count)
     }
 
-    private var histograma: [BinHistograma] {
-        let rangos = ["1.0\u{2013}1.9", "2.0\u{2013}2.9", "3.0\u{2013}3.9", "4.0\u{2013}4.9", "5.0\u{2013}5.9", "6.0\u{2013}7.0"]
-        var conteos = Array(repeating: 0, count: 6)
-        for est in activos {
-            guard let nota = est.nota else { continue }
-            let index = min(max(Int(nota) - 1, 0), 5)
-            conteos[index] += 1
-        }
-        return rangos.enumerated().map { index, rango in
-            BinHistograma(rango: rango, cantidad: conteos[index], aprobado: index >= 3)
-        }
-    }
-
     private var promediosPorCriterio: [CriterioStat] {
         guard let rubrica else { return [] }
         return rubrica.partes.flatMap { parte in
@@ -291,6 +260,10 @@ struct RubricaResultadosView: View {
                 return
             }
             rubrica = rubricaCargada
+
+            if let snapshot = try? await dashboardRepository.fetchDashboard() {
+                roster = (snapshot.studentsByCourse[rubricaCargada.curso] ?? []).sorted { $0.orden < $1.orden }
+            }
 
             if var evaluacionCargada = try await repository.cargarEvaluacionRubrica(rubricaId: rubricaId) {
                 for grupoIndex in evaluacionCargada.grupos.indices {
