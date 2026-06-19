@@ -105,7 +105,8 @@ struct ListaCotejoCardView: View {
                         .frame(width: 32, height: 32)
                         .background(EPTheme.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        EPStatusPill(text: lista.asignatura.isEmpty ? "Sin asignatura" : lista.asignatura, icon: "book.closed.fill", tint: EPTheme.primary)
                         Text(lista.nombre.isEmpty ? "Lista de cotejo" : lista.nombre)
                             .font(.system(size: 15, weight: .black))
                             .foregroundStyle(.primary)

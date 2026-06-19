@@ -117,8 +117,10 @@ final class EvaluacionesViewModel {
         defer { isLoadingContenido = false }
 
         do {
-            async let listasCargadas = evaluacionesRepository.cargarListasCotejo(asignatura: activeSubject, curso: selectedCurso)
-            async let rubricasCargadas = evaluacionesRepository.cargarRubricas(asignatura: activeSubject, curso: selectedCurso)
+            // Mostramos TODAS las asignaturas del curso (cada tarjeta indica la suya);
+            // el selector de asignatura solo define con qué asignatura se crea una nueva.
+            async let listasCargadas = evaluacionesRepository.cargarListasCotejo(asignatura: nil, curso: selectedCurso)
+            async let rubricasCargadas = evaluacionesRepository.cargarRubricas(asignatura: nil, curso: selectedCurso)
             listas = try await listasCargadas
             rubricas = try await rubricasCargadas
             errorMessage = nil

@@ -101,7 +101,8 @@ struct RubricaCardView: View {
                         .frame(width: 32, height: 32)
                         .background(EPTheme.fuchsia.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        EPStatusPill(text: rubrica.asignatura.isEmpty ? "Sin asignatura" : rubrica.asignatura, icon: "book.closed.fill", tint: EPTheme.fuchsia)
                         Text(rubrica.nombre.isEmpty ? "R\u{00FA}brica" : rubrica.nombre)
                             .font(.system(size: 15, weight: .black))
                             .foregroundStyle(.primary)

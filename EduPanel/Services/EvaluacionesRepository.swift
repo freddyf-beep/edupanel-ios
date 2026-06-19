@@ -28,11 +28,11 @@ struct EvaluacionesRepository {
 
     // MARK: - Listas de Cotejo
 
-    func cargarListasCotejo(asignatura: String, curso: String) async throws -> [ListaCotejoTemplate] {
+    func cargarListasCotejo(asignatura: String?, curso: String) async throws -> [ListaCotejoTemplate] {
         let snapshot = try await getDocuments(try userCol(col: "listas_cotejo"))
         return snapshot.documents
             .compactMap { decode(ListaCotejoTemplate.self, from: $0) }
-            .filter { $0.asignatura == asignatura && $0.curso == curso }
+            .filter { $0.curso == curso && (asignatura == nil || $0.asignatura == asignatura) }
             .sorted { ($0.fechaActualizacion ?? .distantPast) > ($1.fechaActualizacion ?? .distantPast) }
     }
 
@@ -85,11 +85,11 @@ struct EvaluacionesRepository {
 
     // MARK: - Rúbricas
 
-    func cargarRubricas(asignatura: String, curso: String) async throws -> [RubricaTemplate] {
+    func cargarRubricas(asignatura: String?, curso: String) async throws -> [RubricaTemplate] {
         let snapshot = try await getDocuments(try userCol(col: "rubricas"))
         return snapshot.documents
             .compactMap { decode(RubricaTemplate.self, from: $0) }
-            .filter { $0.asignatura == asignatura && $0.curso == curso }
+            .filter { $0.curso == curso && (asignatura == nil || $0.asignatura == asignatura) }
             .sorted { ($0.fechaActualizacion ?? .distantPast) > ($1.fechaActualizacion ?? .distantPast) }
     }
 
