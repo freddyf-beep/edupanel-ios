@@ -30,6 +30,14 @@ struct EvaluacionesShell: View {
                     EvaluacionesErrorBanner(message: error)
                 }
 
+                if let diag = viewModel.diagnostico {
+                    EvaluacionesDiagnosticoCard(
+                        diagnostico: diag,
+                        cursoActual: viewModel.selectedCurso,
+                        asignaturaActual: viewModel.activeSubject
+                    )
+                }
+
                 if viewModel.isLoading && viewModel.snapshot == nil {
                     EvaluacionesLoadingCard(texto: "Cargando evaluaciones...")
                 } else if viewModel.cursos.isEmpty {
@@ -156,6 +164,49 @@ struct EvaluacionesCursoPicker: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(EPTheme.primary.opacity(0.1), in: Capsule())
+        }
+    }
+}
+
+struct EvaluacionesDiagnosticoCard: View {
+    let diagnostico: EvaluacionesDiagnostico
+    let cursoActual: String
+    let asignaturaActual: String
+
+    var body: some View {
+        EPWebCard {
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Diagn\u{00F3}stico (temporal)", systemImage: "stethoscope")
+                    .font(.system(size: 11, weight: .black))
+                    .foregroundStyle(.orange)
+
+                Group {
+                    fila("Filtrando curso", "\u{201C}\(cursoActual)\u{201D}")
+                    fila("Asignatura activa", "\u{201C}\(asignaturaActual)\u{201D}")
+                    fila("UID", String(diagnostico.uid.prefix(10)) + "…")
+                    Divider()
+                    fila("R\u{00FA}bricas en BD", "\(diagnostico.totalRubricas) (decodifican \(diagnostico.rubricasDecodificadas))")
+                    fila("Cursos en r\u{00FA}bricas", diagnostico.cursosRubricas.isEmpty ? "—" : diagnostico.cursosRubricas.joined(separator: " | "))
+                    fila("Asignaturas r\u{00FA}bricas", diagnostico.asignaturasRubricas.isEmpty ? "—" : diagnostico.asignaturasRubricas.joined(separator: " | "))
+                    Divider()
+                    fila("Listas en BD", "\(diagnostico.totalListas) (decodifican \(diagnostico.listasDecodificadas))")
+                    fila("Cursos en listas", diagnostico.cursosListas.isEmpty ? "—" : diagnostico.cursosListas.joined(separator: " | "))
+                }
+            }
+        }
+    }
+
+    private func fila(_ titulo: String, _ valor: String) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Text(titulo)
+                .font(.system(size: 10.5, weight: .bold))
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            Text(valor)
+                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

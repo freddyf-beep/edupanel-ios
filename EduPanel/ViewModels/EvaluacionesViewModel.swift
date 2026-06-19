@@ -12,6 +12,7 @@ final class EvaluacionesViewModel {
     var errorMessage: String?
     var selectedCurso: String = ""
     var selectedSubject: String?
+    var diagnostico: EvaluacionesDiagnostico?
 
     private let dashboardRepository: DashboardRepository
     private let evaluacionesRepository: EvaluacionesRepository
@@ -129,6 +130,8 @@ final class EvaluacionesViewModel {
             rubricas = []
             errorMessage = "No se pudieron cargar las evaluaciones de este curso."
         }
+
+        diagnostico = try? await evaluacionesRepository.diagnostico()
     }
 
     func eliminarLista(_ lista: ListaCotejoTemplate) async {
