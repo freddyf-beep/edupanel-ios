@@ -101,6 +101,75 @@ struct EPSectionHeader: View {
     }
 }
 
+struct EPCollapsibleSection<Content: View>: View {
+    private let title: String
+    private let subtitle: String?
+    private let icon: String
+    private let tint: Color
+    private let content: Content
+    @State private var expanded: Bool
+
+    init(
+        title: String,
+        subtitle: String? = nil,
+        icon: String,
+        tint: Color = EPTheme.primary,
+        startsExpanded: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.icon = icon
+        self.tint = tint
+        self.content = content()
+        _expanded = State(initialValue: startsExpanded)
+    }
+
+    var body: some View {
+        EPWebCard {
+            VStack(alignment: .leading, spacing: expanded ? 14 : 0) {
+                Button {
+                    withAnimation(EPTheme.spring) { expanded.toggle() }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: icon)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(tint)
+                            .frame(width: 28, height: 28)
+                            .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(title)
+                                .font(.system(size: 14, weight: .black))
+                                .foregroundStyle(.primary)
+                            if let subtitle, !subtitle.isEmpty {
+                                Text(subtitle)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12, weight: .black))
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(expanded ? 0 : -90))
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if expanded {
+                    content
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+        }
+    }
+}
+
 struct EPKPIBox: View {
     let title: String
     let value: String

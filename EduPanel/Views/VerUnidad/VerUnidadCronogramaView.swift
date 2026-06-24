@@ -13,7 +13,7 @@ struct VerUnidadCronogramaView: View {
     var body: some View {
         if let crono = viewModel.cronograma {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 14) {
                     controlsCard(crono)
                     if !displayMode.isSimple {
                         coverageCard(crono)
@@ -124,10 +124,8 @@ struct VerUnidadCronogramaView: View {
         let percent = total > 0 ? Int((Double(withOAs) / Double(total)) * 100) : 0
         let unassigned = max(0, total - withOAs)
 
-        return EPWebCard {
+        return EPCollapsibleSection(title: "Resumen de cobertura", subtitle: "\(withOAs)/\(total) clases con OA · \(percent)%.", icon: "checkmark.seal.fill") {
             VStack(alignment: .leading, spacing: 12) {
-                EPSectionHeader(title: "Resumen de cobertura", subtitle: "Asignación de OA por clase.", icon: "checkmark.seal.fill")
-
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     EPKPIBox(title: "Clases", value: "\(total)", subtitle: "en secuencia", icon: "number.square.fill", tint: .blue)
                     EPKPIBox(title: "Con OA", value: "\(withOAs)", subtitle: "clases cubiertas", icon: "checkmark.circle.fill", tint: .green)

@@ -15,16 +15,14 @@ struct VerUnidadClasesView: View {
             classSelectorRail
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 14) {
                     classHeaderCard
                     objectivesCard
-                    curriculumTransversalCard
                     editorFields
-                    if !displayMode.isSimple {
-                        externalPedagogyCard
-                    }
+                    curriculumTransversalCard
                     resourcesSection
                     if !displayMode.isSimple {
+                        externalPedagogyCard
                         placeholdersCard
                     }
                 }
@@ -153,11 +151,10 @@ struct VerUnidadClasesView: View {
                     .sensoryFeedback(.impact(weight: .medium), trigger: showingLiveMode)
                 }
 
-                ReplicaFlowLayout(spacing: 7) {
+                HStack(spacing: 7) {
                     EPStatusPill(text: cronoClass?.fecha.isEmpty == false ? cronoClass?.fecha ?? "Sin fecha" : "Sin fecha", icon: "calendar", tint: .blue)
-                    EPStatusPill(text: "Clase \(selectedClassNum)", icon: "number.square.fill", tint: EPTheme.primary)
-                    EPStatusPill(text: "\(linkedOAs.count) OA vinculados", icon: "tag.fill", tint: linkedOAs.isEmpty ? .orange : .green)
-                    EPStatusPill(text: act.estadoLabel, icon: "circle.fill", tint: act.estadoTint)
+                    EPStatusPill(text: "\(linkedOAs.count) OA", icon: "tag.fill", tint: linkedOAs.isEmpty ? .orange : .green)
+                    Spacer(minLength: 0)
                 }
             }
         }
@@ -213,10 +210,8 @@ struct VerUnidadClasesView: View {
     }
 
     private var curriculumTransversalCard: some View {
-        EPWebCard {
-            VStack(alignment: .leading, spacing: 14) {
-                EPSectionHeader(title: "Currículo transversal", subtitle: "Habilidades y actitudes disponibles para esta clase.", icon: "layers.fill")
-
+        EPCollapsibleSection(title: "Currículo transversal", subtitle: "Habilidades y actitudes de la clase.", icon: "layers.fill") {
+            VStack(alignment: .leading, spacing: 16) {
                 curriculumToggleSection(
                     title: "Habilidades",
                     icon: "target",
@@ -226,8 +221,6 @@ struct VerUnidadClasesView: View {
                 ) { value in
                     toggleString(value, keyPath: \.habilidades)
                 }
-
-                Divider()
 
                 curriculumToggleSection(
                     title: "Actitudes",
@@ -301,10 +294,8 @@ struct VerUnidadClasesView: View {
     private var resourcesSection: some View {
         let binding = activeActivityBinding
 
-        return EPWebCard {
-            VStack(alignment: .leading, spacing: 14) {
-                EPSectionHeader(title: "Recursos y materiales de clase", subtitle: "Mantiene chips editables como la web.", icon: "tray.full.fill")
-
+        return EPCollapsibleSection(title: "Recursos y materiales", subtitle: "Materiales, TIC y archivos.", icon: "tray.full.fill") {
+            VStack(alignment: .leading, spacing: 16) {
                 chipEditor(
                     title: "Materiales físicos",
                     placeholder: "Añadir material...",
@@ -318,8 +309,6 @@ struct VerUnidadClasesView: View {
                         viewModel.clasesActividades[selectedClassNum]?.materiales.removeAll { $0 == value }
                     }
                 )
-
-                Divider()
 
                 chipEditor(
                     title: "Herramientas TIC",
@@ -336,7 +325,6 @@ struct VerUnidadClasesView: View {
                 )
 
                 if let archivos = binding.wrappedValue.archivos, !archivos.isEmpty {
-                    Divider()
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Archivos")
                             .font(.caption.weight(.black))
@@ -354,10 +342,8 @@ struct VerUnidadClasesView: View {
     private var externalPedagogyCard: some View {
         let act = activeActivity
 
-        return EPWebCard {
+        return EPCollapsibleSection(title: "Datos pedagógicos avanzados", subtitle: "Multinivel, Bloom y evaluación.", icon: "brain.head.profile") {
             VStack(alignment: .leading, spacing: 14) {
-                EPSectionHeader(title: "Datos pedagógicos avanzados", subtitle: "Campos creados desde la web, IA o planificación avanzada.", icon: "brain.head.profile")
-
                 if !hasExternalPedagogyData(act) {
                     Text("Sin datos avanzados registrados para esta clase.")
                         .font(.footnote.weight(.semibold))
@@ -479,13 +465,10 @@ struct VerUnidadClasesView: View {
     }
 
     private var placeholdersCard: some View {
-        EPWebCard {
-            VStack(alignment: .leading, spacing: 12) {
-                EPSectionHeader(title: "Apoyos IA y Drive", subtitle: "Visible como estructura nativa, sin WebView.", icon: "sparkles")
-                HStack(spacing: 8) {
-                    EPPlaceholderActionButton(title: "Sugerir mejoras", icon: "wand.and.stars", message: "La asistencia IA se conectará después de cerrar la réplica base.")
-                    EPPlaceholderActionButton(title: "Adjuntar Drive", icon: "externaldrive.fill", message: "El selector Drive queda pendiente de conexión nativa.")
-                }
+        EPCollapsibleSection(title: "Apoyos IA y Drive", subtitle: "Acciones rápidas.", icon: "sparkles") {
+            HStack(spacing: 8) {
+                EPPlaceholderActionButton(title: "Sugerir mejoras", icon: "wand.and.stars", message: "La asistencia IA se conectará después de cerrar la réplica base.")
+                EPPlaceholderActionButton(title: "Adjuntar Drive", icon: "externaldrive.fill", message: "El selector Drive queda pendiente de conexión nativa.")
             }
         }
     }

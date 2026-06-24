@@ -11,12 +11,12 @@ struct VerUnidadBaseView: View {
     var body: some View {
         if let verUnidad = viewModel.verUnidad {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 14) {
                     planUnidadCard(verUnidad)
+                    estadoUnidadCard(verUnidad)
                     curriculoCard(verUnidad)
                     rutaTrabajoCard(verUnidad)
                     actividadesUnidadCard(verUnidad)
-                    estadoUnidadCard(verUnidad)
                     recursosEvaluacionCard(verUnidad)
                 }
                 .padding(.horizontal, 16)
@@ -151,10 +151,8 @@ struct VerUnidadBaseView: View {
     }
 
     private func rutaTrabajoCard(_ verUnidad: VerUnidadGuardada) -> some View {
-        EPWebCard {
+        EPCollapsibleSection(title: "Ruta de trabajo", subtitle: "Habilidades, conocimientos y actitudes.", icon: "point.topleft.down.curvedto.point.bottomright.up") {
             VStack(alignment: .leading, spacing: 14) {
-                EPSectionHeader(title: "Ruta de trabajo", subtitle: "Habilidades, conocimientos, actitudes y aprendizajes previos.", icon: "point.topleft.down.curvedto.point.bottomright.up")
-
                 curriculumCategorySection(
                     title: "Habilidades",
                     items: verUnidad.habilidades,
@@ -262,10 +260,8 @@ struct VerUnidadBaseView: View {
     }
 
     private func actividadesUnidadCard(_ verUnidad: VerUnidadGuardada) -> some View {
-        EPWebCard {
+        EPCollapsibleSection(title: "Actividades de la unidad", subtitle: "\((verUnidad.actividades ?? []).count) registradas.", icon: "figure.walk.motion") {
             VStack(alignment: .leading, spacing: 12) {
-                EPSectionHeader(title: "Actividades de la unidad", subtitle: "Datos guardados en la web para la ruta de trabajo.", icon: "figure.walk.motion")
-
                 let actividades = verUnidad.actividades ?? []
                 if actividades.isEmpty {
                     Text("Sin actividades de unidad registradas.")
@@ -321,10 +317,8 @@ struct VerUnidadBaseView: View {
     }
 
     private func recursosEvaluacionCard(_ verUnidad: VerUnidadGuardada) -> some View {
-        EPWebCard {
+        EPCollapsibleSection(title: "Recursos y estrategias", subtitle: "Materiales, evaluación y archivos.", icon: "tray.full.fill") {
             VStack(alignment: .leading, spacing: 16) {
-                EPSectionHeader(title: "Recursos y estrategias", subtitle: "Estructura nativa equivalente al sidebar web.", icon: "tray.full.fill")
-
                 VStack(alignment: .leading, spacing: 9) {
                     Text("Recursos materiales")
                         .font(.caption.weight(.black))
