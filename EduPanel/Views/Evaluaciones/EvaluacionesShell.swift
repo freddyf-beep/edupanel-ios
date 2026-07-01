@@ -188,9 +188,13 @@ struct EvaluacionesDiagnosticoCard: View {
                     fila("R\u{00FA}bricas en BD", "\(diagnostico.totalRubricas) (decodifican \(diagnostico.rubricasDecodificadas))")
                     fila("Cursos en r\u{00FA}bricas", diagnostico.cursosRubricas.isEmpty ? "—" : diagnostico.cursosRubricas.joined(separator: " | "))
                     fila("Asignaturas r\u{00FA}bricas", diagnostico.asignaturasRubricas.isEmpty ? "—" : diagnostico.asignaturasRubricas.joined(separator: " | "))
+                }
+                Group {
                     Divider()
                     fila("Listas en BD", "\(diagnostico.totalListas) (decodifican \(diagnostico.listasDecodificadas))")
                     fila("Cursos en listas", diagnostico.cursosListas.isEmpty ? "—" : diagnostico.cursosListas.joined(separator: " | "))
+                    Divider()
+                    fila("Bajo invitado (web sin sesión)", "\(diagnostico.rubricasInvitado) rúbricas · \(diagnostico.listasInvitado) listas")
                 }
             }
         }

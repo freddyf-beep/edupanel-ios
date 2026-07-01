@@ -558,6 +558,8 @@ struct EvaluacionesDiagnostico {
     var listasDecodificadas: Int
     var cursosListas: [String]
     var asignaturasListas: [String]
+    var rubricasInvitado: Int
+    var listasInvitado: Int
 }
 
 // MARK: - Sincronización con Calificaciones
@@ -612,5 +614,340 @@ enum EvaluacionesIDs {
 
     static func buildRubricaEvaluacionId(rubricaId: String) -> String {
         "eval_\(rubricaId)"
+    }
+}
+
+// MARK: - Decodificación tolerante
+// Los documentos escritos por la web pueden traer campos faltantes o con tipos
+// distintos (Int por Double, número por String, docs antiguos). Sin esto, un solo
+// campo inesperado descarta el documento completo y "desaparece" de la app.
+
+private extension KeyedDecodingContainer {
+    func evString(_ key: Key, default defaultValue: String = "") -> String {
+        if let value = try? decode(String.self, forKey: key) { return value }
+        if let value = try? decode(Int.self, forKey: key) { return String(value) }
+        if let value = try? decode(Double.self, forKey: key) { return String(value) }
+        return defaultValue
+    }
+
+    func evStringOpt(_ key: Key) -> String? {
+        try? decode(String.self, forKey: key)
+    }
+
+    func evInt(_ key: Key, default defaultValue: Int = 0) -> Int {
+        if let value = try? decode(Int.self, forKey: key) { return value }
+        if let value = try? decode(Double.self, forKey: key) { return Int(value) }
+        if let value = try? decode(String.self, forKey: key), let parsed = Int(value.trimmingCharacters(in: .whitespacesAndNewlines)) { return parsed }
+        return defaultValue
+    }
+
+    func evDouble(_ key: Key) -> Double? {
+        if let value = try? decode(Double.self, forKey: key) { return value }
+        if let value = try? decode(Int.self, forKey: key) { return Double(value) }
+        if let value = try? decode(String.self, forKey: key) {
+            return Double(value.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: "."))
+        }
+        return nil
+    }
+
+    func evBool(_ key: Key, default defaultValue: Bool = false) -> Bool {
+        if let value = try? decode(Bool.self, forKey: key) { return value }
+        if let value = try? decode(Int.self, forKey: key) { return value != 0 }
+        return defaultValue
+    }
+
+    func evBoolOpt(_ key: Key) -> Bool? {
+        if let value = try? decode(Bool.self, forKey: key) { return value }
+        if let value = try? decode(Int.self, forKey: key) { return value != 0 }
+        return nil
+    }
+
+    func evArray<T: Decodable>(_ type: [T].Type, _ key: Key) -> [T] {
+        (try? decode(type, forKey: key)) ?? []
+    }
+
+    func evStringArray(_ key: Key) -> [String] {
+        if let value = try? decode([String].self, forKey: key) { return value }
+        return []
+    }
+
+    func evBoolMap(_ key: Key) -> [String: Bool] {
+        if let value = try? decode([String: Bool].self, forKey: key) { return value }
+        if let value = try? decode([String: Int].self, forKey: key) { return value.mapValues { $0 != 0 } }
+        return [:]
+    }
+
+    func evDoubleMap(_ key: Key) -> [String: Double] {
+        if let value = try? decode([String: Double].self, forKey: key) { return value }
+        if let value = try? decode([String: Int].self, forKey: key) { return value.mapValues(Double.init) }
+        if let value = try? decode([String: String].self, forKey: key) {
+            return value.compactMapValues { Double($0.replacingOccurrences(of: ",", with: ".")) }
+        }
+        return [:]
+    }
+}
+
+extension IndicadorListaCotejo {
+    private enum TolerantKeys: String, CodingKey {
+        case id, orden, texto, oasVinculados, esTransversal, focoDiferenciadoActivo, focoDiferenciadoTexto, puedoFilmarloConfirmado
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: TolerantKeys.self)
+        id = c.evString(.id, default: EvaluacionesIDs.uid(prefix: "ind"))
+        orden = c.evInt(.orden, default: 1)
+        texto = c.evString(.texto)
+        oasVinculados = c.evStringArray(.oasVinculados)
+        esTransversal = c.evBoolOpt(.esTransversal)
+        focoDiferenciadoActivo = c.evBoolOpt(.focoDiferenciadoActivo)
+        focoDiferenciadoTexto = c.evStringOpt(.focoDiferenciadoTexto)
+        puedoFilmarloConfirmado = c.evBoolOpt(.puedoFilmarloConfirmado)
+    }
+}
+
+extension SeccionListaCotejo {
+    private enum TolerantKeys: String, CodingKey {
+        case id, orden, nombre, oasVinculados, indicadores
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: TolerantKeys.self)
+        id = c.evString(.id, default: EvaluacionesIDs.uid(prefix: "sec"))
+        orden = c.evInt(.orden, default: 1)
+        nombre = c.evString(.nombre)
+        oasVinculados = c.evStringArray(.oasVinculados)
+        indicadores = c.evArray([IndicadorListaCotejo].self, .indicadores)
+    }
+}
+
+extension ListaCotejoMetadatos {
+    private enum TolerantKeys: String, CodingKey {
+        case objetivos, indicadores, objetivosTransversales
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: TolerantKeys.self)
+        objetivos = c.evStringArray(.objetivos)
+        indicadores = c.evStringArray(.indicadores)
+        objetivosTransversales = c.evStringArray(.objetivosTransversales)
+    }
+}
+
+extension ListaCotejoTemplate {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.evString(.id, default: EvaluacionesIDs.uid(prefix: "lista"))
+        nombre = c.evString(.nombre)
+        asignatura = c.evString(.asignatura)
+        curso = c.evString(.curso)
+        unidadId = c.evStringOpt(.unidadId)
+        unidadNombre = c.evStringOpt(.unidadNombre)
+        metadatosCurriculares = try? c.decode(ListaCotejoMetadatos.self, forKey: .metadatosCurriculares)
+        oas = try? c.decode([OAEditado].self, forKey: .oas)
+        secciones = c.evArray([SeccionListaCotejo].self, .secciones)
+        let porSi = c.evDouble(.puntajePorSi) ?? 1
+        puntajePorSi = porSi > 0 ? porSi : 1
+        let indicadoresTotal = secciones.reduce(0) { $0 + $1.indicadores.count }
+        puntajeMaximo = c.evDouble(.puntajeMaximo) ?? (Double(indicadoresTotal) * puntajePorSi)
+        instruccionesMetodologicas = c.evStringOpt(.instruccionesMetodologicas)
+        let escala = c.evStringArray(.escalaDicotomica)
+        escalaDicotomica = escala.isEmpty ? nil : escala
+        rbd = c.evStringOpt(.rbd)
+        nombreEstablecimiento = c.evStringOpt(.nombreEstablecimiento)
+        docenteNombre = c.evStringOpt(.docenteNombre)
+        fechaActualizacion = nil
+    }
+}
+
+extension EstudianteListaCotejo {
+    private enum TolerantKeys: String, CodingKey {
+        case estudianteId, nombre, hasPie, respuestas, observaciones, puntaje, porcentaje, nota, completado
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: TolerantKeys.self)
+        estudianteId = c.evString(.estudianteId, default: EvaluacionesIDs.uid(prefix: "est"))
+        nombre = c.evString(.nombre)
+        hasPie = c.evBool(.hasPie)
+        respuestas = c.evBoolMap(.respuestas)
+        observaciones = c.evString(.observaciones)
+        puntaje = c.evDouble(.puntaje)
+        porcentaje = c.evDouble(.porcentaje)
+        nota = c.evDouble(.nota)
+        completado = c.evBool(.completado)
+    }
+}
+
+extension GrupoListaCotejo {
+    private enum TolerantKeys: String, CodingKey {
+        case id, nombre, estudiantes
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: TolerantKeys.self)
+        id = c.evString(.id, default: EvaluacionesIDs.uid(prefix: "grupo"))
+        nombre = c.evString(.nombre)
+        estudiantes = c.evArray([EstudianteListaCotejo].self, .estudiantes)
+    }
+}
+
+extension ListaCotejoEvaluacion {
+    private enum LegacyKeys: String, CodingKey {
+        case estudiantes
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.evString(.id)
+        listaId = c.evString(.listaId)
+        listaNombre = c.evString(.listaNombre)
+        asignatura = c.evString(.asignatura)
+        curso = c.evString(.curso)
+        grupos = c.evArray([GrupoListaCotejo].self, .grupos)
+        puntajeMaximo = c.evDouble(.puntajeMaximo) ?? 0
+        bloqueada = c.evBoolOpt(.bloqueada)
+
+        if grupos.isEmpty,
+           let legacy = try? decoder.container(keyedBy: LegacyKeys.self) {
+            let estudiantes = legacy.evArray([EstudianteListaCotejo].self, .estudiantes)
+            if !estudiantes.isEmpty {
+                grupos = [GrupoListaCotejo(id: "grupo_1", nombre: "Grupo 1", estudiantes: estudiantes)]
+            }
+        }
+    }
+}
+
+extension NivelEvaluacion {
+    private enum TolerantKeys: String, CodingKey {
+        case descripcion, puntos
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: TolerantKeys.self)
+        descripcion = c.evString(.descripcion)
+        puntos = c.evDouble(.puntos) ?? 0
+    }
+}
+
+extension NivelesCriterio {
+    private enum TolerantKeys: String, CodingKey {
+        case logrado, casiLogrado, parcialmenteLogrado, porLograr
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: TolerantKeys.self)
+        logrado = (try? c.decode(NivelEvaluacion.self, forKey: .logrado)) ?? NivelEvaluacion(descripcion: "", puntos: 4)
+        casiLogrado = (try? c.decode(NivelEvaluacion.self, forKey: .casiLogrado)) ?? NivelEvaluacion(descripcion: "", puntos: 3)
+        parcialmenteLogrado = (try? c.decode(NivelEvaluacion.self, forKey: .parcialmenteLogrado)) ?? NivelEvaluacion(descripcion: "", puntos: 2)
+        porLograr = (try? c.decode(NivelEvaluacion.self, forKey: .porLograr)) ?? NivelEvaluacion(descripcion: "", puntos: 1)
+    }
+}
+
+extension CriterioRubrica {
+    private enum TolerantKeys: String, CodingKey {
+        case id, orden, nombre, ponderacion, niveles
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: TolerantKeys.self)
+        id = c.evString(.id, default: EvaluacionesIDs.uid(prefix: "crit"))
+        orden = c.evInt(.orden, default: 1)
+        nombre = c.evString(.nombre)
+        ponderacion = c.evDouble(.ponderacion)
+        niveles = (try? c.decode(NivelesCriterio.self, forKey: .niveles)) ?? .vacios
+    }
+}
+
+extension RubricaParte {
+    private enum TolerantKeys: String, CodingKey {
+        case id, orden, nombre, oasVinculados, criterios
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: TolerantKeys.self)
+        id = c.evString(.id, default: EvaluacionesIDs.uid(prefix: "parte"))
+        orden = c.evInt(.orden, default: 1)
+        nombre = c.evString(.nombre)
+        oasVinculados = c.evStringArray(.oasVinculados)
+        criterios = c.evArray([CriterioRubrica].self, .criterios)
+    }
+}
+
+extension RubricaGrupoConfig {
+    private enum TolerantKeys: String, CodingKey {
+        case id, nombre, orden
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: TolerantKeys.self)
+        id = c.evString(.id, default: EvaluacionesIDs.uid(prefix: "grupo"))
+        nombre = c.evString(.nombre)
+        orden = c.evInt(.orden, default: 1)
+    }
+}
+
+extension RubricaTemplate {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.evString(.id, default: EvaluacionesIDs.uid(prefix: "rubrica"))
+        nombre = c.evString(.nombre)
+        asignatura = c.evString(.asignatura)
+        curso = c.evString(.curso)
+        unidadId = c.evStringOpt(.unidadId)
+        unidadNombre = c.evStringOpt(.unidadNombre)
+        usaPonderaciones = c.evBoolOpt(.usaPonderaciones)
+        metadatosCurriculares = try? c.decode(ListaCotejoMetadatos.self, forKey: .metadatosCurriculares)
+        oas = try? c.decode([OAEditado].self, forKey: .oas)
+        gruposConfig = {
+            let grupos = c.evArray([RubricaGrupoConfig].self, .gruposConfig)
+            return grupos.isEmpty ? nil : grupos
+        }()
+        partes = c.evArray([RubricaParte].self, .partes)
+        puntajeMaximo = c.evDouble(.puntajeMaximo) ?? Self.calcularPuntajeMaximo(partes: partes)
+        fechaActualizacion = nil
+    }
+}
+
+extension EstudianteRubrica {
+    private enum TolerantKeys: String, CodingKey {
+        case estudianteId, nombre, hasPie, puntajes, observaciones, nota, completado
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: TolerantKeys.self)
+        estudianteId = c.evString(.estudianteId, default: EvaluacionesIDs.uid(prefix: "est"))
+        nombre = c.evString(.nombre)
+        hasPie = c.evBool(.hasPie)
+        puntajes = c.evDoubleMap(.puntajes)
+        observaciones = c.evString(.observaciones)
+        nota = c.evDouble(.nota)
+        completado = c.evBool(.completado)
+    }
+}
+
+extension GrupoRubrica {
+    private enum TolerantKeys: String, CodingKey {
+        case id, nombre, estudiantes
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: TolerantKeys.self)
+        id = c.evString(.id, default: EvaluacionesIDs.uid(prefix: "grupo"))
+        nombre = c.evString(.nombre)
+        estudiantes = c.evArray([EstudianteRubrica].self, .estudiantes)
+    }
+}
+
+extension EvaluacionRubrica {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.evString(.id)
+        rubricaId = c.evString(.rubricaId)
+        rubricaNombre = c.evString(.rubricaNombre)
+        asignatura = c.evString(.asignatura)
+        curso = c.evString(.curso)
+        grupos = c.evArray([GrupoRubrica].self, .grupos)
+        puntajeMaximo = c.evDouble(.puntajeMaximo) ?? 0
+        bloqueada = c.evBoolOpt(.bloqueada)
     }
 }

@@ -3,6 +3,10 @@ import FirebaseAuth
 import FirebaseFirestore
 
 struct EvaluacionesRepository {
+    /// La web guarda bajo este uid cuando el docente usa la página sin iniciar sesión.
+    /// iOS lo consulta como fallback de LECTURA cuando la cuenta propia no tiene datos.
+    static let invitadoUid = "mock-invitado-uid-12345"
+
     private let db: Firestore
 
     init(db: Firestore = Firestore.firestore()) {
@@ -16,14 +20,49 @@ struct EvaluacionesRepository {
         return uid
     }
 
-    private func userDoc(col: String, id: String) throws -> DocumentReference {
-        let uid = try getUid()
-        return db.collection("users").document(uid).collection(col).document(id)
+    private func doc(uid: String, col: String, id: String) -> DocumentReference {
+        db.collection("users").document(uid).collection(col).document(id)
     }
 
-    private func userCol(col: String) throws -> CollectionReference {
-        let uid = try getUid()
-        return db.collection("users").document(uid).collection(col)
+    private func col(uid: String, col nombre: String) -> CollectionReference {
+        db.collection("users").document(uid).collection(nombre)
+    }
+
+    private func userDoc(col: String, id: String) throws -> DocumentReference {
+        doc(uid: try getUid(), col: col, id: id)
+    }
+
+    private func userCol(col nombre: String) throws -> CollectionReference {
+        col(uid: try getUid(), col: nombre)
+    }
+
+    /// Documentos de la colección propia; si está totalmente vacía, intenta la del invitado.
+    private func documentosConFallback(col nombre: String) async throws -> [QueryDocumentSnapshot] {
+        let propios = try await getDocuments(try userCol(col: nombre)).documents
+        if !propios.isEmpty { return propios }
+        let invitado = try? await getDocuments(col(uid: Self.invitadoUid, col: nombre)).documents
+        return invitado ?? []
+    }
+
+    /// Documento por id bajo la cuenta propia; si no existe, intenta bajo el invitado.
+    private func documentoConFallback(col nombre: String, id: String) async throws -> DocumentSnapshot? {
+        let propio = try await getDocument(try userDoc(col: nombre, id: id))
+        if propio.exists { return propio }
+        if let invitado = try? await getDocument(doc(uid: Self.invitadoUid, col: nombre, id: id)), invitado.exists {
+            return invitado
+        }
+        return nil
+    }
+
+    /// Comparación difusa de curso/asignatura: sin tildes, mayúsculas ni símbolos.
+    static func normalizarClave(_ valor: String) -> String {
+        valor.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL"))
+            .lowercased()
+            .replacingOccurrences(of: "[^a-z0-9]", with: "", options: .regularExpression)
+    }
+
+    private static func coincide(_ a: String, _ b: String) -> Bool {
+        normalizarClave(a) == normalizarClave(b)
     }
 
     // MARK: - Diagnóstico (temporal)
@@ -32,6 +71,8 @@ struct EvaluacionesRepository {
         let uid = (try? getUid()) ?? "—"
         let rubricasSnap = try await getDocuments(try userCol(col: "rubricas"))
         let listasSnap = try await getDocuments(try userCol(col: "listas_cotejo"))
+        let rubricasInvitado = (try? await getDocuments(col(uid: Self.invitadoUid, col: "rubricas")).documents.count) ?? 0
+        let listasInvitado = (try? await getDocuments(col(uid: Self.invitadoUid, col: "listas_cotejo")).documents.count) ?? 0
 
         func cursos(_ snap: QuerySnapshot) -> [String] {
             Array(Set(snap.documents.compactMap { $0.data()["curso"] as? String })).sorted()
@@ -57,7 +98,9 @@ struct EvaluacionesRepository {
             totalListas: listasSnap.documents.count,
             listasDecodificadas: decodificadas(listasSnap, .lista),
             cursosListas: cursos(listasSnap),
-            asignaturasListas: asignaturas(listasSnap)
+            asignaturasListas: asignaturas(listasSnap),
+            rubricasInvitado: rubricasInvitado,
+            listasInvitado: listasInvitado
         )
     }
 
@@ -66,16 +109,18 @@ struct EvaluacionesRepository {
     // MARK: - Listas de Cotejo
 
     func cargarListasCotejo(asignatura: String?, curso: String) async throws -> [ListaCotejoTemplate] {
-        let snapshot = try await getDocuments(try userCol(col: "listas_cotejo"))
-        return snapshot.documents
+        let documentos = try await documentosConFallback(col: "listas_cotejo")
+        return documentos
             .compactMap { decode(ListaCotejoTemplate.self, from: $0) }
-            .filter { $0.curso == curso && (asignatura == nil || $0.asignatura == asignatura) }
+            .filter { lista in
+                Self.coincide(lista.curso, curso) &&
+                (asignatura == nil || Self.coincide(lista.asignatura, asignatura!))
+            }
             .sorted { ($0.fechaActualizacion ?? .distantPast) > ($1.fechaActualizacion ?? .distantPast) }
     }
 
     func cargarListaCotejo(id: String) async throws -> ListaCotejoTemplate? {
-        let snapshot = try await getDocument(try userDoc(col: "listas_cotejo", id: id))
-        guard snapshot.exists else { return nil }
+        guard let snapshot = try await documentoConFallback(col: "listas_cotejo", id: id) else { return nil }
         return decode(ListaCotejoTemplate.self, from: snapshot)
     }
 
@@ -101,8 +146,7 @@ struct EvaluacionesRepository {
 
     func cargarEvaluacionLista(listaId: String) async throws -> ListaCotejoEvaluacion? {
         let id = EvaluacionesIDs.buildListaEvaluacionId(listaId: listaId)
-        let snapshot = try await getDocument(try userDoc(col: "listas_cotejo_evaluaciones", id: id))
-        guard snapshot.exists else { return nil }
+        guard let snapshot = try await documentoConFallback(col: "listas_cotejo_evaluaciones", id: id) else { return nil }
         return decode(ListaCotejoEvaluacion.self, from: snapshot)
     }
 
@@ -123,16 +167,18 @@ struct EvaluacionesRepository {
     // MARK: - Rúbricas
 
     func cargarRubricas(asignatura: String?, curso: String) async throws -> [RubricaTemplate] {
-        let snapshot = try await getDocuments(try userCol(col: "rubricas"))
-        return snapshot.documents
+        let documentos = try await documentosConFallback(col: "rubricas")
+        return documentos
             .compactMap { decode(RubricaTemplate.self, from: $0) }
-            .filter { $0.curso == curso && (asignatura == nil || $0.asignatura == asignatura) }
+            .filter { rubrica in
+                Self.coincide(rubrica.curso, curso) &&
+                (asignatura == nil || Self.coincide(rubrica.asignatura, asignatura!))
+            }
             .sorted { ($0.fechaActualizacion ?? .distantPast) > ($1.fechaActualizacion ?? .distantPast) }
     }
 
     func cargarRubrica(id: String) async throws -> RubricaTemplate? {
-        let snapshot = try await getDocument(try userDoc(col: "rubricas", id: id))
-        guard snapshot.exists else { return nil }
+        guard let snapshot = try await documentoConFallback(col: "rubricas", id: id) else { return nil }
         return decode(RubricaTemplate.self, from: snapshot)
     }
 
@@ -158,8 +204,7 @@ struct EvaluacionesRepository {
 
     func cargarEvaluacionRubrica(rubricaId: String) async throws -> EvaluacionRubrica? {
         let id = EvaluacionesIDs.buildRubricaEvaluacionId(rubricaId: rubricaId)
-        let snapshot = try await getDocument(try userDoc(col: "rubricas_evaluaciones", id: id))
-        guard snapshot.exists else { return nil }
+        guard let snapshot = try await documentoConFallback(col: "rubricas_evaluaciones", id: id) else { return nil }
         return decode(EvaluacionRubrica.self, from: snapshot)
     }
 
