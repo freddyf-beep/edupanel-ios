@@ -1,12 +1,13 @@
 import SwiftUI
 
+/// Visualizador de clases de la unidad (solo lectura).
+/// La creación y edición de clases se hace desde la web; aquí el docente
+/// revisa su planificación de forma limpia y puede lanzar la clase en vivo.
 struct VerUnidadClasesView: View {
     var viewModel: VerUnidadViewModel
 
     @State private var selectedClassNum = 1
     @State private var showingLiveMode = false
-    @State private var newMaterial = ""
-    @State private var newTic = ""
 
     @Environment(\.displayMode) private var displayMode
 
@@ -16,15 +17,21 @@ struct VerUnidadClasesView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    classHeaderCard
-                    objectivesCard
-                    editorFields
-                    curriculumTransversalCard
-                    resourcesSection
-                    if !displayMode.isSimple {
-                        externalPedagogyCard
-                        placeholdersCard
+                    resumenCard
+
+                    if isClassPlanificable(classNum: selectedClassNum) {
+                        planCard
+                        oasCard
+                        extrasSection
+                        curriculoYRecursosSection
+                        if !displayMode.isSimple {
+                            externalPedagogyCard
+                        }
+                    } else {
+                        emptyPlanCard
                     }
+
+                    avisoVisualizador
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)
@@ -48,6 +55,8 @@ struct VerUnidadClasesView: View {
         }
     }
 
+    // MARK: - Selector de clases
+
     private var classSelectorRail: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -57,13 +66,13 @@ struct VerUnidadClasesView: View {
                     let cronoClass = cronogramaClass(for: cNum)
                     Button {
                         withAnimation(EPTheme.spring) {
-                            selectClass(cNum)
+                            selectedClassNum = cNum
                         }
                     } label: {
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(spacing: 3) {
                             HStack(spacing: 5) {
                                 Text("Clase \(cNum)")
-                                    .font(.caption.weight(.black))
+                                    .font(.system(size: 12, weight: .black))
                                 if hasData {
                                     Circle()
                                         .fill(isSelected ? .white : .green)
@@ -72,23 +81,17 @@ struct VerUnidadClasesView: View {
                             }
                             if let cronoClass, !cronoClass.fecha.isEmpty {
                                 Text(cronoClass.fecha)
-                                    .font(.system(size: 9, weight: .black))
-                                    .foregroundStyle(isSelected ? .white.opacity(0.82) : .secondary)
-                            }
-                            if let cronoClass, !cronoClass.oaIds.isEmpty {
-                                Text("\(cronoClass.oaIds.count) OA")
-                                    .font(.system(size: 9, weight: .black))
-                                    .foregroundStyle(isSelected ? .white.opacity(0.82) : EPTheme.primary)
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(isSelected ? .white.opacity(0.85) : .secondary)
                             }
                         }
                         .foregroundStyle(isSelected ? .white : EPTheme.ink)
-                        .padding(.horizontal, 13)
+                        .padding(.horizontal, 14)
                         .padding(.vertical, 9)
                         .background(
                             isSelected ? AnyShapeStyle(EPTheme.primary) : AnyShapeStyle(Color(.systemGray6)),
-                            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            in: Capsule()
                         )
-                        .shadow(color: isSelected ? EPTheme.primary.opacity(0.3) : .clear, radius: 8, y: 3)
                     }
                     .buttonStyle(.plain)
                 }
@@ -105,89 +108,122 @@ struct VerUnidadClasesView: View {
         .sensoryFeedback(.selection, trigger: selectedClassNum)
     }
 
-    private var classHeaderCard: some View {
+    // MARK: - Resumen de la clase
+
+    private var resumenCard: some View {
         let act = activeActivity
         let cronoClass = cronogramaClass(for: selectedClassNum)
-        let dateLabel = act.fecha.isEmpty ? "Fecha no programada" : "Programada: \(act.fecha)"
 
         return EPWebCard {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("DETALLE DE LA JORNADA")
-                            .font(.system(size: 10, weight: .black))
-                            .tracking(1.0)
-                            .foregroundStyle(EPTheme.primary)
-                        Text("Clase \(selectedClassNum): Plan de aula")
-                            .font(.headline.weight(.black))
-                        Text(dateLabel)
-                            .font(.caption.weight(.semibold))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Clase \(selectedClassNum)")
+                            .font(.system(size: 18, weight: .black))
+                        Text(cronoClass?.fecha.isEmpty == false ? cronoClass!.fecha : "Sin fecha programada")
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.secondary)
-
-                        Picker("Estado", selection: activeActivityBinding.estado) {
-                            Text("No planificada").tag("no_planificada")
-                            Text("Planificada").tag("planificada")
-                            Text("Realizada").tag("realizada")
-                        }
-                        .pickerStyle(.menu)
-                        .font(.caption.weight(.black))
                     }
 
                     Spacer(minLength: 8)
 
                     Button {
-                        ensureActivityExists(for: selectedClassNum)
+                        viewModel.ensureActivity(for: selectedClassNum)
                         showingLiveMode = true
                     } label: {
                         Label("Clase en vivo", systemImage: "play.fill")
-                            .font(.caption.weight(.black))
+                            .font(.system(size: 12, weight: .black))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 13)
                             .padding(.vertical, 10)
                             .background(EPTheme.heroGradient, in: Capsule())
-                            .shadow(color: EPTheme.primary.opacity(0.3), radius: 8, y: 4)
                     }
                     .buttonStyle(.plain)
-                    .sensoryFeedback(.impact(weight: .medium), trigger: showingLiveMode)
                 }
 
                 HStack(spacing: 7) {
-                    EPStatusPill(text: cronoClass?.fecha.isEmpty == false ? cronoClass?.fecha ?? "Sin fecha" : "Sin fecha", icon: "calendar", tint: .blue)
-                    EPStatusPill(text: "\(linkedOAs.count) OA", icon: "tag.fill", tint: linkedOAs.isEmpty ? .orange : .green)
+                    EPStatusPill(text: act.estadoLabel, icon: "circle.fill", tint: act.estadoTint)
+                    EPStatusPill(
+                        text: "\(linkedOAs.count) OA",
+                        icon: "tag.fill",
+                        tint: linkedOAs.isEmpty ? .orange : .green
+                    )
                     Spacer(minLength: 0)
                 }
             }
         }
     }
 
-    private var objectivesCard: some View {
+    // MARK: - Plan de la clase (lectura)
+
+    private var planCard: some View {
+        let act = activeActivity
+
+        return EPWebCard {
+            VStack(alignment: .leading, spacing: 16) {
+                EPSectionHeader(title: "Plan de la clase", icon: "text.book.closed.fill")
+
+                if hasText(act.objetivo) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("OBJETIVO DE LA CLASE")
+                            .font(.system(size: 10, weight: .black))
+                            .tracking(0.8)
+                            .foregroundStyle(EPTheme.primary)
+                        RichTextRenderer(html: act.objetivo)
+                    }
+                }
+
+                momentoRow(numero: 1, titulo: "Inicio", html: act.inicio, tint: .blue)
+                momentoRow(numero: 2, titulo: "Desarrollo", html: act.desarrollo, tint: .green)
+                momentoRow(numero: 3, titulo: "Cierre", html: act.cierre, tint: .purple)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func momentoRow(numero: Int, titulo: String, html: String, tint: Color) -> some View {
+        if hasText(html) {
+            HStack(alignment: .top, spacing: 12) {
+                Text("\(numero)")
+                    .font(.system(size: 12, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+                    .frame(width: 26, height: 26)
+                    .background(tint, in: Circle())
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(titulo)
+                        .font(.system(size: 13, weight: .black))
+                    RichTextRenderer(html: html)
+                }
+            }
+        }
+    }
+
+    // MARK: - OAs vinculados
+
+    private var oasCard: some View {
         EPWebCard {
             VStack(alignment: .leading, spacing: 12) {
-                EPSectionHeader(title: "Objetivos vinculados", subtitle: "Vienen de la matriz del cronograma.", icon: "tag.fill")
+                EPSectionHeader(title: "Objetivos vinculados", icon: "tag.fill")
 
                 let linked = linkedOAs
                 if linked.isEmpty {
-                    Label("Esta clase todavía no tiene OA asignados.", systemImage: "exclamationmark.triangle.fill")
+                    Label("Esta clase no tiene OA asignados.", systemImage: "exclamationmark.triangle.fill")
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(.orange)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
-                        .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 } else {
                     ForEach(linked, id: \.id) { oa in
-                        VStack(alignment: .leading, spacing: 7) {
+                        VStack(alignment: .leading, spacing: 6) {
                             Text(oa.numero != nil ? "OA \(oa.numero!)" : oa.id)
-                                .font(.subheadline.weight(.black))
+                                .font(.system(size: 13, weight: .black))
+                                .foregroundStyle(EPTheme.primary)
                             Text(oa.descripcion)
-                                .font(.caption.weight(.medium))
+                                .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
 
                             let selectedIndicators = indicatorsForClass(oa)
                             if !selectedIndicators.isEmpty {
-                                Text("Indicadores seleccionados")
-                                    .font(.system(size: 9, weight: .black))
-                                    .foregroundStyle(.secondary)
-                                    .textCase(.uppercase)
                                 ReplicaFlowLayout(spacing: 6) {
                                     ForEach(selectedIndicators) { indicador in
                                         Text(indicador.texto)
@@ -201,262 +237,36 @@ struct VerUnidadClasesView: View {
                                 }
                             }
                         }
-                        .padding(11)
-                        .background(Color(.systemGray6).opacity(0.7), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                        .padding(.vertical, 4)
                     }
                 }
             }
         }
     }
 
-    private var curriculumTransversalCard: some View {
-        EPCollapsibleSection(title: "Currículo transversal", subtitle: "Habilidades y actitudes de la clase.", icon: "layers.fill") {
-            VStack(alignment: .leading, spacing: 16) {
-                curriculumToggleSection(
-                    title: "Habilidades",
-                    icon: "target",
-                    available: selectedUnitSkills,
-                    selected: activeActivity.habilidades,
-                    tint: EPTheme.primary
-                ) { value in
-                    toggleString(value, keyPath: \.habilidades)
-                }
+    // MARK: - Contexto y adecuación (colapsable)
 
-                curriculumToggleSection(
-                    title: "Actitudes",
-                    icon: "heart.fill",
-                    available: selectedUnitAttitudes,
-                    selected: activeActivity.actitudes,
-                    tint: .orange
-                ) { value in
-                    toggleString(value, keyPath: \.actitudes)
-                }
-            }
-        }
-    }
-
-    private var editorFields: some View {
-        let binding = activeActivityBinding
-
-        return EPWebCard {
-            VStack(alignment: .leading, spacing: 14) {
-                EPSectionHeader(title: "Planificación diaria", subtitle: "Campos rich text compatibles con Quill/HTML simple.", icon: "square.and.pencil")
-
-                RichTextEditor(
-                    title: "Objetivo de aprendizaje de la clase",
-                    placeholder: "Crear un primer boceto de paisaje sonoro...",
-                    html: binding.objetivo,
-                    minHeight: 84
-                )
-
-                RichTextEditor(
-                    title: "Contexto de la clase",
-                    placeholder: "Notas pedagógicas, agrupamientos, apoyos o alertas...",
-                    html: binding.contextoProfesor.toNonOptional(),
-                    minHeight: 76
-                )
-
-                Divider()
-
-                RichTextEditor(
-                    title: "Momento 1: Inicio",
-                    placeholder: "Activación de conocimientos, pregunta inicial, motivación...",
-                    html: binding.inicio,
-                    minHeight: 92
-                )
-
-                RichTextEditor(
-                    title: "Momento 2: Desarrollo",
-                    placeholder: "Actividad principal, pasos, agrupamientos y mediación docente...",
-                    html: binding.desarrollo,
-                    minHeight: 118
-                )
-
-                RichTextEditor(
-                    title: "Momento 3: Cierre",
-                    placeholder: "Metacognición, evidencia final o ticket de salida...",
-                    html: binding.cierre,
-                    minHeight: 92
-                )
-
-                Divider()
-
-                RichTextEditor(
-                    title: "Adecuación curricular",
-                    placeholder: "Estrategias PIE / DUA, apoyos, multinivel o ajustes...",
-                    html: binding.adecuacion,
-                    minHeight: 92
-                )
-            }
-        }
-    }
-
-    private var resourcesSection: some View {
-        let binding = activeActivityBinding
-
-        return EPCollapsibleSection(title: "Recursos y materiales", subtitle: "Materiales, TIC y archivos.", icon: "tray.full.fill") {
-            VStack(alignment: .leading, spacing: 16) {
-                chipEditor(
-                    title: "Materiales físicos",
-                    placeholder: "Añadir material...",
-                    text: $newMaterial,
-                    items: binding.wrappedValue.materiales,
-                    tint: .blue,
-                    onAdd: { value in
-                        viewModel.clasesActividades[selectedClassNum]?.materiales.append(value)
-                    },
-                    onRemove: { value in
-                        viewModel.clasesActividades[selectedClassNum]?.materiales.removeAll { $0 == value }
-                    }
-                )
-
-                chipEditor(
-                    title: "Herramientas TIC",
-                    placeholder: "Añadir TIC...",
-                    text: $newTic,
-                    items: binding.wrappedValue.tics,
-                    tint: .purple,
-                    onAdd: { value in
-                        viewModel.clasesActividades[selectedClassNum]?.tics.append(value)
-                    },
-                    onRemove: { value in
-                        viewModel.clasesActividades[selectedClassNum]?.tics.removeAll { $0 == value }
-                    }
-                )
-
-                if let archivos = binding.wrappedValue.archivos, !archivos.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Archivos")
-                            .font(.caption.weight(.black))
-                        ForEach(archivos) { archivo in
-                            Label(archivo.nombre, systemImage: "paperclip")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var externalPedagogyCard: some View {
+    private var extrasSection: some View {
         let act = activeActivity
+        let contexto = act.contextoProfesor ?? ""
 
-        return EPCollapsibleSection(title: "Datos pedagógicos avanzados", subtitle: "Multinivel, Bloom y evaluación.", icon: "brain.head.profile") {
-            VStack(alignment: .leading, spacing: 14) {
-                if !hasExternalPedagogyData(act) {
-                    Text("Sin datos avanzados registrados para esta clase.")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
-                        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                } else {
-                    if let objetivoMultinivel = act.objetivoMultinivel {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Objetivo multinivel")
-                                .font(.caption.weight(.black))
-                            externalTextRow("Básico", objetivoMultinivel.basico, tint: .green)
-                            externalTextRow("Intermedio", objetivoMultinivel.intermedio, tint: .blue)
-                            externalTextRow("Avanzado", objetivoMultinivel.avanzado, tint: .purple)
-                            externalTextRow("Recomendado", objetivoMultinivel.recomendado, tint: EPTheme.primary)
-                        }
-                    }
-
-                    if let analisisBloom = act.analisisBloom, !analisisBloom.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Análisis Bloom")
-                                .font(.caption.weight(.black))
-                            ForEach(analisisBloom) { item in
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack(spacing: 6) {
-                                        EPStatusPill(text: item.oaId ?? "OA", icon: "tag.fill", tint: .blue)
-                                        EPStatusPill(text: item.categoria ?? "Categoría", icon: "chart.bar.fill", tint: EPTheme.primary)
-                                        EPStatusPill(text: item.nivel ?? "Nivel", icon: "gauge.with.dots.needle.67percent", tint: .purple)
-                                    }
-                                    if let justificacion = item.justificacion, !justificacion.isEmpty {
-                                        Text(justificacion)
-                                            .font(.caption.weight(.medium))
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    if let verbos = item.verbosSugeridos, !verbos.isEmpty {
-                                        ReplicaFlowLayout(spacing: 6) {
-                                            ForEach(verbos, id: \.self) { verbo in
-                                                Text(verbo)
-                                                    .font(.caption2.weight(.black))
-                                                    .foregroundStyle(.green)
-                                                    .padding(.horizontal, 8)
-                                                    .padding(.vertical, 5)
-                                                    .background(.green.opacity(0.1), in: Capsule())
-                                            }
-                                        }
-                                    }
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(10)
-                                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        return Group {
+            if hasText(contexto) || hasText(act.adecuacion) {
+                EPCollapsibleSection(title: "Contexto y adecuación", subtitle: "Notas y apoyos PIE/DUA.", icon: "person.text.rectangle") {
+                    VStack(alignment: .leading, spacing: 14) {
+                        if hasText(contexto) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("Contexto de la clase")
+                                    .font(.system(size: 12, weight: .black))
+                                RichTextRenderer(html: contexto)
                             }
                         }
-                    }
-
-                    if let indicadores = act.indicadoresEvaluacion, !indicadores.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Indicadores de evaluación")
-                                .font(.caption.weight(.black))
-                            ForEach(indicadores) { indicador in
-                                HStack(alignment: .top, spacing: 8) {
-                                    Image(systemName: indicador.seleccionado == false ? "circle" : "checkmark.circle.fill")
-                                        .foregroundStyle(indicador.seleccionado == false ? .secondary : EPTheme.primary)
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(indicador.texto)
-                                            .font(.caption.weight(.medium))
-                                            .foregroundStyle(.secondary)
-                                        HStack(spacing: 6) {
-                                            if let dimension = indicador.dimension, !dimension.isEmpty {
-                                                EPStatusPill(text: dimension, tint: .blue)
-                                            }
-                                            if let nivelBloom = indicador.nivelBloom, !nivelBloom.isEmpty {
-                                                EPStatusPill(text: nivelBloom, tint: .purple)
-                                            }
-                                        }
-                                    }
-                                    Spacer()
-                                }
-                                .padding(10)
-                                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        if hasText(act.adecuacion) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("Adecuación curricular")
+                                    .font(.system(size: 12, weight: .black))
+                                RichTextRenderer(html: act.adecuacion)
                             }
-                        }
-                    }
-
-                    if let actividadEvaluacion = act.actividadEvaluacion,
-                       [actividadEvaluacion.tipo, actividadEvaluacion.descripcion, actividadEvaluacion.instrumento].contains(where: { ($0 ?? "").isEmpty == false }) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Actividad de evaluación")
-                                .font(.caption.weight(.black))
-                            externalTextRow("Tipo", actividadEvaluacion.tipo, tint: .orange)
-                            externalTextRow("Instrumento", actividadEvaluacion.instrumento, tint: .purple)
-                            if let descripcion = actividadEvaluacion.descripcion, !descripcion.isEmpty {
-                                RichTextRenderer(html: descripcion)
-                                    .padding(10)
-                                    .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            }
-                            if let criterios = actividadEvaluacion.criterios, !criterios.isEmpty {
-                                labeledChipList("Criterios", criterios, tint: .green)
-                            }
-                            if let alineacion = actividadEvaluacion.alineacionMBE, !alineacion.isEmpty {
-                                labeledChipList("Alineación MBE", alineacion, tint: .blue)
-                            }
-                        }
-                    }
-
-                    if let desarrolloFormal = act.desarrolloFormal,
-                       [desarrolloFormal.inicio, desarrolloFormal.desarrollo, desarrolloFormal.cierre].contains(where: { ($0 ?? "").isEmpty == false }) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Desarrollo formal")
-                                .font(.caption.weight(.black))
-                            externalTextRow("Inicio", desarrolloFormal.inicio, tint: .blue)
-                            externalTextRow("Desarrollo", desarrolloFormal.desarrollo, tint: .green)
-                            externalTextRow("Cierre", desarrolloFormal.cierre, tint: .purple)
                         }
                     }
                 }
@@ -464,67 +274,169 @@ struct VerUnidadClasesView: View {
         }
     }
 
-    private var placeholdersCard: some View {
-        EPCollapsibleSection(title: "Apoyos IA y Drive", subtitle: "Acciones rápidas.", icon: "sparkles") {
-            HStack(spacing: 8) {
-                EPPlaceholderActionButton(title: "Sugerir mejoras", icon: "wand.and.stars", message: "La asistencia IA se conectará después de cerrar la réplica base.")
-                EPPlaceholderActionButton(title: "Adjuntar Drive", icon: "externaldrive.fill", message: "El selector Drive queda pendiente de conexión nativa.")
+    // MARK: - Currículo y recursos (colapsable, solo lectura)
+
+    private var curriculoYRecursosSection: some View {
+        let act = activeActivity
+        let hayContenido = !act.habilidades.isEmpty || !act.actitudes.isEmpty
+            || !act.materiales.isEmpty || !act.tics.isEmpty || !(act.archivos ?? []).isEmpty
+
+        return Group {
+            if hayContenido {
+                EPCollapsibleSection(title: "Currículo y recursos", subtitle: "Habilidades, actitudes y materiales.", icon: "tray.full.fill") {
+                    VStack(alignment: .leading, spacing: 14) {
+                        chipsRow(titulo: "Habilidades", items: act.habilidades, tint: EPTheme.primary)
+                        chipsRow(titulo: "Actitudes", items: act.actitudes, tint: .orange)
+                        chipsRow(titulo: "Materiales", items: act.materiales, tint: .blue)
+                        chipsRow(titulo: "Herramientas TIC", items: act.tics, tint: .purple)
+
+                        if let archivos = act.archivos, !archivos.isEmpty {
+                            VStack(alignment: .leading, spacing: 7) {
+                                Text("Archivos")
+                                    .font(.system(size: 12, weight: .black))
+                                ForEach(archivos) { archivo in
+                                    Label(archivo.nombre, systemImage: "paperclip")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 
-    private func chipEditor(
-        title: String,
-        placeholder: String,
-        text: Binding<String>,
-        items: [String],
-        tint: Color,
-        onAdd: @escaping (String) -> Void,
-        onRemove: @escaping (String) -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.caption.weight(.black))
-
-            if items.isEmpty {
-                Text("Sin elementos agregados.")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-            } else {
+    @ViewBuilder
+    private func chipsRow(titulo: String, items: [String], tint: Color) -> some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 7) {
+                Text(titulo)
+                    .font(.system(size: 12, weight: .black))
                 ReplicaFlowLayout(spacing: 7) {
                     ForEach(items, id: \.self) { item in
                         Text(item)
-                            .font(.caption.weight(.black))
+                            .font(.caption.weight(.bold))
                             .foregroundStyle(tint)
                             .padding(.horizontal, 9)
                             .padding(.vertical, 6)
                             .background(tint.opacity(0.11), in: Capsule())
-                            .onLongPressGesture {
-                                onRemove(item)
-                            }
                     }
                 }
             }
+        }
+    }
 
-            HStack(spacing: 8) {
-                TextField(placeholder, text: text)
-                    .font(.caption.weight(.semibold))
-                    .textFieldStyle(.roundedBorder)
-                Button {
-                    let value = text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !value.isEmpty else { return }
-                    onAdd(value)
-                    text.wrappedValue = ""
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.caption.weight(.black))
-                        .foregroundStyle(.white)
-                        .padding(7)
-                        .background(tint, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    // MARK: - Datos pedagógicos avanzados (colapsable, solo lectura)
+
+    private var externalPedagogyCard: some View {
+        let act = activeActivity
+
+        return Group {
+            if hasExternalPedagogyData(act) {
+                EPCollapsibleSection(title: "Datos pedagógicos avanzados", subtitle: "Multinivel, Bloom y evaluación.", icon: "brain.head.profile") {
+                    VStack(alignment: .leading, spacing: 14) {
+                        if let objetivoMultinivel = act.objetivoMultinivel {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Objetivo multinivel")
+                                    .font(.caption.weight(.black))
+                                externalTextRow("Básico", objetivoMultinivel.basico, tint: .green)
+                                externalTextRow("Intermedio", objetivoMultinivel.intermedio, tint: .blue)
+                                externalTextRow("Avanzado", objetivoMultinivel.avanzado, tint: .purple)
+                                externalTextRow("Recomendado", objetivoMultinivel.recomendado, tint: EPTheme.primary)
+                            }
+                        }
+
+                        if let analisisBloom = act.analisisBloom, !analisisBloom.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Análisis Bloom")
+                                    .font(.caption.weight(.black))
+                                ForEach(analisisBloom) { item in
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        HStack(spacing: 6) {
+                                            EPStatusPill(text: item.oaId ?? "OA", icon: "tag.fill", tint: .blue)
+                                            EPStatusPill(text: item.nivel ?? "Nivel", tint: .purple)
+                                        }
+                                        if let justificacion = item.justificacion, !justificacion.isEmpty {
+                                            Text(justificacion)
+                                                .font(.caption.weight(.medium))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(10)
+                                    .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                }
+                            }
+                        }
+
+                        if let indicadores = act.indicadoresEvaluacion, !indicadores.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Indicadores de evaluación")
+                                    .font(.caption.weight(.black))
+                                ForEach(indicadores) { indicador in
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Image(systemName: indicador.seleccionado == false ? "circle" : "checkmark.circle.fill")
+                                            .foregroundStyle(indicador.seleccionado == false ? .secondary : EPTheme.primary)
+                                        Text(indicador.texto)
+                                            .font(.caption.weight(.medium))
+                                            .foregroundStyle(.secondary)
+                                        Spacer()
+                                    }
+                                }
+                            }
+                        }
+
+                        if let actividadEvaluacion = act.actividadEvaluacion,
+                           [actividadEvaluacion.tipo, actividadEvaluacion.descripcion, actividadEvaluacion.instrumento].contains(where: { ($0 ?? "").isEmpty == false }) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Actividad de evaluación")
+                                    .font(.caption.weight(.black))
+                                externalTextRow("Tipo", actividadEvaluacion.tipo, tint: .orange)
+                                externalTextRow("Instrumento", actividadEvaluacion.instrumento, tint: .purple)
+                                if let descripcion = actividadEvaluacion.descripcion, !descripcion.isEmpty {
+                                    RichTextRenderer(html: descripcion)
+                                }
+                            }
+                        }
+                    }
                 }
-                .buttonStyle(.plain)
             }
         }
+    }
+
+    // MARK: - Vacío y aviso
+
+    private var emptyPlanCard: some View {
+        EPWebCard {
+            VStack(spacing: 12) {
+                Image(systemName: "calendar.badge.exclamationmark")
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundStyle(.secondary)
+                Text("Esta clase aún no está planificada")
+                    .font(.system(size: 15, weight: .black))
+                Text("Crea la planificación de esta clase desde EduPanel web. Aquí la verás lista para revisar y hacer la clase en vivo.")
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+        }
+    }
+
+    private var avisoVisualizador: some View {
+        Label("Modo visualización · las clases se editan desde la web", systemImage: "eye.fill")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+    }
+
+    // MARK: - Datos derivados
+
+    private func hasText(_ html: String) -> Bool {
+        !RichTextHTML.plainText(from: html).isEmpty
     }
 
     private var classNumbers: [Int] {
@@ -545,49 +457,14 @@ struct VerUnidadClasesView: View {
         }
     }
 
-    private var selectedUnitSkills: [String] {
-        viewModel.verUnidad?.habilidades
-            .filter(\.seleccionado)
-            .map(\.texto)
-            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? []
-    }
-
-    private var selectedUnitAttitudes: [String] {
-        viewModel.verUnidad?.actitudes
-            .filter(\.seleccionado)
-            .map(\.texto)
-            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? []
-    }
-
     private var activeActivity: ActividadClase {
         viewModel.clasesActividades[selectedClassNum] ?? viewModel.activityTemplate(for: selectedClassNum)
-    }
-
-    private var activeActivityBinding: Binding<ActividadClase> {
-        Binding(
-            get: {
-                activeActivity
-            },
-            set: { newValue in
-                viewModel.clasesActividades[selectedClassNum] = newValue
-            }
-        )
-    }
-
-    private func selectClass(_ classNum: Int) {
-        selectedClassNum = classNum
-        ensureActivityExists(for: classNum)
     }
 
     private func normalizeSelectedClass() {
         if !classNumbers.contains(selectedClassNum) {
             selectedClassNum = classNumbers.first ?? 1
         }
-        ensureActivityExists(for: selectedClassNum)
-    }
-
-    private func ensureActivityExists(for classNum: Int) {
-        viewModel.ensureActivity(for: classNum)
     }
 
     private func isClassPlanificable(classNum: Int) -> Bool {
@@ -629,62 +506,6 @@ struct VerUnidadClasesView: View {
             }
 
         return known + custom.sorted { $0.texto.localizedCaseInsensitiveCompare($1.texto) == .orderedAscending }
-    }
-
-    private func curriculumToggleSection(
-        title: String,
-        icon: String,
-        available: [String],
-        selected: [String],
-        tint: Color,
-        onToggle: @escaping (String) -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Label(title, systemImage: icon)
-                .font(.caption.weight(.black))
-                .foregroundStyle(.secondary)
-
-            let merged = Array(Set(available + selected)).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-            if merged.isEmpty {
-                Text("Sin \(title.lowercased()) seleccionadas en la unidad.")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-            } else {
-                ReplicaFlowLayout(spacing: 7) {
-                    ForEach(merged, id: \.self) { value in
-                        let isSelected = selected.contains(value)
-                        Button {
-                            onToggle(value)
-                        } label: {
-                            HStack(spacing: 5) {
-                                Text(value)
-                                    .font(.caption.weight(.black))
-                                    .lineLimit(2)
-                                if isSelected {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 8, weight: .black))
-                                }
-                            }
-                            .foregroundStyle(isSelected ? .white : tint)
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 6)
-                            .background(isSelected ? tint : tint.opacity(0.11), in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-    }
-
-    private func toggleString(_ value: String, keyPath: WritableKeyPath<ActividadClase, [String]>) {
-        var act = activeActivity
-        if act[keyPath: keyPath].contains(value) {
-            act[keyPath: keyPath].removeAll { $0 == value }
-        } else {
-            act[keyPath: keyPath].append(value)
-        }
-        viewModel.clasesActividades[selectedClassNum] = act
     }
 
     private func getStudents() -> [EstudiantePerfil] {
@@ -762,38 +583,8 @@ struct VerUnidadClasesView: View {
                     RichTextRenderer(html: value)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(10)
-                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
         }
-    }
-
-    private func labeledChipList(_ label: String, _ values: [String], tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label)
-                .font(.caption.weight(.black))
-            ReplicaFlowLayout(spacing: 6) {
-                ForEach(values, id: \.self) { value in
-                    Text(value)
-                        .font(.caption2.weight(.black))
-                        .foregroundStyle(tint)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background(tint.opacity(0.1), in: Capsule())
-                }
-            }
-        }
-        .padding(10)
-        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-}
-
-private extension Binding where Value == Optional<String> {
-    func toNonOptional() -> Binding<String> {
-        Binding<String>(
-            get: { self.wrappedValue ?? "" },
-            set: { self.wrappedValue = $0 }
-        )
     }
 }
 
