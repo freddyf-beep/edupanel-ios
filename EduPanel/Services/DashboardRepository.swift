@@ -264,31 +264,39 @@ struct DashboardRepository {
 
     private func loadStudentsByCourse(for horario: [ClaseHorario], uid: String) async -> [String: [EstudiantePerfil]] {
         let cursos = Array(Set(horario.filter(\.isAcademic).map(\.resumen))).sorted()
-        var result: [String: [EstudiantePerfil]] = [:]
+        let studentsRef = db
+            .collection("users")
+            .document(uid)
+            .collection("estudiantes")
 
-        for curso in cursos {
-            let studentsRef = db
-                .collection("users")
-                .document(uid)
-                .collection("estudiantes")
-
-            if let data = try? await getStudentDocument(for: curso, in: studentsRef).data(),
-               let alumnos = data["alumnos"] as? [[String: Any]] {
-                result[curso] = alumnos
-                    .enumerated()
-                    .compactMap { index, value in EstudiantePerfil.from(dictionary: value, index: index) }
-                    .sorted { lhs, rhs in
-                        if lhs.orden != rhs.orden {
-                            return lhs.orden < rhs.orden
-                        }
-                        return lhs.nombre.localizedCaseInsensitiveCompare(rhs.nombre) == .orderedAscending
+        // Cargar todos los cursos en paralelo: un viaje a Firestore por curso,
+        // pero simultáneos en vez de en serie.
+        return await withTaskGroup(of: (String, [EstudiantePerfil]).self) { group in
+            for curso in cursos {
+                group.addTask {
+                    if let data = try? await getStudentDocument(for: curso, in: studentsRef).data(),
+                       let alumnos = data["alumnos"] as? [[String: Any]] {
+                        let estudiantes = alumnos
+                            .enumerated()
+                            .compactMap { index, value in EstudiantePerfil.from(dictionary: value, index: index) }
+                            .sorted { lhs, rhs in
+                                if lhs.orden != rhs.orden {
+                                    return lhs.orden < rhs.orden
+                                }
+                                return lhs.nombre.localizedCaseInsensitiveCompare(rhs.nombre) == .orderedAscending
+                            }
+                        return (curso, estudiantes)
                     }
-            } else {
-                result[curso] = []
+                    return (curso, [])
+                }
             }
-        }
 
-        return result
+            var result: [String: [EstudiantePerfil]] = [:]
+            for await (curso, estudiantes) in group {
+                result[curso] = estudiantes
+            }
+            return result
+        }
     }
 
     private func getStudentDocument(for curso: String, in collection: CollectionReference) async throws -> DocumentSnapshot {
