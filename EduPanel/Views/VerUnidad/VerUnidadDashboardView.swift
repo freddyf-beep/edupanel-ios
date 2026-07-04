@@ -49,7 +49,7 @@ struct VerUnidadDashboardView: View {
                 Group {
                     switch selectedTab {
                     case "unidad":
-                        VerUnidadBaseView(viewModel: viewModel)
+                        VerUnidadBaseView(viewModel: viewModel, selectedTab: $selectedTab)
                     case "cronograma":
                         VerUnidadCronogramaView(viewModel: viewModel, selectedTab: $selectedTab)
                     case "clases":
