@@ -64,7 +64,7 @@ final class ProfileViewModel {
         isLoading = true
         errorMessage = nil
         do {
-            let next = try await repository.fetchDashboard()
+            let next = try await repository.fetchDashboard(forceRefresh: true)
             snapshot = next
             draftProfile = next.profile
             draftSchool = next.school

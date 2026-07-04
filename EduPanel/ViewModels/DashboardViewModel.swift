@@ -36,7 +36,7 @@ final class DashboardViewModel {
         isLoading = true
         errorMessage = nil
         do {
-            snapshot = try await repository.fetchDashboard()
+            snapshot = try await repository.fetchDashboard(forceRefresh: true)
         } catch {
             errorMessage = error.localizedDescription
         }

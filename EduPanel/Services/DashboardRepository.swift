@@ -13,16 +13,54 @@ enum DashboardRepositoryError: LocalizedError {
     }
 }
 
+/// Caché en memoria del snapshot del dashboard. Cada pantalla llama
+/// fetchDashboard al aparecer; sin caché eso repite las mismas lecturas
+/// de Firestore en cada navegación. Cualquier escritura la invalida.
+private actor DashboardCacheStore {
+    private var snapshot: DashboardSnapshot?
+    private var uid: String?
+    private var dateKey: String?
+    private var fetchedAt = Date.distantPast
+
+    func get(uid: String, dateKey: String, maxAge: TimeInterval) -> DashboardSnapshot? {
+        guard self.uid == uid,
+              self.dateKey == dateKey,
+              let snapshot,
+              Date().timeIntervalSince(fetchedAt) < maxAge else { return nil }
+        return snapshot
+    }
+
+    func set(_ nuevo: DashboardSnapshot, uid: String, dateKey: String) {
+        snapshot = nuevo
+        self.uid = uid
+        self.dateKey = dateKey
+        fetchedAt = Date()
+    }
+
+    func clear() {
+        snapshot = nil
+    }
+}
+
 struct DashboardRepository {
+    private static let cache = DashboardCacheStore()
+    private static let cacheMaxAge: TimeInterval = 25
+
     private let db: Firestore
 
     init(db: Firestore = Firestore.firestore()) {
         self.db = db
     }
 
-    func fetchDashboard(for date: Date = Date()) async throws -> DashboardSnapshot {
+    func fetchDashboard(for date: Date = Date(), forceRefresh: Bool = false) async throws -> DashboardSnapshot {
         guard let uid = Auth.auth().currentUser?.uid else {
             throw DashboardRepositoryError.missingUser
+        }
+
+        let dateKey = DateHelpers.dateKey(for: date)
+        if !forceRefresh,
+           let cached = await Self.cache.get(uid: uid, dateKey: dateKey, maxAge: Self.cacheMaxAge) {
+            return cached
         }
 
         let userRef = db.collection("users").document(uid)
@@ -56,7 +94,7 @@ struct DashboardRepository {
         let rawCursoTipos = levelsData?["cursoTipos"] as? [String: String] ?? [:]
         let cursoTipos = rawCursoTipos.mapValues { TipoCurricular.from($0) }
 
-        return DashboardSnapshot(
+        let snapshot = DashboardSnapshot(
             date: date,
             profile: PerfilUsuario.from(dictionary: profileData),
             school: InfoColegio.from(dictionary: schoolData),
@@ -68,6 +106,8 @@ struct DashboardRepository {
             nivelMapping: levelsData?["mapping"] as? [String: String] ?? [:],
             cursoTipos: cursoTipos
         )
+        await Self.cache.set(snapshot, uid: uid, dateKey: dateKey)
+        return snapshot
     }
 
     func saveClassState(_ state: [String: Bool], for date: Date = Date()) async throws {
@@ -372,6 +412,7 @@ struct DashboardRepository {
                 }
             }
         }
+        await Self.cache.clear()
     }
 }
 
