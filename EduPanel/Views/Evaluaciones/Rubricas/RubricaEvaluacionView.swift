@@ -139,166 +139,45 @@ struct RubricaEvaluacionView: View {
     }
 
     private var selectorGrupos: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 7) {
-                    ForEach(Array((evaluacion?.grupos ?? []).enumerated()), id: \.element.id) { index, grupo in
-                        Button {
-                            grupoActivo = index
-                            alumnoActivo = grupo.estudiantes.first?.estudianteId
-                        } label: {
-                            HStack(spacing: 5) {
-                                if grupo.esAusentes {
-                                    Image(systemName: "person.fill.xmark")
-                                        .font(.system(size: 9, weight: .black))
-                                }
-                                Text(grupo.nombre)
-                                    .font(.system(size: 12, weight: .black))
-                                Text("\(grupo.estudiantes.count)")
-                                    .font(.system(size: 10, weight: .black))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(.white.opacity(grupoActivo == index ? 0.25 : 0.0), in: Capsule())
-                            }
-                            .foregroundStyle(grupoActivo == index ? .white : (grupo.esAusentes ? .orange : .secondary))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 9)
-                            .background(
-                                grupoActivo == index
-                                    ? AnyShapeStyle(grupo.esAusentes ? Color.orange : EPTheme.primary)
-                                    : AnyShapeStyle(Color(.systemGray6)),
-                                in: Capsule()
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-
-            HStack(spacing: 8) {
-                BotonAccionGrupo(titulo: "Agregar grupo", icono: "plus") {
-                    guard var actual = evaluacion, !bloqueada else { return }
-                    let numero = actual.grupos.count + 1
-                    actual.grupos.append(GrupoRubrica(id: EvaluacionesIDs.uid(prefix: "grupo"), nombre: "Grupo \(numero)", estudiantes: []))
-                    evaluacion = actual
-                    programarAutosave()
-                }
-                BotonAccionGrupo(titulo: "Ausentes", icono: "person.fill.xmark") {
-                    asegurarGrupoAusentes()
-                }
-                BotonAccionGrupo(titulo: "Distribuci\u{00F3}n", icono: "shuffle") {
-                    withAnimation(EPTheme.spring) { mostrarDistribucion.toggle() }
-                }
-            }
-        }
+        SelectorGruposEvaluacion(
+            grupos: gruposResumen,
+            activo: grupoActivo,
+            disabled: bloqueada,
+            onSelect: { index in
+                grupoActivo = index
+                alumnoActivo = evaluacion?.grupos[index].estudiantes.first?.estudianteId
+            },
+            onAgregarGrupo: {
+                guard var actual = evaluacion, !bloqueada else { return }
+                let numero = actual.grupos.count + 1
+                actual.grupos.append(GrupoRubrica(id: EvaluacionesIDs.uid(prefix: "grupo"), nombre: "Grupo \(numero)", estudiantes: []))
+                evaluacion = actual
+                programarAutosave()
+            },
+            onAusentes: asegurarGrupoAusentes,
+            mostrarDistribucion: $mostrarDistribucion
+        )
     }
 
     private var distribucionCard: some View {
-        EPWebCard {
-            VStack(alignment: .leading, spacing: 12) {
-                EPSectionHeader(
-                    title: "Distribuci\u{00F3}n r\u{00E1}pida",
-                    subtitle: "Reparte al azar los estudiantes en grupos. Los ausentes no se mueven.",
-                    icon: "shuffle"
-                )
-
-                Picker("Modo", selection: $distribucionPorCantidad) {
-                    Text("Por tama\u{00F1}o").tag(false)
-                    Text("Cantidad de grupos").tag(true)
-                }
-                .pickerStyle(.segmented)
-
-                if distribucionPorCantidad {
-                    Stepper(value: $cantidadGrupos, in: 1...12) {
-                        Text("\(cantidadGrupos) grupos")
-                            .font(.system(size: 13, weight: .bold))
-                    }
-                } else {
-                    Stepper(value: $tamanoGrupo, in: 2...10) {
-                        Text("\(tamanoGrupo) estudiantes por grupo")
-                            .font(.system(size: 13, weight: .bold))
-                    }
-                }
-
-                Button {
-                    distribuir()
-                } label: {
-                    Label("Distribuir ahora", systemImage: "wand.and.stars")
-                        .font(.system(size: 12.5, weight: .black))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 11)
-                        .background(EPTheme.primary, in: Capsule())
-                }
-                .disabled(bloqueada)
-            }
-        }
+        DistribucionGruposCard(
+            distribucionPorCantidad: $distribucionPorCantidad,
+            cantidadGrupos: $cantidadGrupos,
+            tamanoGrupo: $tamanoGrupo,
+            disabled: bloqueada,
+            distribuir: distribuir
+        )
     }
 
     private var selectorAlumnos: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 7) {
-                ForEach(grupoActual?.estudiantes ?? []) { estudiante in
-                    Button {
-                        alumnoActivo = estudiante.estudianteId
-                    } label: {
-                        HStack(spacing: 5) {
-                            if estudiante.completado {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 10, weight: .black))
-                            }
-                            Text(estudiante.nombre)
-                                .font(.system(size: 12, weight: .bold))
-                                .lineLimit(1)
-                            if estudiante.hasPie {
-                                Text("PIE")
-                                    .font(.system(size: 8, weight: .black))
-                                    .padding(.horizontal, 4)
-                                    .padding(.vertical, 1)
-                                    .background(Color.purple.opacity(0.18), in: Capsule())
-                                    .foregroundStyle(.purple)
-                            }
-                        }
-                        .foregroundStyle(alumnoActivo == estudiante.estudianteId ? .white : .primary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 9)
-                        .background(
-                            alumnoActivo == estudiante.estudianteId
-                                ? AnyShapeStyle(EPTheme.rose)
-                                : AnyShapeStyle(EPTheme.card),
-                            in: Capsule()
-                        )
-                        .overlay(Capsule().stroke(Color(.separator).opacity(0.15), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        moverAlumnoMenu(estudiante: estudiante)
-                    }
-                }
-
-                if grupoActual?.estudiantes.isEmpty == true {
-                    Text("Grupo vac\u{00ED}o \u{2014} mant\u{00E9}n presionado un alumno de otro grupo para moverlo aqu\u{00ED}.")
-                        .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 10)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func moverAlumnoMenu(estudiante: EstudianteRubrica) -> some View {
-        if let evaluacion, !bloqueada {
-            Menu("Mover a...") {
-                ForEach(Array(evaluacion.grupos.enumerated()), id: \.element.id) { index, grupo in
-                    if index != grupoActivo {
-                        Button(grupo.nombre) {
-                            moverAlumno(estudianteId: estudiante.estudianteId, hasta: index)
-                        }
-                    }
-                }
-            }
-        }
+        SelectorAlumnosEvaluacion(
+            estudiantes: grupoActual?.estudiantes ?? [],
+            grupoVacio: grupoActual?.estudiantes.isEmpty == true,
+            gruposDestino: gruposDestino,
+            puedeMover: !bloqueada,
+            alumnoActivo: $alumnoActivo,
+            onMove: moverAlumno
+        )
     }
 
     private func scoreboardCard(alumno: EstudianteRubrica) -> some View {
@@ -451,6 +330,18 @@ struct RubricaEvaluacionView: View {
     }
 
     // MARK: - Estado derivado
+
+    private var gruposResumen: [(id: String, nombre: String, esAusentes: Bool, count: Int)] {
+        (evaluacion?.grupos ?? []).map {
+            (id: $0.id, nombre: $0.nombre, esAusentes: $0.esAusentes, count: $0.estudiantes.count)
+        }
+    }
+
+    private var gruposDestino: [(index: Int, nombre: String)] {
+        Array((evaluacion?.grupos ?? []).enumerated()).compactMap { index, grupo in
+            index == grupoActivo ? nil : (index: index, nombre: grupo.nombre)
+        }
+    }
 
     private var grupoActual: GrupoRubrica? {
         guard let evaluacion, evaluacion.grupos.indices.contains(grupoActivo) else { return nil }
