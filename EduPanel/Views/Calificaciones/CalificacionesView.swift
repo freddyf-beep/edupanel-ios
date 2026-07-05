@@ -187,7 +187,8 @@ struct CalificacionesView: View {
                                 .font(.system(size: 9.5, weight: .black))
                                 .lineLimit(2)
                                 .multilineTextAlignment(.center)
-                                .frame(width: 64, minHeight: 34)
+                                .frame(width: 64)
+                                .frame(minHeight: 34)
                         }
                         Text("Prom.")
                             .font(.system(size: 10.5, weight: .black))
