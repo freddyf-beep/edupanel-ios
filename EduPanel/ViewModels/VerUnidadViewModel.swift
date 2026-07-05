@@ -21,6 +21,7 @@ final class VerUnidadViewModel {
     
     let dashboardRepository: DashboardRepository
     let planificacionRepository: PlanificacionRepository
+    private let curriculoRepository = CurriculoRepository()
 
     init(dashboardRepository: DashboardRepository, planificacionRepository: PlanificacionRepository) {
         self.dashboardRepository = dashboardRepository
@@ -295,43 +296,46 @@ final class VerUnidadViewModel {
         }
     }
 
+    private func cargarOAsCurriculares() async -> [OAEditado]? {
+        guard let nivel = CurriculoNivel.resolver(curso: curso, mapping: snapshot?.nivelMapping ?? [:]) else {
+            return nil
+        }
+
+        for candidato in PlanificacionRepository.unidadIdCandidates(raw: unidadId) {
+            if let unidad = try? await curriculoRepository.getUnidadCompleta(
+                asignatura: activeSubject,
+                nivel: nivel,
+                unidadId: candidato
+            ) {
+                return CurriculoOA.initOAs(unidad: unidad, asignatura: activeSubject)
+            }
+        }
+
+        return nil
+    }
+
     // Curricular Fallback setup for local premium preview
     private func initDefaultUnit() async -> VerUnidadGuardada {
-        let defaultOAs = [
-            OAEditado(
-                id: "OA1",
-                numero: 1,
-                tipo: "oa",
-                descripcion: "Escuchar cualidades del sonido y describirlas usando vocabulario musical.",
-                seleccionado: true,
-                indicadores: [
-                    IndicadorEditado(id: "OA1_IND1", texto: "Describen cualidades del sonido en el entorno.", seleccionado: true),
-                    IndicadorEditado(id: "OA1_IND2", texto: "Identifican fuentes sonoras directas.", seleccionado: true)
-                ]
-            ),
-            OAEditado(
-                id: "OA2",
-                numero: 2,
-                tipo: "oa",
-                descripcion: "Interpretar y crear patrones rítmicos con voz, cuerpo e instrumentos.",
-                seleccionado: true,
-                indicadores: [
-                    IndicadorEditado(id: "OA2_IND1", texto: "Ejecutan ritmos corporales de forma grupal.", seleccionado: true),
-                    IndicadorEditado(id: "OA2_IND2", texto: "Crean secuencias rítmicas de 4 pulsos.", seleccionado: true)
-                ]
-            ),
-            OAEditado(
-                id: "OA4",
-                numero: 4,
-                tipo: "oa",
-                descripcion: "Expresar ideas musicales mediante recursos sonoros diversos.",
-                seleccionado: true,
-                indicadores: [
-                    IndicadorEditado(id: "OA4_IND1", texto: "Diseñan bocetos de paisajes sonoros.", seleccionado: true),
-                    IndicadorEditado(id: "OA4_IND2", texto: "Graban y reproducen creaciones sonoras.", seleccionado: true)
-                ]
+        if let oasCurriculares = await cargarOAsCurriculares() {
+            return VerUnidadGuardada(
+                asignatura: activeSubject,
+                curso: curso,
+                unidadId: unidadId,
+                descripcion: "<p>Explorar las cualidades del sonido en el entorno y crear paisajes sonoros y patrones rítmicos.</p>",
+                contextoDocente: "<p>Se requiere enfoque activo con dinámicas corporales y material lúdico.</p>",
+                objetivoDocente: "<p>Lograr que los estudiantes identifiquen y combinen al menos 3 fuentes sonoras.</p>",
+                horas: 16,
+                clases: 8,
+                oas: oasCurriculares,
+                habilidades: [],
+                conocimientos: [],
+                actitudes: [],
+                recursosMaterialesUnidad: [],
+                estrategiasEvaluacion: []
             )
-        ]
+        }
+
+        let defaultOAs: [OAEditado] = []
 
         let defaultHabilidades = [
             ElementoCurricular(id: "hab_1", texto: "Escuchar de forma atenta y reflexiva.", seleccionado: true),
