@@ -90,6 +90,9 @@
 		400000000000000000000122 /* EvaluacionesCurriculoSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000022 /* EvaluacionesCurriculoSection.swift */; };
 		400000000000000000000123 /* SincronizarCalificacionesButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000023 /* SincronizarCalificacionesButton.swift */; };
 		400000000000000000000124 /* HistogramaNotasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000024 /* HistogramaNotasView.swift */; };
+		400000000000000000000130 /* CalificacionesModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000030 /* CalificacionesModels.swift */; };
+		400000000000000000000131 /* CalificacionesRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000031 /* CalificacionesRepository.swift */; };
+		400000000000000000000132 /* CalificacionesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000032 /* CalificacionesView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -178,6 +181,9 @@
 		400000000000000000000022 /* EvaluacionesCurriculoSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvaluacionesCurriculoSection.swift; sourceTree = "<group>"; };
 		400000000000000000000023 /* SincronizarCalificacionesButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SincronizarCalificacionesButton.swift; sourceTree = "<group>"; };
 		400000000000000000000024 /* HistogramaNotasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistogramaNotasView.swift; sourceTree = "<group>"; };
+		400000000000000000000030 /* CalificacionesModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalificacionesModels.swift; sourceTree = "<group>"; };
+		400000000000000000000031 /* CalificacionesRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalificacionesRepository.swift; sourceTree = "<group>"; };
+		400000000000000000000032 /* CalificacionesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalificacionesView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -239,6 +245,7 @@
 		100000000000000000000012 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				400000000000000000000030 /* CalificacionesModels.swift */,
 				400000000000000000000001 /* EvaluacionesModels.swift */,
 				200000000000000000000001 /* PlanificacionModels.swift */,
 				100000000000000000000022 /* AppTab.swift */,
@@ -251,6 +258,7 @@
 		100000000000000000000013 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				400000000000000000000031 /* CalificacionesRepository.swift */,
 				443B548B642897ACDA7F5B2F /* CronogramaRepository.swift */,
 				400000000000000000000002 /* EvaluacionesRepository.swift */,
 				400000000000000000000020 /* CurriculoRepository.swift */,
@@ -281,6 +289,7 @@
 		100000000000000000000015 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				400000000000000000000042 /* Calificaciones */,
 				443A6D15AA5486619142AEBB /* Cronograma */,
 				400000000000000000000040 /* Evaluaciones */,
 				443C5D20AB4D92EB7CDDF60A /* Help */,
@@ -388,6 +397,14 @@
 				448C0D3DAD9DD5F06C2F6557 /* CronogramaView.swift */,
 			);
 			path = Cronograma;
+			sourceTree = "<group>";
+		};
+		400000000000000000000042 /* Calificaciones */ = {
+			isa = PBXGroup;
+			children = (
+				400000000000000000000032 /* CalificacionesView.swift */,
+			);
+			path = Calificaciones;
 			sourceTree = "<group>";
 		};
 		400000000000000000000040 /* Evaluaciones */ = {
@@ -580,6 +597,9 @@
 				30000000000000000000010C /* EditCourseView.swift in Sources */,
 				30000000000000000000010D /* SchoolLogoEditView.swift in Sources */,
 				30000000000000000000010E /* GoogleConnectionView.swift in Sources */,
+				400000000000000000000130 /* CalificacionesModels.swift in Sources */,
+				400000000000000000000131 /* CalificacionesRepository.swift in Sources */,
+				400000000000000000000132 /* CalificacionesView.swift in Sources */,
 				400000000000000000000101 /* EvaluacionesModels.swift in Sources */,
 				400000000000000000000102 /* EvaluacionesRepository.swift in Sources */,
 				400000000000000000000103 /* EvaluacionesViewModel.swift in Sources */,

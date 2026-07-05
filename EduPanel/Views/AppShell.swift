@@ -293,6 +293,8 @@ struct AppShell: View {
             SettingsView(user: user, repository: dashboardRepository)
         case .ayuda:
             HelpView()
+        case .calificaciones:
+            CalificacionesView(dashboardRepository: dashboardRepository)
         case .cronograma:
             CronogramaView(
                 dashboardRepository: dashboardRepository,
