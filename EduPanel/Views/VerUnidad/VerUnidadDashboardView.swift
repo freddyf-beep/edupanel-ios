@@ -106,7 +106,7 @@ struct VerUnidadDashboardView: View {
                         .tracking(1.0)
                         .foregroundStyle(EPTheme.primary)
                     Text(unidadNombre)
-                        .font(.system(size: displayMode.isSimple ? 15 : 17, weight: .black))
+                        .font(.system(size: displayMode.isSimple ? 22 : 26, weight: .black, design: .rounded))
                         .lineLimit(2)
                     if !displayMode.isSimple {
                         Text(headerSubtitle)
@@ -123,8 +123,6 @@ struct VerUnidadDashboardView: View {
                         icon: viewModel.saveStatus.contains("Error") ? "xmark.octagon.fill" : "checkmark.circle.fill",
                         tint: viewModel.saveStatus.contains("Error") ? .red : .green
                     )
-                } else {
-                    EPStatusPill(text: "V3", icon: "sparkles", tint: EPTheme.primary)
                 }
             }
 
