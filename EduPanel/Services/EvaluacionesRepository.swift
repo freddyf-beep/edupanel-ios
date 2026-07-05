@@ -127,6 +127,9 @@ struct EvaluacionesRepository {
     func guardarListaCotejo(_ lista: ListaCotejoTemplate) async throws {
         var normalizada = lista
         normalizada.normalizar()
+        if let meta = ListaCotejoMetadatos.desde(oas: normalizada.oas) {
+            normalizada.metadatosCurriculares = meta
+        }
         guard var dict = normalizada.dictionary else {
             throw EvaluacionesRepositoryError.encoding
         }
@@ -185,6 +188,9 @@ struct EvaluacionesRepository {
     func guardarRubrica(_ rubrica: RubricaTemplate) async throws {
         var normalizada = rubrica
         normalizada.normalizar()
+        if let meta = ListaCotejoMetadatos.desde(oas: normalizada.oas) {
+            normalizada.metadatosCurriculares = meta
+        }
         guard var dict = normalizada.dictionary else {
             throw EvaluacionesRepositoryError.encoding
         }

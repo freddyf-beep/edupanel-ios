@@ -30,7 +30,7 @@ struct EvaluacionesShell: View {
                     EvaluacionesErrorBanner(message: error)
                 }
 
-                if let diag = viewModel.diagnostico {
+                if let diag = viewModel.diagnostico, viewModel.listas.isEmpty && viewModel.rubricas.isEmpty {
                     EvaluacionesDiagnosticoCard(
                         diagnostico: diag,
                         cursoActual: viewModel.selectedCurso,

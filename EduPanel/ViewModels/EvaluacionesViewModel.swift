@@ -111,6 +111,7 @@ final class EvaluacionesViewModel {
         guard !selectedCurso.isEmpty else {
             listas = []
             rubricas = []
+            diagnostico = nil
             return
         }
 
@@ -131,7 +132,11 @@ final class EvaluacionesViewModel {
             errorMessage = "No se pudieron cargar las evaluaciones de este curso."
         }
 
-        diagnostico = try? await evaluacionesRepository.diagnostico()
+        if listas.isEmpty && rubricas.isEmpty {
+            diagnostico = try? await evaluacionesRepository.diagnostico()
+        } else {
+            diagnostico = nil
+        }
     }
 
     func eliminarLista(_ lista: ListaCotejoTemplate) async {

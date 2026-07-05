@@ -41,6 +41,42 @@ struct ListaCotejoMetadatos: Codable, Hashable {
     var objetivosTransversales: [String]
 
     static let vacios = ListaCotejoMetadatos(objetivos: [], indicadores: [], objetivosTransversales: [])
+
+    static func desde(oas: [OAEditado]?) -> ListaCotejoMetadatos? {
+        guard let oas, !oas.isEmpty else { return nil }
+
+        let seleccionados = oas.filter(\.seleccionado)
+        let objetivos = seleccionados
+            .filter { ($0.tipo ?? "").lowercased() != "oat" }
+            .compactMap { formatoOA($0, prefijo: "OA") }
+        let objetivosTransversales = seleccionados
+            .filter { ($0.tipo ?? "").lowercased() == "oat" }
+            .compactMap { formatoOA($0, prefijo: "OAA") }
+
+        var vistos = Set<String>()
+        let indicadores = seleccionados
+            .flatMap(\.indicadores)
+            .filter(\.seleccionado)
+            .compactMap { indicador -> String? in
+                let texto = indicador.texto.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !texto.isEmpty, !vistos.contains(texto) else { return nil }
+                vistos.insert(texto)
+                return texto
+            }
+
+        return ListaCotejoMetadatos(
+            objetivos: objetivos,
+            indicadores: indicadores,
+            objetivosTransversales: objetivosTransversales
+        )
+    }
+
+    private static func formatoOA(_ oa: OAEditado, prefijo: String) -> String? {
+        let descripcion = oa.descripcion.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !descripcion.isEmpty else { return nil }
+        guard let numero = oa.numero else { return descripcion }
+        return "\(prefijo) \(numero): \(descripcion)"
+    }
 }
 
 struct ListaCotejoTemplate: Codable, Identifiable, Hashable {
