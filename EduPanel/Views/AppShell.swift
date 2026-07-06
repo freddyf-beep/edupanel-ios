@@ -213,6 +213,11 @@ struct AppShell: View {
                         withAnimation(EPTheme.spring) {
                             selectedTab = .perfil
                         }
+                    },
+                    onOpenPlanificaciones: {
+                        withAnimation(EPTheme.spring) {
+                            selectedTab = .planificaciones
+                        }
                     }
                 )
             }
@@ -326,6 +331,13 @@ struct AppShell: View {
             GoogleConnectionView(connectionType: "calendar", repository: dashboardRepository)
         case .driveConnect:
             GoogleConnectionView(connectionType: "drive", repository: dashboardRepository)
+        case .classDetail(let id, let title):
+            ClassDetailView(
+                classId: id,
+                title: title,
+                dashboardRepository: dashboardRepository,
+                planificacionRepository: planificacionRepository
+            )
         case .listaCotejoEditor(let listaId, let curso, let asignatura):
             ListaCotejoEditorView(
                 listaId: listaId,

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		44D5CB1CB04778EAD0156B4A /* ClassDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 446E5C9DB5BE65C282C326B7 /* ClassDetailView.swift */; };
 		44633FCF8B517719166BE927 /* ClasesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C54F4B74CBAEC92AF24E66 /* ClasesView.swift */; };
 		445338F8B5666B8B9BAC92B7 /* FloatingTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 449F462A164495012A2700B4 /* FloatingTabBar.swift */; };
 		442B01AC756AB7E3B158A220 /* CronogramaRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443B548B642897ACDA7F5B2F /* CronogramaRepository.swift */; };
@@ -98,6 +99,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		446E5C9DB5BE65C282C326B7 /* ClassDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClassDetailView.swift; sourceTree = "<group>"; };
 		44C54F4B74CBAEC92AF24E66 /* ClasesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClasesView.swift; sourceTree = "<group>"; };
 		449F462A164495012A2700B4 /* FloatingTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingTabBar.swift; sourceTree = "<group>"; };
 		443B548B642897ACDA7F5B2F /* CronogramaRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronogramaRepository.swift; sourceTree = "<group>"; };
@@ -303,6 +305,7 @@
 				300000000000000000000040 /* Profile */,
 				300000000000000000000001 /* WebReplicaComponents.swift */,
 				44C54F4B74CBAEC92AF24E66 /* ClasesView.swift */,
+				446E5C9DB5BE65C282C326B7 /* ClassDetailView.swift */,
 				10000000000000000000002C /* AppShell.swift */,
 				10000000000000000000002D /* DashboardView.swift */,
 				10000000000000000000002E /* LoginView.swift */,
@@ -575,6 +578,7 @@
 				10000000000000000000004C /* AppShell.swift in Sources */,
 				10000000000000000000004D /* DashboardView.swift in Sources */,
 				44633FCF8B517719166BE927 /* ClasesView.swift in Sources */,
+				44D5CB1CB04778EAD0156B4A /* ClassDetailView.swift in Sources */,
 				10000000000000000000004E /* LoginView.swift in Sources */,
 				10000000000000000000004F /* PlaceholderModuleView.swift in Sources */,
 				100000000000000000000090 /* SidebarContainer.swift in Sources */,

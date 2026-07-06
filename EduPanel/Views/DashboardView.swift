@@ -33,11 +33,18 @@ struct DashboardView: View {
 
     let user: AuthenticatedUser
     let onOpenProfile: () -> Void
+    let onOpenPlanificaciones: () -> Void
 
-    init(repository: DashboardRepository, user: AuthenticatedUser, onOpenProfile: @escaping () -> Void = {}) {
+    init(
+        repository: DashboardRepository,
+        user: AuthenticatedUser,
+        onOpenProfile: @escaping () -> Void = {},
+        onOpenPlanificaciones: @escaping () -> Void = {}
+    ) {
         _viewModel = State(initialValue: DashboardViewModel(repository: repository))
         self.user = user
         self.onOpenProfile = onOpenProfile
+        self.onOpenPlanificaciones = onOpenPlanificaciones
     }
 
     var body: some View {
@@ -310,7 +317,7 @@ struct DashboardView: View {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                 QuickAction(title: "Calificar", icon: "checkmark.clipboard.fill", colors: [.green, .teal], kind: .route(.calificaciones))
                 QuickAction(title: "Cronograma", icon: "calendar.badge.clock", colors: [.cyan, .blue], kind: .route(.cronograma))
-                QuickAction(title: "Planificar", icon: "lightbulb.fill", colors: [.purple, EPTheme.primary], kind: .route(.actividades))
+                QuickAction(title: "Planificar", icon: "lightbulb.fill", colors: [.purple, EPTheme.primary], kind: .action(onOpenPlanificaciones))
                 QuickAction(title: "Mi Perfil", icon: "person.crop.circle.fill", colors: [.indigo, .purple], kind: .action(onOpenProfile))
             }
         }
