@@ -58,7 +58,7 @@ struct EvaluacionesShell: View {
             .padding(.top, 8)
             .padding(.bottom, 24)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(EPTheme.background)
         .navigationTitle("Evaluaciones")
         .task {
             guard !hasLoaded else { return }
@@ -72,29 +72,13 @@ struct EvaluacionesShell: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 13, weight: .black))
-                Text("EVALUACIONES")
-                    .font(.system(size: 11, weight: .black))
-                    .tracking(1.2)
-            }
-            .foregroundStyle(.white.opacity(0.9))
-
-            Text("R\u{00FA}bricas y listas de cotejo")
-                .font(.system(size: 22, weight: .black, design: .rounded))
-                .foregroundStyle(.white)
-
-            Text("Crea instrumentos vinculados al curr\u{00ED}culum, eval\u{00FA}a por grupos y revisa resultados con nota chilena.")
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(.white.opacity(0.85))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
-        .background(EPTheme.heroGradient, in: RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous))
-        .shadow(color: EPTheme.primary.opacity(0.25), radius: 12, y: 5)
+        EPModuleHeader(
+            eyebrow: "Evaluaciones",
+            title: "R\u{00FA}bricas y listas de cotejo",
+            subtitle: "Crea instrumentos vinculados al curr\u{00ED}culum, eval\u{00FA}a por grupos y revisa resultados con nota chilena.",
+            icon: "checkmark.seal.fill",
+            accent: .evaluaciones
+        )
     }
 
     @ViewBuilder

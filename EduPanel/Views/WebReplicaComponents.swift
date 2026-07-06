@@ -2,15 +2,30 @@ import SwiftUI
 import UIKit
 
 enum EPTheme {
-    static let primary = Color(red: 0.941, green: 0.243, blue: 0.431)
-    static let rose = Color(red: 0.957, green: 0.122, blue: 0.416)
-    static let fuchsia = Color(red: 0.753, green: 0.192, blue: 0.831)
-    static let ink = Color(.label)
-    static let muted = Color(.secondaryLabel)
-    static let card = Color(.secondarySystemGroupedBackground)
-    static let subtle = Color(.tertiarySystemGroupedBackground)
+    static let primary = dynamic(light: "#F03E6E", dark: "#F03E6E")
+    static let primaryDark = dynamic(light: "#D6335E", dark: "#D6335E")
+    static let primaryLight = dynamic(light: "#FFF0F4", dark: "#30171E")
+    static let primaryMid = dynamic(light: "#FDDDE6", dark: "#461C27")
+    static let primaryForeground = Color.white
+    static let rose = dynamic(light: "#F41F6A", dark: "#F03E6E")
+    static let fuchsia = dynamic(light: "#C031D4", dark: "#A855F7")
 
-    static let cardRadius: CGFloat = 22
+    static let background = dynamic(light: "#F8F9FC", dark: "#0F0F0F")
+    static let ink = dynamic(light: "#1A1D2E", dark: "#F0F0F0")
+    static let muted = dynamic(light: "#7B809A", dark: "#888888")
+    static let card = dynamic(light: "#FFFFFF", dark: "#1A1A1A")
+    static let subtle = dynamic(light: "#F3F5FA", dark: "#242424")
+    static let border = dynamic(light: "#ECEEF5", dark: "#2A2A2A")
+
+    static let statusGreen = dynamic(light: "#22C55E", dark: "#4ADE80")
+    static let statusAmber = dynamic(light: "#F59E0B", dark: "#FBBF24")
+    static let statusRed = dynamic(light: "#EF4444", dark: "#F87171")
+    static let statusBlue = dynamic(light: "#3B82F6", dark: "#60A5FA")
+
+    static let cardRadius: CGFloat = 14
+    static let heroRadius: CGFloat = 18
+    static let controlRadius: CGFloat = 10
+    static let smallRadius: CGFloat = 8
     static let spring = Animation.spring(response: 0.35, dampingFraction: 0.82)
 
     static let heroGradient = LinearGradient(
@@ -32,13 +47,70 @@ enum EPTheme {
             blue: Double(value & 0xFF) / 255.0
         )
     }
+
+    private static func dynamic(light: String, dark: String) -> Color {
+        Color(UIColor { traits in
+            uiColor(hex: traits.userInterfaceStyle == .dark ? dark : light)
+        })
+    }
+
+    private static func uiColor(hex: String, fallback: UIColor = .systemPink) -> UIColor {
+        let clean = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        guard clean.count == 6 else { return fallback }
+
+        var value: UInt64 = 0
+        guard Scanner(string: clean).scanHexInt64(&value) else { return fallback }
+
+        return UIColor(
+            red: CGFloat((value >> 16) & 0xFF) / 255.0,
+            green: CGFloat((value >> 8) & 0xFF) / 255.0,
+            blue: CGFloat(value & 0xFF) / 255.0,
+            alpha: 1
+        )
+    }
+}
+
+struct EPModuleAccent {
+    let tint: Color
+    let soft: Color
+    let gradient: LinearGradient
+
+    init(tint: Color, soft: Color, colors: [Color]) {
+        self.tint = tint
+        self.soft = soft
+        self.gradient = LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+
+    static let primary = EPModuleAccent(
+        tint: EPTheme.primary,
+        soft: EPTheme.primaryLight,
+        colors: [EPTheme.primary, EPTheme.primaryDark, EPTheme.rose]
+    )
+
+    static let calificaciones = EPModuleAccent(
+        tint: EPTheme.statusGreen,
+        soft: EPTheme.color(hex: "#ECFDF5"),
+        colors: [EPTheme.color(hex: "#10B981"), EPTheme.color(hex: "#14B8A6"), EPTheme.color(hex: "#06B6D4")]
+    )
+
+    static let evaluaciones = EPModuleAccent(
+        tint: EPTheme.primary,
+        soft: EPTheme.primaryLight,
+        colors: [EPTheme.primary, EPTheme.rose, EPTheme.primaryDark]
+    )
+
+    static let planificaciones = EPModuleAccent(
+        tint: EPTheme.primary,
+        soft: EPTheme.primaryLight,
+        colors: [EPTheme.primary, EPTheme.primaryDark, EPTheme.color(hex: "#FB7185")]
+    )
 }
 
 struct EPWebCard<Content: View>: View {
-    var padding: CGFloat = 18
+    var padding: CGFloat = 16
     var content: Content
 
-    init(padding: CGFloat = 18, @ViewBuilder content: () -> Content) {
+    init(padding: CGFloat = 16, @ViewBuilder content: () -> Content) {
         self.padding = padding
         self.content = content()
     }
@@ -49,9 +121,9 @@ struct EPWebCard<Content: View>: View {
             .background(EPTheme.card, in: RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous)
-                    .stroke(Color(.separator).opacity(0.1), lineWidth: 1)
+                    .stroke(EPTheme.border, lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+            .shadow(color: .black.opacity(0.035), radius: 5, y: 1)
     }
 }
 
@@ -60,9 +132,100 @@ extension View {
         background(EPTheme.card, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(Color(.separator).opacity(0.1), lineWidth: 1)
+                    .stroke(EPTheme.border, lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+            .shadow(color: .black.opacity(0.035), radius: 5, y: 1)
+    }
+}
+
+struct EPModuleHeader<Controls: View>: View {
+    let eyebrow: String
+    let title: String
+    let subtitle: String?
+    let icon: String
+    let accent: EPModuleAccent
+    private let controls: Controls
+
+    @Environment(\.displayMode) private var displayMode
+
+    init(
+        eyebrow: String,
+        title: String,
+        subtitle: String? = nil,
+        icon: String,
+        accent: EPModuleAccent = .primary,
+        @ViewBuilder controls: () -> Controls
+    ) {
+        self.eyebrow = eyebrow
+        self.title = title
+        self.subtitle = subtitle
+        self.icon = icon
+        self.accent = accent
+        self.controls = controls()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: displayMode.isSimple ? 10 : 12) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Label(eyebrow.uppercased(), systemImage: icon)
+                        .font(.system(size: 10, weight: .black))
+                        .tracking(1.0)
+                        .foregroundStyle(.white.opacity(0.88))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+
+                    Text(title)
+                        .font(.system(size: displayMode.isSimple ? 20 : 23, weight: .black))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.82)
+
+                    if let subtitle, !subtitle.isEmpty, !displayMode.isSimple {
+                        Text(subtitle)
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.84))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .black))
+                    .foregroundStyle(.white)
+                    .frame(width: 38, height: 38)
+                    .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: EPTheme.controlRadius, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: EPTheme.controlRadius, style: .continuous)
+                            .stroke(.white.opacity(0.2), lineWidth: 1)
+                    )
+            }
+
+            controls
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(displayMode.isSimple ? 15 : 18)
+        .background(accent.gradient, in: RoundedRectangle(cornerRadius: EPTheme.heroRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: EPTheme.heroRadius, style: .continuous)
+                .stroke(.white.opacity(0.16), lineWidth: 1)
+        )
+        .shadow(color: accent.tint.opacity(0.18), radius: 9, y: 4)
+    }
+}
+
+extension EPModuleHeader where Controls == EmptyView {
+    init(
+        eyebrow: String,
+        title: String,
+        subtitle: String? = nil,
+        icon: String,
+        accent: EPModuleAccent = .primary
+    ) {
+        self.init(eyebrow: eyebrow, title: title, subtitle: subtitle, icon: icon, accent: accent) {
+            EmptyView()
+        }
     }
 }
 
@@ -80,7 +243,7 @@ struct EPSectionHeader: View {
                     .font(.system(size: displayMode.isSimple ? 10 : 12, weight: .bold))
                     .foregroundStyle(EPTheme.primary)
                     .frame(width: displayMode.isSimple ? 24 : 28, height: displayMode.isSimple ? 24 : 28)
-                    .background(EPTheme.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .background(EPTheme.primaryLight, in: RoundedRectangle(cornerRadius: EPTheme.smallRadius, style: .continuous))
             }
 
             VStack(alignment: .leading, spacing: 3) {
@@ -136,7 +299,7 @@ struct EPCollapsibleSection<Content: View>: View {
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(tint)
                             .frame(width: 28, height: 28)
-                            .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: EPTheme.smallRadius, style: .continuous))
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(title)
@@ -180,7 +343,7 @@ struct EPKPIBox: View {
     @Environment(\.displayMode) private var displayMode
 
     var body: some View {
-        VStack(alignment: .leading, spacing: displayMode.isSimple ? 6 : 10) {
+        VStack(alignment: .leading, spacing: displayMode.isSimple ? 6 : 9) {
             HStack(spacing: 8) {
                 if let icon {
                     Image(systemName: icon)
@@ -197,7 +360,7 @@ struct EPKPIBox: View {
             }
 
             Text(value)
-                .font(.system(size: displayMode.isSimple ? 21 : 26, weight: .black, design: .rounded))
+                .font(.system(size: displayMode.isSimple ? 20 : 24, weight: .black))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -211,14 +374,14 @@ struct EPKPIBox: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: displayMode.isSimple ? 66 : 108, alignment: .topLeading)
-        .padding(displayMode.isSimple ? 11 : 14)
-        .background(EPTheme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .frame(maxWidth: .infinity, minHeight: displayMode.isSimple ? 64 : 98, alignment: .topLeading)
+        .padding(displayMode.isSimple ? 10 : 13)
+        .background(EPTheme.card, in: RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color(.separator).opacity(0.1), lineWidth: 1)
+            RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous)
+                .stroke(EPTheme.border, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+        .shadow(color: .black.opacity(0.035), radius: 5, y: 1)
     }
 }
 
@@ -241,6 +404,7 @@ struct EPStatusPill: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(tint.opacity(0.12), in: Capsule())
+        .overlay(Capsule().stroke(tint.opacity(0.18), lineWidth: 1))
     }
 }
 
@@ -258,7 +422,7 @@ struct EPWebTabBar: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: 2) {
                 ForEach(tabs) { tab in
                     let isSelected = selected == tab.id
                     Button {
@@ -273,23 +437,27 @@ struct EPWebTabBar: View {
                             Text(tab.title)
                                 .font(.system(size: 12, weight: .black))
                         }
-                        .foregroundStyle(isSelected ? .white : .secondary)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        .foregroundStyle(isSelected ? EPTheme.primary : EPTheme.muted)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
                         .background {
                             if isSelected {
-                                Capsule()
-                                    .fill(EPTheme.primary)
+                                RoundedRectangle(cornerRadius: EPTheme.smallRadius, style: .continuous)
+                                    .fill(EPTheme.primaryLight)
                                     .matchedGeometryEffect(id: "ep-tab-selection", in: tabNamespace)
                             }
                         }
-                        .contentShape(Capsule())
+                        .contentShape(RoundedRectangle(cornerRadius: EPTheme.smallRadius, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(4)
-            .background(Color(.systemGray6).opacity(0.8), in: Capsule())
+            .padding(3)
+            .background(EPTheme.card, in: RoundedRectangle(cornerRadius: EPTheme.controlRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: EPTheme.controlRadius, style: .continuous)
+                    .stroke(EPTheme.border, lineWidth: 1)
+            )
         }
         .sensoryFeedback(.selection, trigger: selected)
     }
@@ -322,7 +490,8 @@ struct EPPlaceholderActionButton: View {
                         Capsule().fill(.white.opacity(0.22))
                             .overlay(Capsule().stroke(.white.opacity(0.3), lineWidth: 1))
                     } else {
-                        Capsule().fill(EPTheme.primary.opacity(0.1))
+                        Capsule().fill(EPTheme.primaryLight)
+                            .overlay(Capsule().stroke(EPTheme.primary.opacity(0.16), lineWidth: 1))
                     }
                 }
         }
@@ -675,7 +844,7 @@ struct RichTextEditor: View {
                         .foregroundStyle(EPTheme.primary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
-                        .background(EPTheme.primary.opacity(0.1), in: Capsule())
+                        .background(EPTheme.primaryLight, in: Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -684,14 +853,14 @@ struct RichTextEditor: View {
                 RichTextRenderer(html: html.isEmpty ? "<p>\(placeholder)</p>" : html)
                     .frame(minHeight: minHeight, alignment: .topLeading)
                     .padding(10)
-                    .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(EPTheme.subtle, in: RoundedRectangle(cornerRadius: EPTheme.controlRadius, style: .continuous))
             } else {
                 TextEditor(text: $plainText)
                     .font(.subheadline)
                     .frame(minHeight: minHeight)
                     .scrollContentBackground(.hidden)
                     .padding(8)
-                    .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(EPTheme.subtle, in: RoundedRectangle(cornerRadius: EPTheme.controlRadius, style: .continuous))
                     .overlay(alignment: .topLeading) {
                         if plainText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             Text(placeholder)

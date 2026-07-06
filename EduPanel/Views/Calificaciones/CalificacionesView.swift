@@ -58,36 +58,20 @@ struct CalificacionesView: View {
             .padding(.top, 8)
             .padding(.bottom, 24)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(EPTheme.background)
         .navigationTitle("Calificaciones")
         .task { await cargar() }
         .refreshable { await cargar() }
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.clipboard.fill")
-                    .font(.system(size: 13, weight: .black))
-                Text("CALIFICACIONES")
-                    .font(.system(size: 11, weight: .black))
-                    .tracking(1.2)
-            }
-            .foregroundStyle(.white.opacity(0.9))
-
-            Text("Notas sincronizadas")
-                .font(.system(size: 22, weight: .black, design: .rounded))
-                .foregroundStyle(.white)
-
-            Text("Visor nativo para revisar la tabla, el diario digital y la cobertura OA.")
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(.white.opacity(0.85))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
-        .background(EPTheme.heroGradient, in: RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous))
-        .shadow(color: EPTheme.primary.opacity(0.25), radius: 12, y: 5)
+        EPModuleHeader(
+            eyebrow: "Calificaciones",
+            title: "Notas sincronizadas",
+            subtitle: "Visor nativo para revisar la tabla, el diario digital y la cobertura OA.",
+            icon: "checkmark.clipboard.fill",
+            accent: .calificaciones
+        )
     }
 
     @ViewBuilder

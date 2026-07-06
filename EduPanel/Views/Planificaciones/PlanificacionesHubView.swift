@@ -46,7 +46,7 @@ struct PlanificacionesHubView: View {
             .padding(.top, 10)
             .padding(.bottom, 28)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(EPTheme.background)
         .navigationTitle("Mis Planificaciones")
         .task {
             await viewModel.load()
@@ -155,61 +155,49 @@ struct PlanificacionesHubView: View {
     // MARK: - Hero
 
     private var heroCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Label("MIS PLANIFICACIONES · V3 BETA", systemImage: "sparkles")
-                    .font(.system(size: 9, weight: .black))
-                    .tracking(1.0)
-                    .foregroundStyle(.white.opacity(0.85))
+        EPModuleHeader(
+            eyebrow: "Mis Planificaciones - V3 Beta",
+            title: "\(viewModel.activeSubject) - \(cursosInfo.count) curso\(cursosInfo.count == 1 ? "" : "s")",
+            subtitle: "Vista global de tus unidades did\u{00E1}cticas: timeline anual, calendario de hitos y m\u{00E9}tricas en tiempo real.",
+            icon: "sparkles",
+            accent: .planificaciones
+        ) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 7) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.white.opacity(0.72))
+                        .font(.system(size: 12, weight: .semibold))
+                    TextField("", text: $searchQuery, prompt: Text("Buscar unidad o curso...").foregroundStyle(.white.opacity(0.62)))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .tint(.white)
+                        .textFieldStyle(.plain)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: EPTheme.controlRadius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: EPTheme.controlRadius, style: .continuous)
+                        .stroke(.white.opacity(0.25), lineWidth: 1)
+                )
 
-                Text("\(viewModel.activeSubject) · \(cursosInfo.count) curso\(cursosInfo.count == 1 ? "" : "s")")
-                    .font(.title3.weight(.black))
-                    .foregroundStyle(.white)
-
-                if !displayMode.isSimple {
-                    Text("Vista global de tus unidades didácticas: timeline anual, calendario de hitos y métricas en tiempo real.")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.85))
+                HStack(spacing: 8) {
+                    EPPlaceholderActionButton(
+                        title: "Drive",
+                        icon: "externaldrive.fill",
+                        message: "El Drive de planificaciones queda visible como en la web y se conectar\u{00E1} cuando habilitemos el flujo nativo.",
+                        variant: .white
+                    )
+                    EPPlaceholderActionButton(
+                        title: "Asistente IA",
+                        icon: "sparkles",
+                        message: "El recomendador sem\u{00E1}ntico IA queda preparado para una siguiente entrega.",
+                        variant: .white
+                    )
+                    Spacer()
                 }
             }
-
-            HStack(spacing: 7) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.white.opacity(0.7))
-                    .font(.system(size: 12, weight: .semibold))
-                TextField("", text: $searchQuery, prompt: Text("Buscar unidad o curso…").foregroundStyle(.white.opacity(0.6)))
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .tint(.white)
-                    .textFieldStyle(.plain)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(.white.opacity(0.25), lineWidth: 1)
-            )
-
-            HStack(spacing: 8) {
-                EPPlaceholderActionButton(
-                    title: "Drive",
-                    icon: "externaldrive.fill",
-                    message: "El Drive de planificaciones queda visible como en la web y se conectará cuando habilitemos el flujo nativo.",
-                    variant: .white
-                )
-                EPPlaceholderActionButton(
-                    title: "Asistente IA",
-                    icon: "sparkles",
-                    message: "El recomendador semántico IA queda preparado para una siguiente entrega.",
-                    variant: .white
-                )
-                Spacer()
-            }
         }
-        .padding(18)
-        .background(EPTheme.heroGradient, in: RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous))
-        .shadow(color: EPTheme.primary.opacity(0.28), radius: 14, y: 7)
     }
 
     private var subjectSelector: some View {

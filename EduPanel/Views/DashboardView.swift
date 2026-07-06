@@ -55,7 +55,7 @@ struct DashboardView: View {
             .padding(.top, 10)
             .padding(.bottom, 28)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(EPTheme.background)
         .navigationTitle("Inicio")
         .toolbar {
             if displayMode.isSimple {
@@ -199,7 +199,7 @@ struct DashboardView: View {
         .padding(16)
         .background(
             LinearGradient(colors: greeting.colors, startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous)
+            in: RoundedRectangle(cornerRadius: EPTheme.heroRadius, style: .continuous)
         )
         .shadow(color: (greeting.colors.first ?? .black).opacity(0.25), radius: 14, y: 7)
         .scrollTransition(axis: .vertical) { content, phase in
@@ -234,12 +234,16 @@ struct DashboardView: View {
                                 .background(isSelected ? .white.opacity(0.3) : .red, in: Capsule())
                         }
                     }
-                    .foregroundStyle(isSelected ? .white : .secondary)
+                    .foregroundStyle(isSelected ? EPTheme.primary : EPTheme.muted)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 9)
                     .background(
-                        isSelected ? AnyShapeStyle(EPTheme.primary) : AnyShapeStyle(Color(.secondarySystemGroupedBackground)),
-                        in: Capsule()
+                        isSelected ? AnyShapeStyle(EPTheme.primaryLight) : AnyShapeStyle(EPTheme.card),
+                        in: RoundedRectangle(cornerRadius: EPTheme.controlRadius, style: .continuous)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: EPTheme.controlRadius, style: .continuous)
+                            .stroke(isSelected ? EPTheme.primary.opacity(0.16) : EPTheme.border, lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -426,7 +430,7 @@ struct DashboardView: View {
                     .textFieldStyle(.plain)
                     .font(.footnote)
                     .padding(11)
-                    .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                    .background(EPTheme.subtle, in: RoundedRectangle(cornerRadius: EPTheme.controlRadius, style: .continuous))
 
                 Button {
                     addReminder()
@@ -738,7 +742,7 @@ private struct TimelineClassRow: View {
                         .font(.caption.weight(.black))
                         .foregroundStyle(.secondary)
                         .frame(width: 26, height: 26)
-                        .background(Color(.systemGray5), in: Circle())
+                        .background(EPTheme.subtle, in: Circle())
                 }
                 .buttonStyle(.plain)
             }
@@ -832,13 +836,13 @@ private struct ReminderNote: Codable, Identifiable, Equatable {
 
 private extension View {
     func webCard() -> some View {
-        self.padding(18)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        self.padding(16)
+            .background(EPTheme.card, in: RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(Color(.separator).opacity(0.1), lineWidth: 1)
+                RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous)
+                    .stroke(EPTheme.border, lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+            .shadow(color: .black.opacity(0.035), radius: 5, y: 1)
     }
 }
 
