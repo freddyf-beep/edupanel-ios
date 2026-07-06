@@ -125,16 +125,14 @@ struct PlanificacionesDetailView: View {
 
                 if !displayMode.isSimple {
                     HStack(spacing: 8) {
-                        EPPlaceholderActionButton(
-                            title: "Drive",
-                            icon: "externaldrive.fill",
-                            message: "El respaldo en Drive queda visible como en la web. La conexión nativa se implementará en una entrega posterior."
-                        )
-                        EPPlaceholderActionButton(
-                            title: "Exportar",
-                            icon: "square.and.arrow.up",
-                            message: "Las exportaciones DOCX/PDF quedan preparadas como placeholder nativo."
-                        )
+                        NavigationLink(value: AppRoute.driveConnect) {
+                            actionLabel("Drive", icon: "externaldrive.fill", destacado: true)
+                        }
+                        .buttonStyle(.plain)
+                        ShareLink(item: exportResumenTexto) {
+                            actionLabel("Compartir", icon: "square.and.arrow.up", destacado: true)
+                        }
+                        .buttonStyle(.plain)
                         Spacer(minLength: 0)
                     }
                 }
@@ -414,17 +412,17 @@ struct PlanificacionesDetailView: View {
     private var exportarCard: some View {
         EPWebCard {
             VStack(alignment: .leading, spacing: 10) {
-                EPSectionHeader(title: "Exportar", subtitle: "Elige entre formato detallado o por tabla.", icon: "square.and.arrow.up")
-                EPPlaceholderActionButton(
-                    title: "Descargar DOCX",
-                    icon: "doc.richtext",
-                    message: "La exportación DOCX se conectará cuando migremos el servicio web."
-                )
-                EPPlaceholderActionButton(
-                    title: "Resumen PDF",
-                    icon: "doc.text",
-                    message: "La exportación PDF se conectará en una entrega posterior."
-                )
+                EPSectionHeader(title: "Compartir", subtitle: "Exportacion nativa v1 en texto para enviar o guardar.", icon: "square.and.arrow.up")
+                ShareLink(item: exportResumenTexto) {
+                    actionLabel("Resumen del curso", icon: "doc.text", destacado: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                ShareLink(item: exportTablaTexto) {
+                    actionLabel("Tabla de unidades", icon: "tablecells", destacado: false)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -481,6 +479,38 @@ struct PlanificacionesDetailView: View {
         }
 
         return Array(lista.sorted { $0.fecha < $1.fecha }.prefix(8))
+    }
+
+    private var exportResumenTexto: String {
+        var lines = [
+            "EduPanel - Planificacion por curso",
+            "Asignatura: \(activeSubject)",
+            "Curso: \(curso)",
+            "Unidades: \(units.count)",
+            "Horas totales: \(totalHoras)",
+            "Cobertura: \(coberturaGeneral)%",
+            ""
+        ]
+
+        for (index, unit) in units.enumerated() {
+            let estado = UnitPlanningState.state(for: unit)
+            lines.append("\(index + 1). \(unit.name)")
+            lines.append("   Estado: \(estado.label)")
+            lines.append("   Tipo: \(TipoUnidad.label(unit.type))")
+            lines.append("   Horas: \(unit.hours)")
+            lines.append("   Fechas: \(unit.start.isEmpty ? "-" : unit.start) - \(unit.end.isEmpty ? "-" : unit.end)")
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    private var exportTablaTexto: String {
+        let header = "Unidad\tTipo\tHoras\tInicio\tFin\tEstado"
+        let rows = units.map { unit in
+            let estado = UnitPlanningState.state(for: unit)
+            return "\(unit.name)\t\(TipoUnidad.label(unit.type))\t\(unit.hours)\t\(unit.start.isEmpty ? "-" : unit.start)\t\(unit.end.isEmpty ? "-" : unit.end)\t\(estado.label)"
+        }
+        return ([header] + rows).joined(separator: "\n")
     }
 
     private var totalHoras: Int {

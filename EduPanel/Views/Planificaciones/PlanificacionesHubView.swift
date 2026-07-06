@@ -182,18 +182,18 @@ struct PlanificacionesHubView: View {
                 )
 
                 HStack(spacing: 8) {
-                    EPPlaceholderActionButton(
-                        title: "Drive",
-                        icon: "externaldrive.fill",
-                        message: "El Drive de planificaciones queda visible como en la web y se conectar\u{00E1} cuando habilitemos el flujo nativo.",
-                        variant: .white
-                    )
-                    EPPlaceholderActionButton(
-                        title: "Asistente IA",
-                        icon: "sparkles",
-                        message: "El recomendador sem\u{00E1}ntico IA queda preparado para una siguiente entrega.",
-                        variant: .white
-                    )
+                    NavigationLink(value: AppRoute.driveConnect) {
+                        Label("Drive", systemImage: "externaldrive.fill")
+                            .font(.system(size: 12, weight: .black))
+                            .padding(.horizontal, 13)
+                            .padding(.vertical, 9)
+                            .foregroundStyle(.white)
+                            .background {
+                                Capsule().fill(.white.opacity(0.22))
+                                    .overlay(Capsule().stroke(.white.opacity(0.3), lineWidth: 1))
+                            }
+                    }
+                    .buttonStyle(.plain)
                     Spacer()
                 }
             }
