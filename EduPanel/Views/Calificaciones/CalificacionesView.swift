@@ -1,5 +1,12 @@
 import SwiftUI
 
+private struct OaOpcionCalificaciones: Identifiable, Hashable {
+    let id: String
+    let label: String
+    let descripcion: String
+    let unidadId: String
+}
+
 struct CalificacionesView: View {
     let dashboardRepository: DashboardRepository
 
@@ -7,16 +14,20 @@ struct CalificacionesView: View {
     @State private var selectedCurso = ""
     @State private var selectedSubject = ""
     @State private var doc: CalificacionesDoc?
+    @State private var oaOpciones: [OaOpcionCalificaciones] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var tab = "tabla"
     @State private var filtroPeriodo = "todos"
 
     private let repository = CalificacionesRepository()
+    private let planificacionRepository = PlanificacionRepository()
+    private let curriculoRepository = CurriculoRepository()
 
     private let tabs = [
-        EPWebTab(id: "tabla", title: "Tabla", icon: "tablecells"),
-        EPWebTab(id: "alumnos", title: "Por alumno", icon: "person.text.rectangle")
+        EPWebTab(id: "tabla", title: "Tabla densa", icon: "tablecells"),
+        EPWebTab(id: "alumnos", title: "Diario digital", icon: "person.text.rectangle"),
+        EPWebTab(id: "cobertura", title: "Cobertura OA", icon: "target")
     ]
 
     var body: some View {
@@ -68,7 +79,7 @@ struct CalificacionesView: View {
                 .font(.system(size: 22, weight: .black, design: .rounded))
                 .foregroundStyle(.white)
 
-            Text("Visor nativo para revisar la tabla del curso y el detalle por estudiante.")
+            Text("Visor nativo para revisar la tabla, el diario digital y la cobertura OA.")
                 .font(.system(size: 12.5, weight: .medium))
                 .foregroundStyle(.white.opacity(0.85))
                 .fixedSize(horizontal: false, vertical: true)
@@ -123,10 +134,15 @@ struct CalificacionesView: View {
 
             if evaluacionesFiltradas.isEmpty {
                 emptyState
-            } else if tab == "tabla" {
-                tablaView(doc)
             } else {
-                porAlumnoView(doc)
+                switch tab {
+                case "tabla":
+                    tablaView(doc)
+                case "cobertura":
+                    coberturaView(doc)
+                default:
+                    porAlumnoView(doc)
+                }
             }
         } else {
             emptyState
@@ -274,6 +290,117 @@ struct CalificacionesView: View {
         }
     }
 
+    private func coberturaView(_ doc: CalificacionesDoc) -> some View {
+        let oas = oaInfoCobertura
+        let evaluacionesPorOa = evaluacionesPorOA(oas)
+
+        return Group {
+            if oas.isEmpty {
+                coberturaEmptyState
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    coberturaInfoBanner
+
+                    EPWebCard(padding: 12) {
+                        ScrollView(.horizontal, showsIndicators: true) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                HStack(spacing: 6) {
+                                    Text("Estudiante")
+                                        .font(.system(size: 10.5, weight: .black))
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 140, alignment: .leading)
+
+                                    ForEach(oas) { oa in
+                                        VStack(spacing: 2) {
+                                            Text(oa.label)
+                                                .font(.system(size: 10, weight: .black))
+                                                .lineLimit(1)
+                                            if !oa.descripcion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                                Text(oa.descripcion)
+                                                    .font(.system(size: 8.5, weight: .semibold))
+                                                    .foregroundStyle(.secondary)
+                                                    .lineLimit(1)
+                                            }
+                                        }
+                                        .multilineTextAlignment(.center)
+                                        .frame(width: 70)
+                                        .frame(minHeight: 38)
+                                    }
+                                }
+                                .padding(.bottom, 8)
+
+                                Divider()
+
+                                ForEach(Array(estudiantesOrdenados.enumerated()), id: \.element.id) { index, estudiante in
+                                    HStack(spacing: 6) {
+                                        estudianteCell(estudiante)
+
+                                        ForEach(oas) { oa in
+                                            coberturaCell(
+                                                resultado: resultadoCobertura(
+                                                    estudiante: estudiante,
+                                                    evaluaciones: evaluacionesPorOa[oa.id] ?? [],
+                                                    doc: doc
+                                                )
+                                            )
+                                            .frame(width: 70)
+                                        }
+                                    }
+                                    .padding(.vertical, 8)
+
+                                    if index < estudiantesOrdenados.count - 1 {
+                                        Divider()
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var coberturaInfoBanner: some View {
+        EPWebCard(padding: 12) {
+            Label(
+                "Heatmap de cobertura: cada celda muestra el promedio del estudiante en las evaluaciones que tocan ese OA.",
+                systemImage: "target"
+            )
+            .font(.system(size: 11.5, weight: .bold))
+            .foregroundStyle(.blue)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var coberturaEmptyState: some View {
+        EPWebCard {
+            EPEmptyState(
+                icon: "target",
+                title: "Sin cobertura OA",
+                message: "Aun no has vinculado evaluaciones a OAs. Vincula al menos una en la web o desde evaluaciones sincronizadas."
+            )
+        }
+    }
+
+    private func coberturaCell(resultado: (nota: Double?, count: Int)) -> some View {
+        VStack(spacing: 2) {
+            Text(formatNota(resultado.nota))
+                .font(.system(size: 13, weight: .black, design: .rounded))
+                .foregroundStyle(colorCobertura(resultado.nota))
+
+            if resultado.count > 0 {
+                Text("\(resultado.count)x ev")
+                    .font(.system(size: 8.5, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(minWidth: 48)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 6)
+        .background(colorCobertura(resultado.nota).opacity(resultado.nota == nil ? 0.08 : 0.16), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
     private func estudianteCell(_ estudiante: EstudianteCalif) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(estudiante.name)
@@ -361,6 +488,22 @@ struct CalificacionesView: View {
         }
     }
 
+    private var oaInfoCobertura: [OaOpcionCalificaciones] {
+        let index = Dictionary(oaOpciones.map { ($0.id, $0) }) { first, _ in first }
+        var vistos = Set<String>()
+        var result: [OaOpcionCalificaciones] = []
+
+        for evaluacion in evaluacionesFiltradas {
+            for rawId in evaluacion.oaIds ?? [] {
+                let oaId = rawId.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !oaId.isEmpty, !vistos.contains(oaId) else { continue }
+                vistos.insert(oaId)
+                result.append(index[oaId] ?? OaOpcionCalificaciones(id: oaId, label: oaId, descripcion: "", unidadId: ""))
+            }
+        }
+        return result
+    }
+
     private var estudiantesOrdenados: [EstudianteCalif] {
         (doc?.estudiantes ?? []).sorted {
             let left = $0.orden ?? 999
@@ -386,6 +529,25 @@ struct CalificacionesView: View {
         return Int((Double(aprobados) / Double(promediosCurso.count) * 100).rounded())
     }
 
+    private func evaluacionesPorOA(_ oas: [OaOpcionCalificaciones]) -> [String: [EvaluacionCalif]] {
+        Dictionary(uniqueKeysWithValues: oas.map { oa in
+            (oa.id, evaluacionesFiltradas.filter { tocaOA($0, oaId: oa.id) })
+        })
+    }
+
+    private func tocaOA(_ evaluacion: EvaluacionCalif, oaId: String) -> Bool {
+        (evaluacion.oaIds ?? []).contains {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines) == oaId
+        }
+    }
+
+    private func resultadoCobertura(estudiante: EstudianteCalif, evaluaciones: [EvaluacionCalif], doc: CalificacionesDoc) -> (nota: Double?, count: Int) {
+        let notas = evaluaciones.compactMap { doc.notaEfectiva(estudiante: estudiante, evalId: $0.id) }
+        guard !notas.isEmpty else { return (nil, 0) }
+        let promedio = notas.reduce(0, +) / Double(notas.count)
+        return ((promedio * 10).rounded() / 10, notas.count)
+    }
+
     private var periodoDescripcion: String {
         switch filtroPeriodo {
         case "s1": return "Primer semestre"
@@ -403,9 +565,94 @@ struct CalificacionesView: View {
         return nota >= 4.0 ? .green : .red
     }
 
+    private func colorCobertura(_ nota: Double?) -> Color {
+        guard let nota else { return .secondary }
+        if nota < 4.0 { return .red }
+        if nota < 5.5 { return .orange }
+        return .green
+    }
+
     private func formatNota(_ nota: Double?) -> String {
         guard let nota else { return "\u{2014}" }
         return String(format: "%.1f", nota)
+    }
+
+    private func cargarOpcionesOA(asignatura: String, curso: String, snapshot: DashboardSnapshot) async -> [OaOpcionCalificaciones] {
+        if let unidadesGuardadas = try? await planificacionRepository.cargarVerUnidadesCurso(asignatura: asignatura, curso: curso) {
+            let opciones = opcionesDesdeVerUnidades(unidadesGuardadas)
+            if !opciones.isEmpty { return opciones }
+        }
+
+        guard let nivel = CurriculoNivel.resolver(curso: curso, mapping: snapshot.nivelMapping),
+              let unidades = try? await curriculoRepository.getUnidades(asignatura: asignatura, nivel: nivel) else {
+            return []
+        }
+
+        var completas: [UnidadCurricular] = []
+        for unidad in unidades {
+            if let completa = try? await curriculoRepository.getUnidadCompleta(asignatura: asignatura, nivel: nivel, unidadId: unidad.id) {
+                completas.append(completa)
+            } else {
+                completas.append(unidad)
+            }
+        }
+        return opcionesDesdeCurriculo(completas, asignatura: asignatura)
+    }
+
+    private func opcionesDesdeVerUnidades(_ unidades: [String: VerUnidadGuardada]) -> [OaOpcionCalificaciones] {
+        var vistos = Set<String>()
+        var result: [OaOpcionCalificaciones] = []
+
+        for (fallbackUnidadId, unidad) in unidades.sorted(by: { $0.key < $1.key }) {
+            let unidadId = firstNonEmpty(unidad.unidadId, fallbackUnidadId)
+            for oa in unidad.oas where oa.seleccionado {
+                let oaId = oa.id.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !oaId.isEmpty, !vistos.contains(oaId) else { continue }
+                vistos.insert(oaId)
+                result.append(
+                    OaOpcionCalificaciones(
+                        id: oaId,
+                        label: etiquetaOA(oa, fallback: oaId),
+                        descripcion: oa.descripcion,
+                        unidadId: unidadId
+                    )
+                )
+            }
+        }
+        return result
+    }
+
+    private func opcionesDesdeCurriculo(_ unidades: [UnidadCurricular], asignatura: String) -> [OaOpcionCalificaciones] {
+        var vistos = Set<String>()
+        var result: [OaOpcionCalificaciones] = []
+
+        for unidad in unidades.sorted(by: { $0.numeroUnidad < $1.numeroUnidad }) {
+            for oa in CurriculoOA.initOAs(unidad: unidad, asignatura: asignatura) where oa.seleccionado {
+                let oaId = oa.id.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !oaId.isEmpty, !vistos.contains(oaId) else { continue }
+                vistos.insert(oaId)
+                result.append(
+                    OaOpcionCalificaciones(
+                        id: oaId,
+                        label: etiquetaOA(oa, fallback: oaId),
+                        descripcion: oa.descripcion,
+                        unidadId: unidad.id
+                    )
+                )
+            }
+        }
+        return result
+    }
+
+    private func etiquetaOA(_ oa: OAEditado, fallback: String) -> String {
+        if let numero = oa.numero {
+            return "OA \(numero)"
+        }
+        return fallback
+    }
+
+    private func firstNonEmpty(_ values: String...) -> String {
+        values.first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? ""
     }
 
     private func seleccionarCurso(_ curso: String) async {
@@ -433,14 +680,18 @@ struct CalificacionesView: View {
             }
             guard !selectedCurso.isEmpty else {
                 doc = nil
+                oaOpciones = []
                 return
             }
             if selectedSubject.isEmpty {
                 selectedSubject = availableSubjects.first ?? activeSubject
             }
-            doc = try await repository.cargar(asignatura: activeSubject, curso: selectedCurso)
+            let subject = activeSubject
+            doc = try await repository.cargar(asignatura: subject, curso: selectedCurso)
+            oaOpciones = await cargarOpcionesOA(asignatura: subject, curso: selectedCurso, snapshot: snap)
         } catch {
             doc = nil
+            oaOpciones = []
             errorMessage = "No se pudieron cargar las calificaciones de este curso."
         }
     }

@@ -222,6 +222,22 @@ struct PlanificacionRepository {
         return VerUnidadGuardada.from(dictionary: dict)
     }
 
+    func cargarVerUnidadesCurso(asignatura: String, curso: String) async throws -> [String: VerUnidadGuardada] {
+        let query = try userCol(col: "ver_unidad")
+            .whereField("asignatura", isEqualTo: asignatura)
+            .whereField("curso", isEqualTo: curso)
+        let snapshot = try await getDocuments(query)
+
+        var result: [String: VerUnidadGuardada] = [:]
+        for doc in snapshot.documents {
+            guard let data = VerUnidadGuardada.from(dictionary: doc.data()) else { continue }
+            let unidadId = data.unidadId.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !unidadId.isEmpty else { continue }
+            result[unidadId] = data
+        }
+        return result
+    }
+
     func cargarVerUnidadConFallback(asignatura: String, curso: String, unidadId: String) async throws -> VerUnidadGuardada? {
         let candidates = Self.unidadIdCandidates(raw: unidadId)
         for candidate in candidates {
@@ -428,6 +444,20 @@ struct PlanificacionRepository {
     private func getDocument(_ ref: DocumentReference) async throws -> DocumentSnapshot {
         try await withCheckedThrowingContinuation { continuation in
             ref.getDocument { snapshot, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let snapshot {
+                    continuation.resume(returning: snapshot)
+                } else {
+                    continuation.resume(throwing: DashboardRepositoryError.missingUser)
+                }
+            }
+        }
+    }
+
+    private func getDocuments(_ query: Query) async throws -> QuerySnapshot {
+        try await withCheckedThrowingContinuation { continuation in
+            query.getDocuments { snapshot, error in
                 if let error {
                     continuation.resume(throwing: error)
                 } else if let snapshot {
