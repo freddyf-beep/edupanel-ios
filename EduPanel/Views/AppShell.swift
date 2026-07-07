@@ -297,6 +297,8 @@ struct AppShell: View {
             SettingsView(user: user, repository: dashboardRepository)
         case .ayuda:
             HelpView()
+        case .perfil360:
+            Perfil360View(user: user, repository: dashboardRepository)
         case .calificaciones:
             CalificacionesView(dashboardRepository: dashboardRepository)
         case .cronograma:
