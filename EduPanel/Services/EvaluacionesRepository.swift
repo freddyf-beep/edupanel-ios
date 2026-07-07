@@ -65,47 +65,6 @@ struct EvaluacionesRepository {
         normalizarClave(a) == normalizarClave(b)
     }
 
-    // MARK: - Diagnóstico (temporal)
-
-    func diagnostico() async throws -> EvaluacionesDiagnostico {
-        let uid = (try? getUid()) ?? "—"
-        let rubricasSnap = try await getDocuments(try userCol(col: "rubricas"))
-        let listasSnap = try await getDocuments(try userCol(col: "listas_cotejo"))
-        let rubricasInvitado = (try? await getDocuments(col(uid: Self.invitadoUid, col: "rubricas")).documents.count) ?? 0
-        let listasInvitado = (try? await getDocuments(col(uid: Self.invitadoUid, col: "listas_cotejo")).documents.count) ?? 0
-
-        func cursos(_ snap: QuerySnapshot) -> [String] {
-            Array(Set(snap.documents.compactMap { $0.data()["curso"] as? String })).sorted()
-        }
-        func asignaturas(_ snap: QuerySnapshot) -> [String] {
-            Array(Set(snap.documents.compactMap { $0.data()["asignatura"] as? String })).sorted()
-        }
-        func decodificadas(_ snap: QuerySnapshot, _ tipo: DecodeTipo) -> Int {
-            snap.documents.filter { doc in
-                switch tipo {
-                case .rubrica: return decode(RubricaTemplate.self, from: doc) != nil
-                case .lista: return decode(ListaCotejoTemplate.self, from: doc) != nil
-                }
-            }.count
-        }
-
-        return EvaluacionesDiagnostico(
-            uid: uid,
-            totalRubricas: rubricasSnap.documents.count,
-            rubricasDecodificadas: decodificadas(rubricasSnap, .rubrica),
-            cursosRubricas: cursos(rubricasSnap),
-            asignaturasRubricas: asignaturas(rubricasSnap),
-            totalListas: listasSnap.documents.count,
-            listasDecodificadas: decodificadas(listasSnap, .lista),
-            cursosListas: cursos(listasSnap),
-            asignaturasListas: asignaturas(listasSnap),
-            rubricasInvitado: rubricasInvitado,
-            listasInvitado: listasInvitado
-        )
-    }
-
-    private enum DecodeTipo { case rubrica, lista }
-
     // MARK: - Listas de Cotejo
 
     func cargarListasCotejo(asignatura: String?, curso: String) async throws -> [ListaCotejoTemplate] {

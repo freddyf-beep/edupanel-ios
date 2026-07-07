@@ -582,22 +582,6 @@ enum NotaChilena {
     }
 }
 
-// MARK: - Diagnóstico (temporal)
-
-struct EvaluacionesDiagnostico {
-    var uid: String
-    var totalRubricas: Int
-    var rubricasDecodificadas: Int
-    var cursosRubricas: [String]
-    var asignaturasRubricas: [String]
-    var totalListas: Int
-    var listasDecodificadas: Int
-    var cursosListas: [String]
-    var asignaturasListas: [String]
-    var rubricasInvitado: Int
-    var listasInvitado: Int
-}
-
 // MARK: - Sincronización con Calificaciones
 
 struct SyncConflicto: Identifiable, Hashable {
