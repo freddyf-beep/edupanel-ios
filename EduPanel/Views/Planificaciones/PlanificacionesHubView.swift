@@ -156,7 +156,7 @@ struct PlanificacionesHubView: View {
 
     private var heroCard: some View {
         EPModuleHeader(
-            eyebrow: "Mis Planificaciones - V3 Beta",
+            eyebrow: "Mis Planificaciones",
             title: "\(viewModel.activeSubject) - \(cursosInfo.count) curso\(cursosInfo.count == 1 ? "" : "s")",
             subtitle: "Vista global de tus unidades did\u{00E1}cticas: timeline anual, calendario de hitos y m\u{00E9}tricas en tiempo real.",
             icon: "sparkles",
