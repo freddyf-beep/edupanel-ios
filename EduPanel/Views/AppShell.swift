@@ -90,32 +90,6 @@ enum AppRoute: Hashable {
         }
     }
 
-    var placeholderText: String {
-        switch self {
-        case .classDetail:
-            return "Pantalla preparada para revisar y editar este bloque."
-        case .newScheduleBlock:
-            return "Aquí construiremos el formulario nativo para crear bloques de clase o libres."
-        case .courseStudents(let course):
-            return "Lista de estudiantes preparada para \(course)."
-        case .editCourse(let course):
-            return "Configuración del curso preparada para \(course)."
-        case .schoolLogo:
-            return "Subida del logo del colegio reservada para el siguiente paso."
-        case .calendarConnect:
-            return "Conexión OAuth de Google Calendar pendiente de implementar."
-        case .calendarSync:
-            return "Sincronización de Calendar pendiente de conectar."
-        case .driveConnect:
-            return "Conexión a Google Drive pendiente de implementar."
-        case .coursePlanificaciones(let course, _):
-            return "Planificaciones filtradas para el curso \(course)."
-        case .verUnidad:
-            return "Detalle de Unidad"
-        default:
-            return "Sin contenido por ahora."
-        }
-    }
 }
 
 struct AppShell: View {
@@ -293,6 +267,40 @@ struct AppShell: View {
     @ViewBuilder
     private func destination(for route: AppRoute) -> some View {
         switch route {
+        case .module(.inicio):
+            DashboardView(
+                repository: dashboardRepository,
+                user: user,
+                onOpenProfile: {
+                    withAnimation(EPTheme.spring) {
+                        selectedTab = .perfil
+                    }
+                },
+                onOpenPlanificaciones: {
+                    withAnimation(EPTheme.spring) {
+                        selectedTab = .planificaciones
+                    }
+                }
+            )
+        case .module(.planificaciones), .planificacionNueva:
+            PlanificacionesHubView(
+                dashboardRepository: dashboardRepository,
+                planificacionRepository: planificacionRepository
+            )
+        case .module(.cronograma), .cronograma, .actividades:
+            CronogramaView(
+                dashboardRepository: dashboardRepository,
+                planificacionRepository: planificacionRepository
+            )
+        case .module(.evaluaciones), .evaluacionNueva:
+            EvaluacionesShell(dashboardRepository: dashboardRepository)
+        case .module(.clases):
+            ClasesView(
+                dashboardRepository: dashboardRepository,
+                planificacionRepository: planificacionRepository
+            )
+        case .module(.perfil), .newScheduleBlock, .perfilAction(_):
+            ProfileView(repository: dashboardRepository, user: user)
         case .settings:
             SettingsView(user: user, repository: dashboardRepository)
         case .ayuda:
@@ -301,11 +309,6 @@ struct AppShell: View {
             Perfil360View(user: user, repository: dashboardRepository)
         case .calificaciones:
             CalificacionesView(dashboardRepository: dashboardRepository)
-        case .cronograma:
-            CronogramaView(
-                dashboardRepository: dashboardRepository,
-                planificacionRepository: planificacionRepository
-            )
         case .coursePlanificaciones(let course, let asignatura):
             PlanificacionesDetailView(
                 curso: course,
@@ -362,8 +365,6 @@ struct AppShell: View {
             RubricaEvaluacionView(rubricaId: rubricaId, dashboardRepository: dashboardRepository)
         case .rubricaResultados(let rubricaId):
             RubricaResultadosView(rubricaId: rubricaId, dashboardRepository: dashboardRepository)
-        default:
-            RoutePlaceholderView(route: route)
         }
     }
 }

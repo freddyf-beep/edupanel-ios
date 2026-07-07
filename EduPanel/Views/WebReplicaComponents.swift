@@ -463,47 +463,6 @@ struct EPWebTabBar: View {
     }
 }
 
-struct EPPlaceholderActionButton: View {
-    enum Variant {
-        case accent
-        case white
-    }
-
-    let title: String
-    let icon: String
-    var message: String = "Esta acción queda preparada para conectarla en el siguiente paso."
-    var variant: Variant = .accent
-
-    @State private var showAlert = false
-
-    var body: some View {
-        Button {
-            showAlert = true
-        } label: {
-            Label(title, systemImage: icon)
-                .font(.system(size: 12, weight: .black))
-                .padding(.horizontal, 13)
-                .padding(.vertical, 9)
-                .foregroundStyle(variant == .white ? .white : EPTheme.primary)
-                .background {
-                    if variant == .white {
-                        Capsule().fill(.white.opacity(0.22))
-                            .overlay(Capsule().stroke(.white.opacity(0.3), lineWidth: 1))
-                    } else {
-                        Capsule().fill(EPTheme.primaryLight)
-                            .overlay(Capsule().stroke(EPTheme.primary.opacity(0.16), lineWidth: 1))
-                    }
-                }
-        }
-        .buttonStyle(.plain)
-        .alert(title, isPresented: $showAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(message)
-        }
-    }
-}
-
 struct EPEmptyState: View {
     let icon: String
     let title: String

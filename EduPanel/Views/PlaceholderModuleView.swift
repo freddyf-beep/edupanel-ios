@@ -1,63 +1,5 @@
 import SwiftUI
 
-struct PlaceholderModuleView: View {
-    let tab: AppTab
-    var onVolverInicio: (() -> Void)? = nil
-
-    private var descripcion: String {
-        switch tab {
-        case .evaluaciones:
-            return "Crea rúbricas, listas de cotejo y evaluaciones desde el celular."
-        case .clases:
-            return "Libro de clases digital con leccionario, asistencia y registro diario."
-        case .inicio:
-            return "Resumen diario con clases, pendientes y recordatorios."
-        case .planificaciones:
-            return "Planifica unidades por curso con cronograma y clases."
-        case .cronograma:
-            return "Mapa pedagógico del año con todas las actividades."
-        case .perfil:
-            return "Horario, cursos, estudiantes e identidad docente."
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 22) {
-            Image(systemName: tab.systemImage)
-                .font(.system(size: 44, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 96, height: 96)
-                .background(EPTheme.heroGradient, in: RoundedRectangle(cornerRadius: EPTheme.heroRadius, style: .continuous))
-
-            VStack(spacing: 9) {
-                Text(tab.title)
-                    .font(.system(size: 24, weight: .black))
-                Text(descripcion)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
-            }
-
-            if let onVolverInicio {
-                Button {
-                    onVolverInicio()
-                } label: {
-                    Label("Volver al inicio", systemImage: "house.fill")
-                        .font(.system(size: 13, weight: .black))
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 11)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(EPTheme.primary)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(EPTheme.background)
-        .navigationTitle(tab.title)
-    }
-}
-
 struct Perfil360View: View {
     let user: AuthenticatedUser
     let repository: DashboardRepository
@@ -377,33 +319,5 @@ struct Perfil360View: View {
     private func valor(_ text: String) -> String {
         let limpio = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return limpio.isEmpty ? "Sin completar" : limpio
-    }
-}
-
-struct RoutePlaceholderView: View {
-    let route: AppRoute
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: route.systemImage)
-                .font(.system(size: 42, weight: .semibold))
-                .foregroundStyle(EPTheme.primary)
-                .frame(width: 92, height: 92)
-                .background(EPTheme.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: EPTheme.heroRadius, style: .continuous))
-
-            VStack(spacing: 8) {
-                Text(route.title)
-                    .font(.system(size: 22, weight: .black))
-
-                Text(route.placeholderText)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 26)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(EPTheme.background)
-        .navigationTitle(route.title)
     }
 }
