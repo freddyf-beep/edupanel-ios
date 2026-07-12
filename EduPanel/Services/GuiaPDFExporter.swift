@@ -38,8 +38,13 @@ private struct GuiaPDFResolvedFormat {
     let usesTableBorders: Bool
     let signatureCount: Int?
 
-    static func resolve(school: InfoColegio, formatOverride: ExportFormat?) -> Self {
-        let format = formatOverride ?? school.guideExportFormat ?? .empty
+    static func resolve(
+        school: InfoColegio,
+        formatOverride: ExportFormat?,
+        documentKind: String = "guia"
+    ) -> Self {
+        let selected = documentKind == "prueba" ? school.testExportFormat : school.guideExportFormat
+        let format = formatOverride ?? selected ?? .empty
         let uniformMargin = format.marginMM
         return Self(
             fontStack: (format.font ?? .sans).cssStack,
@@ -97,6 +102,40 @@ struct GuiaPDFExporter: Sendable {
         )
     }
 
+    @MainActor
+    func export(
+        test: PruebaTemplate,
+        school: InfoColegio,
+        teacherName: String?,
+        mode: GuiaPDFMode,
+        formatOverride: ExportFormat? = nil
+    ) async throws -> GuiaPDFArtifact {
+        let format = GuiaPDFResolvedFormat.resolve(
+            school: school,
+            formatOverride: formatOverride,
+            documentKind: "prueba"
+        )
+        let sourceImageURLs = imageURLs(in: test)
+        let inlineResult = try await inlineImages(urls: sourceImageURLs)
+        let html = buildTestHTML(
+            test: test,
+            teacherName: teacherName,
+            mode: mode,
+            images: inlineResult.images,
+            format: format
+        )
+        let fileURL = try outputURL(test: test, mode: mode)
+        let data = renderPDF(html: html, school: school, format: format)
+        guard !data.isEmpty else { throw GuiaPDFExportError.emptyPDF }
+        try data.write(to: fileURL, options: .atomic)
+        return GuiaPDFArtifact(
+            url: fileURL,
+            mode: mode,
+            title: test.nombre.isEmpty ? "Prueba" : test.nombre,
+            omittedImageCount: inlineResult.omittedCount
+        )
+    }
+
     private func imageURLs(in guide: GuiaTemplate) -> [String] {
         var result: [String] = []
         func append(_ value: String?) {
@@ -114,6 +153,24 @@ struct GuiaPDFExporter: Sendable {
             }
         }
         blocks(guide.cierre)
+        return result
+    }
+
+    private func imageURLs(in test: PruebaTemplate) -> [String] {
+        var result: [String] = []
+        func append(_ value: String?) {
+            guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  !result.contains(value) else { return }
+            result.append(value)
+        }
+        for section in test.secciones {
+            section.estimulo.forEach { append($0.url) }
+            for item in section.items {
+                item.recursos.forEach { append($0.url) }
+                item.alternativas.forEach { append($0.imagenUrl) }
+                item.columnaA.forEach { append($0.imagenUrl) }
+            }
+        }
         return result
     }
 
@@ -364,6 +421,152 @@ struct GuiaPDFExporter: Sendable {
         return "<div class='activity'>\(header)\(resources)\(body)</div>"
     }
 
+    private func buildTestHTML(
+        test: PruebaTemplate,
+        teacherName: String?,
+        mode: GuiaPDFMode,
+        images: [String: String],
+        format: GuiaPDFResolvedFormat
+    ) -> String {
+        let title = escape(plainText(test.nombre.isEmpty ? "Prueba" : test.nombre))
+        let teacher = teacherName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let facts = [
+            fact("Asignatura", test.asignatura),
+            fact("Curso", test.curso),
+            (teacher?.isEmpty == false ? fact("Profesor(a)", teacher ?? "") : ""),
+            test.tiempoMinutos.map { fact("Tiempo", "\($0) min") } ?? "",
+            fact("Puntaje", "\(self.format(test.puntajeMaximo)) puntos"),
+            fact("Nombre", "_______________________________")
+        ].filter { !$0.isEmpty }
+        let factRows = stride(from: 0, to: facts.count, by: 2).map { index in
+            let second = facts.indices.contains(index + 1) ? facts[index + 1] : "<td></td>"
+            return "<tr>\(facts[index])\(second)</tr>"
+        }.joined()
+        let selectedOAs = test.oas?.filter(\.seleccionado).map { oa in
+            let code = oa.numero.map { "OA \($0)" } ?? oa.id
+            return "<li><b>\(escape(code)):</b> \(escape(oa.descripcion))</li>"
+        } ?? test.metadatosCurriculares.objetivos.map { "<li>\(escape($0))</li>" }
+        let curriculum = format.showsCurricularData && !selectedOAs.isEmpty
+            ? "<div class='curriculum'><b>Objetivos de Aprendizaje:</b><ul>\(selectedOAs.joined())</ul></div>"
+            : ""
+        let instructions = format.showsInstructions && !test.instruccionesGenerales.isEmpty
+            ? "<div class='instructions'><b>Instrucciones:</b><ol>\(test.instruccionesGenerales.map { "<li>\(escape($0))</li>" }.joined())</ol></div>"
+            : ""
+        var itemNumber = 0
+        let sections = test.secciones.sorted { $0.orden < $1.orden }.map { section -> String in
+            let stimulus = section.estimulo.isEmpty ? "" : "<div class='stimulus'>\(blocksHTML(section.estimulo, images: images))</div>"
+            let items = section.items.map { item -> String in
+                itemNumber += 1
+                return testItemHTML(item, number: itemNumber, mode: mode, images: images)
+            }.joined()
+            return """
+            <section><h2>\(escape(section.titulo.isEmpty ? "Sección \(section.orden)" : section.titulo))</h2>
+            \(section.instrucciones.isEmpty ? "" : "<p class='section-instructions'>\(escape(plainText(section.instrucciones)))</p>")
+            \(stimulus)\(items)</section>
+            """
+        }.joined()
+        let pautaTitle = mode == .pauta ? "<div class='pauta-title'>PAUTA DE CORRECCIÓN</div>" : ""
+        let borderOverride = format.usesTableBorders ? "" : "table th, table td { border-color: transparent !important; }"
+
+        return """
+        <!doctype html><html lang="es"><head><meta charset="utf-8"><style>
+        @page { size:A4; margin:0; }
+        * { box-sizing:border-box; }
+        body { margin:0; color:#151515; font-family:\(format.fontStack); font-size:\(format.fontSize)pt; line-height:1.35; }
+        h1 { margin:0 0 10px; text-align:\(format.titleAlignment); color:\(format.primaryColor); font-size:\(format.fontSize + 7)pt; }
+        h2 { margin:18px 0 6px; padding-bottom:4px; border-bottom:1.5px solid \(format.headerAccent); color:\(format.primaryColor); font-size:\(format.fontSize + 2)pt; }
+        .pauta-title { margin:0 0 12px; padding:6px; text-align:center; font-weight:bold; color:#166534; border:1px solid #86efac; background:#f0fdf4; }
+        .facts { width:100%; border-collapse:collapse; margin:0 0 10px; }
+        .facts td { width:50%; padding:4px 6px; border:1px solid #d4d4d4; }
+        .curriculum,.instructions,.stimulus { margin:8px 0; padding:8px 10px; border:1px solid #dedede; background:#fafafa; }
+        .curriculum ul,.instructions ol { margin:4px 0 0 20px; padding:0; }
+        .section-instructions { margin:4px 0 10px; font-style:italic; color:#444; }
+        .test-item { break-inside:avoid; margin:10px 0 15px; padding:9px 10px; border:1px solid #d9d9d9; border-radius:5px; }
+        .item-head { display:flex; justify-content:space-between; gap:12px; margin-bottom:7px; font-weight:bold; }
+        .points { white-space:nowrap; color:#555; }
+        .resource { margin:7px 0; }
+        img { max-width:100%; max-height:230px; object-fit:contain; }
+        .option { margin:5px 0; padding:3px 5px; }
+        .correct { color:#166534; font-weight:bold; background:#f0fdf4; }
+        .wrong { color:#991b1b; }
+        .line { height:21px; border-bottom:1px solid #777; }
+        .answer { margin-top:7px; padding:6px 8px; color:#166534; border-left:3px solid #22c55e; background:#f0fdf4; }
+        table { width:100%; border-collapse:collapse; margin:7px 0; }
+        th,td { padding:5px 7px; border:1px solid #bbb; vertical-align:top; }
+        th { background:\(format.tableHeaderShading); }
+        \(borderOverride)
+        </style></head><body class='\(mode == .pauta ? "pauta" : "")'>
+        \(pautaTitle)<h1>\(title)</h1><table class='facts'>\(factRows)</table>
+        \(curriculum)\(instructions)\(sections)
+        </body></html>
+        """
+    }
+
+    private func testItemHTML(
+        _ item: PruebaItem,
+        number: Int,
+        mode: GuiaPDFMode,
+        images: [String: String]
+    ) -> String {
+        let prompt = escape(plainText(item.enunciado))
+        let header = "<div class='item-head'><span>\(number). \(prompt)</span><span class='points'>\(format(item.puntaje)) pts</span></div>"
+        let resources = item.recursos.isEmpty ? "" : "<div class='resource'>\(blocksHTML(item.recursos, images: images))</div>"
+        let body: String
+
+        switch item.kind {
+        case .seleccionMultiple:
+            body = item.alternativas.enumerated().map { index, option in
+                let isCorrect = option.esCorrecta && mode == .pauta
+                let image = optionImage(option.imagenUrl, images: images)
+                return "<div class='option \(isCorrect ? "correct" : "")'>\(letter(index)).) \(escape(option.texto))\(image)\(isCorrect ? " ✓" : "")</div>"
+            }.joined()
+        case .verdaderoFalso:
+            let mark = mode == .pauta ? (item.respuestaCorrecta == true ? "<b class='correct'>V</b> / F" : "V / <b class='correct'>F</b>") : "V / F"
+            let justification = item.pideJustificacion ? "<div class='line'></div><div class='line'></div>" : ""
+            body = "<div>Respuesta: \(mark)</div>\(justification)"
+        case .pareados:
+            let left = item.columnaA.enumerated().map { "<div>\($0.offset + 1). \(escape($0.element.texto))</div>" }.joined()
+            let right = item.columnaB.enumerated().map { "<div>\(letter($0.offset)). \(escape($0.element.texto))</div>" }.joined()
+            let answer = mode == .pauta ? item.columnaA.compactMap { a -> String? in
+                guard let aId = a.sourceId,
+                      let b = item.columnaB.first(where: { $0.correctaParaAId == aId }),
+                      let bIndex = item.columnaB.firstIndex(where: { $0.id == b.id }) else { return nil }
+                return "\(escape(a.texto)) → \(letter(bIndex)). \(escape(b.texto))"
+            }.joined(separator: "<br>") : ""
+            body = "<table><tr><th>Columna A</th><th>Columna B</th></tr><tr><td>\(left)</td><td>\(right)</td></tr></table>" + (answer.isEmpty ? "" : "<div class='answer'>\(answer)</div>")
+        case .ordenar:
+            let steps: [PruebaPaso]
+            if mode == .pauta || item.pasos.count < 2 { steps = item.pasos }
+            else { steps = Array(item.pasos.dropFirst()) + Array(item.pasos.prefix(1)) }
+            body = steps.enumerated().map { index, step in
+                let order = mode == .pauta
+                    ? String((item.pasos.firstIndex(where: { $0.id == step.id }) ?? index) + 1)
+                    : "_____"
+                return "<div>\(order) &nbsp; \(escape(step.texto))</div>"
+            }.joined()
+        case .completar:
+            let expression = item.textoConBlancos ?? item.enunciado
+            let completed = completionHTML(expression, answers: item.respuestasCorrectas, mode: mode)
+            let bank = item.bancoPalabras.isEmpty ? "" : "<div><b>Banco:</b> \(item.bancoPalabras.map(escape).joined(separator: " · "))</div>"
+            body = "<div>\(completed)</div>\(bank)"
+        case .respuestaCorta:
+            let answer = mode == .pauta && item.respuestaEsperada?.isEmpty == false
+                ? "<div class='answer'><b>Esperada:</b> \(escape(item.respuestaEsperada ?? ""))</div>" : ""
+            body = responseLines(item.lineasRespuesta ?? 2) + answer
+        case .desarrollo:
+            var answerParts: [String] = []
+            if let guide = item.pautaCorreccion, !guide.isEmpty { answerParts.append("<b>Pauta:</b> \(escape(guide))") }
+            if !item.criterios.isEmpty {
+                answerParts.append("<b>Criterios:</b><ul>\(item.criterios.map { "<li>\(escape($0.texto)) (\(format($0.puntaje)) pts)</li>" }.joined())</ul>")
+            }
+            let answer = mode == .pauta && !answerParts.isEmpty ? "<div class='answer'>\(answerParts.joined(separator: "<br>"))</div>" : ""
+            body = responseLines(item.lineasRespuesta ?? 5) + answer
+        case .unknown:
+            body = "<div class='answer'>Tipo de ítem no compatible con la exportación nativa; el documento Firestore no fue modificado.</div>"
+        }
+        return "<div class='test-item'>\(header)\(resources)\(body)</div>"
+    }
+
     @MainActor
     private func renderPDF(html: String, school: InfoColegio, format: GuiaPDFResolvedFormat) -> Data {
         let renderer = A4PrintRenderer()
@@ -397,6 +600,14 @@ struct GuiaPDFExporter: Sendable {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let suffix = mode == .pauta ? "-pauta.pdf" : "-alumno.pdf"
         let base = sanitizeFileName(guide.nombre.isEmpty ? "guia" : plainText(guide.nombre), limit: 90)
+        return directory.appendingPathComponent("\(base)\(suffix)")
+    }
+
+    private func outputURL(test: PruebaTemplate, mode: GuiaPDFMode) throws -> URL {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("EduPanelExports", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let suffix = mode == .pauta ? "-pauta.pdf" : "-alumno.pdf"
+        let base = sanitizeFileName(test.nombre.isEmpty ? "prueba" : plainText(test.nombre), limit: 90)
         return directory.appendingPathComponent("\(base)\(suffix)")
     }
 

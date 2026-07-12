@@ -320,6 +320,19 @@ struct InfoColegio: Equatable {
             ?? formato
     }
 
+    var testExportTemplates: [ExportFormatTemplate] {
+        formatos.filter { $0.scope == "prueba" || $0.scope == "todos" }
+    }
+
+    var testExportFormat: ExportFormat? {
+        let candidates = testExportTemplates
+        return candidates.first { $0.scope == "prueba" && $0.isDefault }?.format
+            ?? candidates.first { $0.scope == "prueba" }?.format
+            ?? candidates.first { $0.scope == "todos" && $0.isDefault }?.format
+            ?? candidates.first { $0.scope == "todos" }?.format
+            ?? formato
+    }
+
     var dictionary: [String: Any] {
         var result: [String: Any] = [
             "nombre": nombre,

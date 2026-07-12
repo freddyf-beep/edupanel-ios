@@ -10,6 +10,9 @@ struct GuiaEditorView: View {
     let dashboardRepository: DashboardRepository
     private let mediaRepository = EvaluacionesMediaRepository()
     private let pdfExporter = GuiaPDFExporter()
+    private let itemBankRepository = ItemBankRepository()
+    private let aiService = EvaluacionesAIService()
+    private let wordService = EvaluacionesWordService()
 
     @State private var draft: GuiaEditorDraft
     @State private var savedDraft: GuiaEditorDraft
@@ -24,6 +27,11 @@ struct GuiaEditorView: View {
     @State private var exportArtifact: GuiaPDFArtifact?
     @State private var exportingMode: GuiaPDFMode?
     @State private var exportErrorMessage: String?
+    @State private var showItemBank = false
+    @State private var itemBankMessage: String?
+    @State private var itemBankMessageIsError = false
+    @State private var showAIGeneration = false
+    @State private var wordArtifact: EvaluacionesWordArtifact?
 
     init(
         guiaId: String?, curso: String, asignatura: String, scope: EvaluacionScope,
@@ -55,6 +63,17 @@ struct GuiaEditorView: View {
                     }
                 } else {
                     if let errorMessage { EvaluacionesErrorBanner(message: errorMessage) }
+                    if let itemBankMessage {
+                        Label(
+                            itemBankMessage,
+                            systemImage: itemBankMessageIsError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill"
+                        )
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(itemBankMessageIsError ? .orange : .green)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background((itemBankMessageIsError ? Color.orange : Color.green).opacity(0.08), in: RoundedRectangle(cornerRadius: 11))
+                    }
                     identityCard
                     teachingCard
                     EvaluacionesCurriculoSection(
@@ -66,7 +85,11 @@ struct GuiaEditorView: View {
                         oas: $draft.oas
                     )
                     instructionsCard
-                    GuiaContentEditorView(sections: $draft.secciones, closingBlocks: $draft.cierre)
+                    GuiaContentEditorView(
+                        sections: $draft.secciones,
+                        closingBlocks: $draft.cierre,
+                        onSaveToBank: { activity in Task { await saveToBank(activity) } }
+                    )
                         .environment(
                             \.guiaMediaContext,
                             GuiaMediaContext(documentId: draft.id, repository: mediaRepository)
@@ -87,6 +110,12 @@ struct GuiaEditorView: View {
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
+                Button { exportWord() } label: {
+                    Label("Word", systemImage: "doc.richtext")
+                }
+                .disabled(isLoading || !draft.isValid)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     GuiaPDFExportActions(templates: school.guideExportTemplates) { mode, format in
                         beginExport(mode, formatOverride: format)
@@ -96,6 +125,18 @@ struct GuiaEditorView: View {
                     else { Label("Exportar", systemImage: "square.and.arrow.up") }
                 }
                 .disabled(isLoading || isSaving || exportingMode != nil || !draft.isValid)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showAIGeneration = true } label: {
+                    Label("Crear con IA", systemImage: "wand.and.stars")
+                }
+                .disabled(isLoading || draft.curso.isEmpty || draft.asignatura.isEmpty)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showItemBank = true } label: {
+                    Label("Banco", systemImage: "tray.full.fill")
+                }
+                .disabled(isLoading || draft.curso.isEmpty || draft.asignatura.isEmpty)
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button { Task { await save() } } label: {
@@ -115,6 +156,27 @@ struct GuiaEditorView: View {
         .sheet(item: $exportArtifact) { artifact in
             GuiaPDFShareSheet(artifact: artifact)
         }
+        .sheet(item: $wordArtifact) { artifact in
+            EvaluacionesWordShareSheet(artifact: artifact)
+        }
+        .sheet(isPresented: $showItemBank) {
+            ItemBankSheet(
+                target: .guia,
+                asignatura: draft.asignatura,
+                curso: draft.curso,
+                onInsert: insertFromBank
+            )
+        }
+        .sheet(isPresented: $showAIGeneration) {
+            EvaluacionesAIGenerationSheet(
+                title: "Crear guía con IA",
+                explanation: "Genera contenido general usando el curso, asignatura, objetivo, unidad y OA seleccionados.",
+                initialInstructions: "Crea 3 secciones con explicación breve y actividades variadas para \(draft.tiempoMinutos) minutos. Incluye selección múltiple, completar, respuesta corta y una actividad abierta. No realices adaptaciones PIE ni calibración Bloom."
+            ) { instructions in
+                let generated = try await aiService.generateGuide(from: draft, instructions: instructions)
+                await MainActor.run { appendGeneratedGuideSections(generated) }
+            }
+        }
         .alert("No se pudo exportar", isPresented: Binding(
             get: { exportErrorMessage != nil },
             set: { if !$0 { exportErrorMessage = nil } }
@@ -127,6 +189,22 @@ struct GuiaEditorView: View {
             if value != savedDraft { saveSucceeded = false }
         }
         .task { await load() }
+    }
+
+    private func appendGeneratedGuideSections(_ generated: [GuiaSectionDraft]) {
+        draft.secciones.append(contentsOf: generated)
+        for index in draft.secciones.indices { draft.secciones[index].orden = index + 1 }
+        if draft.nombre.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            draft.nombre = "Guía de \(draft.unidadNombre.isEmpty ? draft.asignatura : draft.unidadNombre)"
+        }
+    }
+
+    private func exportWord() {
+        do {
+            wordArtifact = try wordService.export(guide: draft)
+        } catch {
+            exportErrorMessage = error.localizedDescription
+        }
     }
 
     private var identityCard: some View {
@@ -246,6 +324,37 @@ struct GuiaEditorView: View {
         )
     }
 
+    private func insertFromBank(_ entry: ItemBankEntry) -> Bool {
+        if draft.secciones.isEmpty {
+            draft.secciones.append(.nueva(order: 1))
+        }
+        guard let index = draft.secciones.indices.last,
+              let activity = entry.guiaActivityDraft(
+                number: draft.secciones[index].actividades.filter { !$0.isDeleted }.count + 1
+              ) else { return false }
+        draft.secciones[index].actividades.append(activity)
+        itemBankMessageIsError = false
+        itemBankMessage = "Actividad insertada desde el banco."
+        return true
+    }
+
+    @MainActor
+    private func saveToBank(_ activity: GuiaActivityDraft) async {
+        do {
+            _ = try await itemBankRepository.save(
+                activity: activity,
+                asignatura: draft.asignatura,
+                curso: draft.curso,
+                author: draft.docenteNombre
+            )
+            itemBankMessageIsError = false
+            itemBankMessage = "Actividad guardada en el banco compartido."
+        } catch {
+            itemBankMessageIsError = true
+            itemBankMessage = error.localizedDescription
+        }
+    }
+
     private func load() async {
         if nivelMapping.isEmpty || school == .empty {
             async let dashboardTask: DashboardSnapshot? = try? await dashboardRepository.fetchDashboard()
@@ -274,6 +383,7 @@ struct GuiaEditorView: View {
 
     private func save() async {
         guard draft.isValid, !isSaving else { return }
+        let previousMediaPaths = savedDraft.ownedMediaStoragePaths
         isSaving = true; errorMessage = nil; saveSucceeded = false
         defer { isSaving = false }
         do {
@@ -283,6 +393,12 @@ struct GuiaEditorView: View {
                 sourceGuide = refreshed
                 draft = canonical
                 savedDraft = canonical
+                await mediaRepository.eliminarMediosHuerfanos(
+                    documentId: id,
+                    folder: .guias,
+                    previousPaths: previousMediaPaths,
+                    currentPaths: canonical.ownedMediaStoragePaths
+                )
             } else {
                 draft.id = id
                 savedDraft = draft

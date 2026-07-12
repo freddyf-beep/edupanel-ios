@@ -1,5 +1,6 @@
 import SwiftUI
 import PDFKit
+import UIKit
 
 struct GuiaPDFExportActions: View {
     let templates: [ExportFormatTemplate]
@@ -56,6 +57,14 @@ struct GuiaPDFShareSheet: View {
                         .frame(maxWidth: .infinity).padding(.vertical, 12)
                         .background(EPTheme.primary, in: RoundedRectangle(cornerRadius: 12))
                 }
+
+                Button(action: printPDF) {
+                    Label("Imprimir", systemImage: "printer.fill")
+                        .font(.subheadline.weight(.black))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                }
+                .buttonStyle(.bordered)
             }
             .padding(16)
             .background(EPTheme.background)
@@ -67,6 +76,17 @@ struct GuiaPDFShareSheet: View {
                 }
             }
         }
+    }
+
+    @MainActor
+    private func printPDF() {
+        let controller = UIPrintInteractionController.shared
+        let printInfo = UIPrintInfo(dictionary: nil)
+        printInfo.outputType = .general
+        printInfo.jobName = artifact.title
+        controller.printInfo = printInfo
+        controller.printingItem = artifact.url
+        controller.present(animated: true)
     }
 }
 

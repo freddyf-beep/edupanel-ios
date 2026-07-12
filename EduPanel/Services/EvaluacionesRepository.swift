@@ -647,6 +647,27 @@ struct EvaluacionesRepository {
         return id
     }
 
+    /// Construye una prueba canónica de vista previa sin escribir en Firestore.
+    /// Se usa para exportar también los cambios todavía no guardados del editor.
+    func prepararPruebaParaExportar(
+        _ draft: PruebaEditorDraft,
+        scope: EvaluacionScope,
+        base: PruebaTemplate?
+    ) throws -> PruebaTemplate {
+        var data = try pruebaPayloadNueva(draft)
+        if let base {
+            // Campos futuros de raíz sobreviven en la vista previa; los campos
+            // conocidos del borrador tienen prioridad.
+            data = base.raw.merging(data) { _, draftValue in draftValue }
+        }
+        return PruebaDocumentParser.prueba(
+            id: draft.id ?? "prueba_preview",
+            scope: scope,
+            isFromCache: false,
+            dictionary: data
+        )
+    }
+
     func eliminarPrueba(id: String, scope: EvaluacionScope) async throws {
         try validate(scope: scope)
         let uid = try getUid()

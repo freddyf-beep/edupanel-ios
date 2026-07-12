@@ -95,6 +95,24 @@ struct EvaluacionesMediaRepository {
         )
     }
 
+    func eliminarMediosHuerfanos(
+        documentId: String,
+        folder: EvaluacionMediaFolder,
+        previousPaths: Set<String>,
+        currentPaths: Set<String>
+    ) async {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        let cleanDocumentId = documentId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanDocumentId.isEmpty, !cleanDocumentId.contains("/") else { return }
+        let prefix = "users/\(uid)/evaluaciones/\(folder.rawValue)/\(cleanDocumentId)/"
+        let orphans = previousPaths.subtracting(currentPaths).filter { path in
+            path.hasPrefix(prefix) && path.count > prefix.count && !path.dropFirst(prefix.count).contains("/")
+        }
+        for path in orphans {
+            try? await delete(storage.reference(withPath: path))
+        }
+    }
+
     private func prepareJPEG(_ data: Data) async throws -> Data {
         try await Task.detached(priority: .userInitiated) {
             guard let image = UIImage(data: data) else {
@@ -132,7 +150,7 @@ struct EvaluacionesMediaRepository {
     ) async throws -> URL {
         try await withCheckedThrowingContinuation { continuation in
             let task = reference.putData(data, metadata: metadata)
-            var handles: [StorageHandle] = []
+            var handles: [String] = []
             func removeObservers() { handles.forEach { task.removeObserver(withHandle: $0) } }
 
             handles.append(task.observe(.progress) { snapshot in
@@ -158,6 +176,53 @@ struct EvaluacionesMediaRepository {
         }
     }
 
+    private func delete(_ reference: StorageReference) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            reference.delete { error in
+                if let error { continuation.resume(throwing: error) }
+                else { continuation.resume(returning: ()) }
+            }
+        }
+    }
+
+}
+
+extension GuiaEditorDraft {
+    var ownedMediaStoragePaths: Set<String> {
+        var paths = Set<String>()
+        func add(_ blocks: [GuiaBlockDraft]) {
+            blocks.filter { !$0.isDeleted }.forEach {
+                if !$0.storagePath.isEmpty { paths.insert($0.storagePath) }
+            }
+        }
+        secciones.forEach { section in
+            add(section.bloques)
+            section.actividades.filter { !$0.isDeleted }.forEach { add($0.resources) }
+        }
+        add(cierre)
+        return paths
+    }
+}
+
+extension PruebaEditorDraft {
+    var ownedMediaStoragePaths: Set<String> {
+        var paths = Set<String>()
+        func add(_ blocks: [GuiaBlockDraft]) {
+            blocks.filter { !$0.isDeleted }.forEach {
+                if !$0.storagePath.isEmpty { paths.insert($0.storagePath) }
+            }
+        }
+        secciones.filter { !$0.isDeleted }.forEach { section in
+            add(section.estimulo)
+            section.items.filter { !$0.isDeleted }.forEach { item in
+                add(item.resources)
+                (item.entriesA + item.entriesB).filter { !$0.isDeleted }.forEach {
+                    if !$0.imageStoragePath.isEmpty { paths.insert($0.imageStoragePath) }
+                }
+            }
+        }
+        return paths
+    }
 }
 
 enum EvaluacionesMediaError: LocalizedError {

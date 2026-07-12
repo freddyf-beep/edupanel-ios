@@ -4,6 +4,7 @@ import SwiftUI
 struct PruebaItemsEditor: View {
     @Binding var items: [PruebaItemDraft]
     let oas: [OAEditado]
+    var onSaveToBank: ((PruebaItemDraft) -> Void)? = nil
 
     private var visibleItems: [PruebaItemDraft] { items.filter { !$0.isDeleted } }
 
@@ -34,6 +35,7 @@ struct PruebaItemsEditor: View {
                     canMoveUp: index > 0,
                     canMoveDown: index + 1 < visibleItems.count,
                     canDelete: !item.isUnknown && !item.resources.contains { $0.isUnknown && !$0.isDeleted },
+                    onSaveToBank: onSaveToBank.map { callback in { callback(item) } },
                     moveUp: { moveItem(id: item.id, offset: -1) },
                     moveDown: { moveItem(id: item.id, offset: 1) },
                     delete: { deleteItem(id: item.id) }
@@ -98,6 +100,7 @@ private struct PruebaItemDraftEditor: View {
     let canMoveUp: Bool
     let canMoveDown: Bool
     let canDelete: Bool
+    let onSaveToBank: (() -> Void)?
     let moveUp: () -> Void
     let moveDown: () -> Void
     let delete: () -> Void
@@ -149,6 +152,10 @@ private struct PruebaItemDraftEditor: View {
                 .frame(width: 72)
                 .disabled(item.isUnknown)
             Menu {
+                if let onSaveToBank {
+                    Button("Guardar en banco", systemImage: "tray.and.arrow.down.fill", action: onSaveToBank)
+                        .disabled(item.isUnknown)
+                }
                 Button("Subir", systemImage: "arrow.up", action: moveUp).disabled(!canMoveUp)
                 Button("Bajar", systemImage: "arrow.down", action: moveDown).disabled(!canMoveDown)
                 Button("Eliminar", systemImage: "trash", role: .destructive, action: delete).disabled(!canDelete)

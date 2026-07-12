@@ -2,6 +2,7 @@ import SwiftUI
 
 struct GuiaActivitiesEditor: View {
     @Binding var activities: [GuiaActivityDraft]
+    var onSaveToBank: ((GuiaActivityDraft) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -20,6 +21,7 @@ struct GuiaActivitiesEditor: View {
                     activity: binding(id: activity.id, fallback: activity),
                     canMoveUp: canMove(id: activity.id, offset: -1),
                     canMoveDown: canMove(id: activity.id, offset: 1),
+                    onSaveToBank: onSaveToBank.map { callback in { callback(activity) } },
                     moveUp: { move(id: activity.id, offset: -1) },
                     moveDown: { move(id: activity.id, offset: 1) },
                     delete: { delete(id: activity.id) }
@@ -81,6 +83,7 @@ private struct GuiaActivityDraftEditor: View {
     @Binding var activity: GuiaActivityDraft
     let canMoveUp: Bool
     let canMoveDown: Bool
+    let onSaveToBank: (() -> Void)?
     let moveUp: () -> Void
     let moveDown: () -> Void
     let delete: () -> Void
@@ -95,6 +98,10 @@ private struct GuiaActivityDraftEditor: View {
                 Label(kind.label, systemImage: "pencil.line").font(.caption.weight(.black)).foregroundStyle(.orange)
                 Spacer()
                 Menu {
+                    if let onSaveToBank {
+                        Button("Guardar en banco", systemImage: "tray.and.arrow.down.fill", action: onSaveToBank)
+                            .disabled(activity.isUnknown)
+                    }
                     Button("Subir", systemImage: "arrow.up", action: moveUp).disabled(!canMoveUp)
                     Button("Bajar", systemImage: "arrow.down", action: moveDown).disabled(!canMoveDown)
                     Button("Eliminar", systemImage: "trash", role: .destructive, action: delete).disabled(activity.isUnknown)

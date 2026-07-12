@@ -4,12 +4,19 @@ struct PruebaDetalleView: View {
     let pruebaId: String
     let scope: EvaluacionScope
     let repository: EvaluacionesRepository
+    let dashboardRepository: DashboardRepository
+
+    private let pdfExporter = GuiaPDFExporter()
 
     @State private var test: PruebaTemplate?
     @State private var application: PruebaAplicacion?
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var applicationErrorMessage: String?
+    @State private var school: InfoColegio = .empty
+    @State private var exportArtifact: GuiaPDFArtifact?
+    @State private var exportingMode: GuiaPDFMode?
+    @State private var exportErrorMessage: String?
 
     private var navigationTitleText: String {
         guard let name = test?.nombre, !name.isEmpty else {
@@ -59,6 +66,17 @@ struct PruebaDetalleView: View {
                     }
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        GuiaPDFExportActions(templates: school.testExportTemplates) { mode, format in
+                            beginExport(test, mode: mode, formatOverride: format)
+                        }
+                    } label: {
+                        if exportingMode != nil { ProgressView() }
+                        else { Label("Exportar", systemImage: "square.and.arrow.up") }
+                    }
+                    .disabled(exportingMode != nil)
+                }
             }
         }
         .task {
@@ -66,6 +84,17 @@ struct PruebaDetalleView: View {
         }
         .refreshable {
             await load()
+        }
+        .sheet(item: $exportArtifact) { artifact in
+            GuiaPDFShareSheet(artifact: artifact)
+        }
+        .alert("No se pudo exportar", isPresented: Binding(
+            get: { exportErrorMessage != nil },
+            set: { if !$0 { exportErrorMessage = nil } }
+        )) {
+            Button("Aceptar", role: .cancel) { exportErrorMessage = nil }
+        } message: {
+            Text(exportErrorMessage ?? "Error desconocido")
         }
     }
 
@@ -475,6 +504,39 @@ struct PruebaDetalleView: View {
         return note >= 4 ? .green : .red
     }
 
+    private func beginExport(
+        _ test: PruebaTemplate,
+        mode: GuiaPDFMode,
+        formatOverride: ExportFormat?
+    ) {
+        Task { await export(test, mode: mode, formatOverride: formatOverride) }
+    }
+
+    @MainActor
+    private func export(
+        _ test: PruebaTemplate,
+        mode: GuiaPDFMode,
+        formatOverride: ExportFormat?
+    ) async {
+        guard exportingMode == nil else { return }
+        exportingMode = mode
+        exportErrorMessage = nil
+        defer { exportingMode = nil }
+        do {
+            exportArtifact = try await pdfExporter.export(
+                test: test,
+                school: school,
+                teacherName: test.docenteNombre,
+                mode: mode,
+                formatOverride: formatOverride
+            )
+        } catch is CancellationError {
+            return
+        } catch {
+            exportErrorMessage = error.localizedDescription
+        }
+    }
+
     @MainActor
     private func load() async {
         guard !isLoading else { return }
@@ -484,6 +546,7 @@ struct PruebaDetalleView: View {
         defer { isLoading = false }
 
         do {
+            async let schoolTask: InfoColegio? = try? await dashboardRepository.fetchExportSchool(scope: scope)
             guard let loadedTest = try await repository.cargarPrueba(id: pruebaId, scope: scope) else {
                 test = nil
                 application = nil
@@ -492,6 +555,7 @@ struct PruebaDetalleView: View {
             }
             guard !Task.isCancelled else { return }
             test = loadedTest
+            if let loadedSchool = await schoolTask { school = loadedSchool }
 
             do {
                 application = try await repository.cargarAplicacionPrueba(pruebaId: pruebaId, scope: scope)

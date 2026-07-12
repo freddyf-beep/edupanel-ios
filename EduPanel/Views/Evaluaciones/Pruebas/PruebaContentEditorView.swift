@@ -3,6 +3,7 @@ import SwiftUI
 struct PruebaContentEditorView: View {
     @Binding var sections: [PruebaSectionDraft]
     let oas: [OAEditado]
+    var onSaveToBank: ((PruebaItemDraft) -> Void)? = nil
 
     private var visibleSections: [PruebaSectionDraft] {
         sections.filter { !$0.isDeleted }
@@ -50,6 +51,7 @@ struct PruebaContentEditorView: View {
                     canMoveUp: index > 0,
                     canMoveDown: index + 1 < visibleSections.count,
                     canDelete: !containsProtectedContent(section),
+                    onSaveToBank: onSaveToBank,
                     moveUp: { moveSection(id: section.id, offset: -1) },
                     moveDown: { moveSection(id: section.id, offset: 1) },
                     delete: { deleteSection(id: section.id) }
@@ -113,6 +115,7 @@ private struct PruebaSectionDraftEditor: View {
     let canMoveUp: Bool
     let canMoveDown: Bool
     let canDelete: Bool
+    let onSaveToBank: ((PruebaItemDraft) -> Void)?
     let moveUp: () -> Void
     let moveDown: () -> Void
     let delete: () -> Void
@@ -172,7 +175,7 @@ private struct PruebaSectionDraftEditor: View {
                     blocks: $section.estimulo
                 )
 
-                PruebaItemsEditor(items: $section.items, oas: oas)
+                PruebaItemsEditor(items: $section.items, oas: oas, onSaveToBank: onSaveToBank)
 
                 if !canDelete {
                     Label("Esta secci\u{00F3}n contiene datos web desconocidos y no puede eliminarse completa.", systemImage: "shield.fill")

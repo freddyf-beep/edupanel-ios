@@ -54,6 +54,16 @@ Ese workflow genera un `.ipa` sin firma para instalarlo manualmente con Sideload
 - `EDUPANEL_API_BASE_URL`
 - `GOOGLE_REVERSED_CLIENT_ID`
 
+### Cómo obtener la IPA desde GitHub Actions
+
+1. Sube el repositorio a GitHub con estos cambios.
+2. Entra a **Actions → Build IPA for verification (unsigned) → Run workflow**.
+3. Selecciona `Release` y presiona **Run workflow**.
+4. Cuando termine en verde, abre la ejecución y descarga el artefacto `EduPanel-unsigned-ipa` desde **Artifacts**.
+5. El artefacto contiene `EduPanel-unsigned.ipa` y su checksum SHA-256.
+
+La IPA de verificación es deliberadamente sin firma. Para instalarla en un iPhone se necesita Sideloadly/AltStore u otra herramienta compatible; para una IPA firmada usa `testflight.yml` y configura los secretos de Apple indicados más abajo.
+
 Guia paso a paso: `docs/FREE_IOS_TESTING.md`.
 
 Requisitos fuera del repo:

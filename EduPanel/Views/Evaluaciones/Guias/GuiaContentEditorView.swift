@@ -21,6 +21,7 @@ extension EnvironmentValues {
 struct GuiaContentEditorView: View {
     @Binding var sections: [GuiaSectionDraft]
     @Binding var closingBlocks: [GuiaBlockDraft]
+    var onSaveToBank: ((GuiaActivityDraft) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -54,6 +55,7 @@ struct GuiaContentEditorView: View {
                     canMoveUp: index > 0,
                     canMoveDown: index + 1 < sections.count,
                     canDelete: section.isNew && section.activityCount == 0,
+                    onSaveToBank: onSaveToBank,
                     moveUp: { moveSection(from: index, offset: -1) },
                     moveDown: { moveSection(from: index, offset: 1) },
                     delete: { deleteSection(id: section.id) }
@@ -102,6 +104,7 @@ private struct GuiaSectionDraftEditor: View {
     let canMoveUp: Bool
     let canMoveDown: Bool
     let canDelete: Bool
+    let onSaveToBank: ((GuiaActivityDraft) -> Void)?
     let moveUp: () -> Void
     let moveDown: () -> Void
     let delete: () -> Void
@@ -138,7 +141,7 @@ private struct GuiaSectionDraftEditor: View {
                     blocks: $section.bloques
                 )
 
-                GuiaActivitiesEditor(activities: $section.actividades)
+                GuiaActivitiesEditor(activities: $section.actividades, onSaveToBank: onSaveToBank)
             }
         }
     }

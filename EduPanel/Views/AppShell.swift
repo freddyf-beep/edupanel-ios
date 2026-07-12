@@ -396,7 +396,8 @@ struct AppShell: View {
             PruebaDetalleView(
                 pruebaId: pruebaId,
                 scope: scope,
-                repository: evaluacionesRepository
+                repository: evaluacionesRepository,
+                dashboardRepository: dashboardRepository
             )
         case .pruebaEditor(let pruebaId, let curso, let asignatura, let scope):
             PruebaEditorView(

@@ -32,6 +32,7 @@ struct PruebasHubView: View {
             }
 
             metricsGrid
+            PruebasUpcomingCard()
             filtersCard
 
             if viewModel.isLoadingContenido {

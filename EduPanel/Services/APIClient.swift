@@ -59,6 +59,30 @@ struct APIClient {
         return try await request(path: path, method: .post, body: payload)
     }
 
+    func postJSONObject(_ path: String, body: [String: Any]) async throws -> [String: Any] {
+        guard JSONSerialization.isValidJSONObject(body) else { throw APIClientError.invalidResponse }
+        guard let user = Auth.auth().currentUser else { throw APIClientError.missingUser }
+
+        let token = try await user.fetchIDToken()
+        var request = URLRequest(url: try makeURL(path: path))
+        request.httpMethod = HTTPMethod.post.rawValue
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw APIClientError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            let message = Self.extractErrorMessage(from: data) ?? "Request failed with status \(http.statusCode)."
+            throw APIClientError.requestFailed(status: http.statusCode, message: message)
+        }
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw APIClientError.invalidResponse
+        }
+        return object
+    }
+
     private func request<Response: Decodable>(path: String, method: HTTPMethod, body: Data?) async throws -> Response {
         guard let user = Auth.auth().currentUser else {
             throw APIClientError.missingUser

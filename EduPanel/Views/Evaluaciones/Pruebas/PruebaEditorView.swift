@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct PruebaEditorView: View {
     @Environment(\.dismiss) private var dismiss
@@ -11,6 +12,10 @@ struct PruebaEditorView: View {
     let dashboardRepository: DashboardRepository
 
     private let mediaRepository = EvaluacionesMediaRepository()
+    private let itemBankRepository = ItemBankRepository()
+    private let pdfExporter = GuiaPDFExporter()
+    private let aiService = EvaluacionesAIService()
+    private let wordService = EvaluacionesWordService()
 
     @State private var draft: PruebaEditorDraft
     @State private var savedDraft: PruebaEditorDraft
@@ -21,6 +26,18 @@ struct PruebaEditorView: View {
     @State private var saveSucceeded = false
     @State private var showDiscardConfirmation = false
     @State private var showReloadConfirmation = false
+    @State private var showItemBank = false
+    @State private var itemBankMessage: String?
+    @State private var itemBankMessageIsError = false
+    @State private var school: InfoColegio = .empty
+    @State private var sourceTest: PruebaTemplate?
+    @State private var exportArtifact: GuiaPDFArtifact?
+    @State private var exportingMode: GuiaPDFMode?
+    @State private var exportErrorMessage: String?
+    @State private var showAIGeneration = false
+    @State private var showWordImporter = false
+    @State private var wordArtifact: EvaluacionesWordArtifact?
+    @State private var wordMessage: String?
 
     init(
         pruebaId: String?,
@@ -85,6 +102,25 @@ struct PruebaEditorView: View {
                         }
                     }
                     if isReadOnly { readOnlyNotice }
+                    if let itemBankMessage {
+                        Label(
+                            itemBankMessage,
+                            systemImage: itemBankMessageIsError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill"
+                        )
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(itemBankMessageIsError ? .orange : .green)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background((itemBankMessageIsError ? Color.orange : Color.green).opacity(0.08), in: RoundedRectangle(cornerRadius: 11))
+                    }
+                    if let wordMessage {
+                        Label(wordMessage, systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.orange)
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 11))
+                    }
                     summaryCard
                     VStack(alignment: .leading, spacing: 14) {
                         generalCard
@@ -98,7 +134,11 @@ struct PruebaEditorView: View {
                             oas: $draft.oas
                         )
                         instructionsCard
-                        PruebaContentEditorView(sections: $draft.secciones, oas: draft.oas ?? [])
+                        PruebaContentEditorView(
+                            sections: $draft.secciones,
+                            oas: draft.oas ?? [],
+                            onSaveToBank: { item in Task { await saveToBank(item) } }
+                        )
                             .environment(
                                 \.guiaMediaContext,
                                 GuiaMediaContext(
@@ -148,6 +188,38 @@ struct PruebaEditorView: View {
                     .accessibilityHint(draft.isValid ? "Guarda los cambios de la prueba" : "Completa nombre, asignatura y curso")
                 }
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showAIGeneration = true } label: {
+                    Label("Crear con IA", systemImage: "wand.and.stars")
+                }
+                .disabled(isLoading || isReadOnly || draft.curso.isEmpty || draft.asignatura.isEmpty)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showItemBank = true } label: {
+                    Label("Banco", systemImage: "tray.full.fill")
+                }
+                .disabled(isLoading || isReadOnly || draft.curso.isEmpty || draft.asignatura.isEmpty)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("Importar .docx", systemImage: "square.and.arrow.down") { showWordImporter = true }
+                    Button("Exportar .docx", systemImage: "doc.richtext") { exportWord() }
+                } label: {
+                    Label("Word", systemImage: "doc.richtext")
+                }
+                .disabled(isLoading || isReadOnly)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    GuiaPDFExportActions(templates: school.testExportTemplates) { mode, format in
+                        beginExport(mode, formatOverride: format)
+                    }
+                } label: {
+                    if exportingMode != nil { ProgressView() }
+                    else { Label("Exportar", systemImage: "square.and.arrow.up") }
+                }
+                .disabled(isLoading || exportingMode != nil || !draft.isValid)
+            }
         }
         .confirmationDialog("\u{00BF}Descartar cambios?", isPresented: $showDiscardConfirmation, titleVisibility: .visible) {
             Button("Descartar", role: .destructive) { dismiss() }
@@ -166,7 +238,83 @@ struct PruebaEditorView: View {
         .onChange(of: draft) { _, value in
             if value.editableFingerprint != savedDraft.editableFingerprint { saveSucceeded = false }
         }
+        .sheet(isPresented: $showItemBank) {
+            ItemBankSheet(
+                target: .prueba,
+                asignatura: draft.asignatura,
+                curso: draft.curso,
+                onInsert: insertFromBank
+            )
+        }
+        .sheet(isPresented: $showAIGeneration) {
+            EvaluacionesAIGenerationSheet(
+                title: "Crear prueba con IA",
+                explanation: "Genera preguntas generales usando el curso, asignatura, unidad y OA seleccionados.",
+                initialInstructions: "Crea 10 preguntas equilibradas. Incluye selección múltiple, verdadero/falso, completar, respuesta corta y desarrollo. Dificultad media. No realices adaptaciones PIE ni calibración Bloom."
+            ) { instructions in
+                let generated = try await aiService.generateTest(from: draft, instructions: instructions)
+                await MainActor.run { appendGeneratedTestSections(generated) }
+            }
+        }
+        .sheet(item: $exportArtifact) { artifact in
+            GuiaPDFShareSheet(artifact: artifact)
+        }
+        .sheet(item: $wordArtifact) { artifact in
+            EvaluacionesWordShareSheet(artifact: artifact)
+        }
+        .fileImporter(
+            isPresented: $showWordImporter,
+            allowedContentTypes: [UTType(filenameExtension: "docx") ?? .data],
+            allowsMultipleSelection: false,
+            onCompletion: importWord
+        )
+        .alert("No se pudo exportar", isPresented: Binding(
+            get: { exportErrorMessage != nil },
+            set: { if !$0 { exportErrorMessage = nil } }
+        )) {
+            Button("Aceptar", role: .cancel) { exportErrorMessage = nil }
+        } message: {
+            Text(exportErrorMessage ?? "Error desconocido")
+        }
         .task { await load() }
+    }
+
+    private func appendGeneratedTestSections(_ generated: [PruebaSectionDraft]) {
+        if draft.secciones.count == 1,
+           draft.secciones[0].items.filter({ !$0.isDeleted }).isEmpty,
+           draft.secciones[0].estimulo.filter({ !$0.isDeleted }).isEmpty {
+            draft.secciones.removeAll()
+        }
+        draft.secciones.append(contentsOf: generated)
+        for index in draft.secciones.indices { draft.secciones[index].orden = index + 1 }
+        if draft.nombre.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            draft.nombre = "Prueba de \(draft.unidadNombre.isEmpty ? draft.asignatura : draft.unidadNombre)"
+        }
+    }
+
+    private func importWord(_ result: Result<[URL], Error>) {
+        do {
+            guard let url = try result.get().first else { return }
+            let imported = try wordService.importTest(from: url)
+            if draft.secciones.count == 1,
+               draft.secciones[0].items.filter({ !$0.isDeleted }).isEmpty {
+                draft.secciones.removeAll()
+            }
+            draft.secciones.append(imported.section)
+            for index in draft.secciones.indices { draft.secciones[index].orden = index + 1 }
+            wordMessage = imported.warning
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func exportWord() {
+        do {
+            wordArtifact = try wordService.export(test: draft)
+        } catch {
+            exportErrorMessage = error.localizedDescription
+        }
     }
 
     private var summaryCard: some View {
@@ -339,10 +487,42 @@ struct PruebaEditorView: View {
         )
     }
 
+    private func insertFromBank(_ entry: ItemBankEntry) -> Bool {
+        guard !isReadOnly, let item = entry.pruebaDraft() else { return false }
+        if draft.secciones.allSatisfy(\.isDeleted) {
+            draft.secciones.append(.nueva(order: 1, type: item.type))
+        }
+        guard let index = draft.secciones.lastIndex(where: { !$0.isDeleted }) else { return false }
+        draft.secciones[index].items.append(item)
+        itemBankMessageIsError = false
+        itemBankMessage = "Pregunta insertada desde el banco."
+        return true
+    }
+
+    @MainActor
+    private func saveToBank(_ item: PruebaItemDraft) async {
+        do {
+            _ = try await itemBankRepository.save(
+                item: item,
+                asignatura: draft.asignatura,
+                curso: draft.curso,
+                author: draft.docenteNombre
+            )
+            itemBankMessageIsError = false
+            itemBankMessage = "Pregunta guardada en el banco compartido."
+        } catch {
+            itemBankMessageIsError = true
+            itemBankMessage = error.localizedDescription
+        }
+    }
+
     @MainActor
     private func load(force: Bool = false) async {
-        if nivelMapping.isEmpty, let snapshot = try? await dashboardRepository.fetchDashboard() {
-            nivelMapping = snapshot.nivelMapping
+        if nivelMapping.isEmpty || school == .empty {
+            async let dashboardTask: DashboardSnapshot? = try? await dashboardRepository.fetchDashboard()
+            async let schoolTask: InfoColegio? = try? await dashboardRepository.fetchExportSchool(scope: scope)
+            if let snapshot = await dashboardTask { nivelMapping = snapshot.nivelMapping }
+            if let exportSchool = await schoolTask { school = exportSchool }
         }
         guard let pruebaId, force || draft.id == nil else { return }
         isLoading = true
@@ -354,6 +534,7 @@ struct PruebaEditorView: View {
                 return
             }
             let loaded = PruebaEditorDraft.from(test)
+            sourceTest = test
             draft = loaded
             savedDraft = loaded
         } catch is CancellationError {
@@ -366,6 +547,7 @@ struct PruebaEditorView: View {
     @MainActor
     private func save() async {
         guard draft.isValid, !isSaving, !isReadOnly else { return }
+        let previousMediaPaths = savedDraft.ownedMediaStoragePaths
         isSaving = true
         errorMessage = nil
         saveSucceeded = false
@@ -377,8 +559,15 @@ struct PruebaEditorView: View {
                     throw EvaluacionesRepositoryError.invalidDocument(collection: "pruebas", id: id)
                 }
                 let canonical = PruebaEditorDraft.from(refreshed)
+                sourceTest = refreshed
                 draft = canonical
                 savedDraft = canonical
+                await mediaRepository.eliminarMediosHuerfanos(
+                    documentId: id,
+                    folder: .pruebas,
+                    previousPaths: previousMediaPaths,
+                    currentPaths: canonical.ownedMediaStoragePaths
+                )
                 saveSucceeded = true
             } catch {
                 // La transacción ya terminó: conservamos el ID para no crear un
@@ -393,6 +582,32 @@ struct PruebaEditorView: View {
             return
         } catch {
             errorMessage = "No se pudo guardar la prueba. \(error.localizedDescription)"
+        }
+    }
+
+    private func beginExport(_ mode: GuiaPDFMode, formatOverride: ExportFormat? = nil) {
+        Task { await export(mode, formatOverride: formatOverride) }
+    }
+
+    @MainActor
+    private func export(_ mode: GuiaPDFMode, formatOverride: ExportFormat?) async {
+        guard draft.isValid, exportingMode == nil else { return }
+        exportingMode = mode
+        exportErrorMessage = nil
+        defer { exportingMode = nil }
+        do {
+            let preview = try repository.prepararPruebaParaExportar(draft, scope: scope, base: sourceTest)
+            exportArtifact = try await pdfExporter.export(
+                test: preview,
+                school: school,
+                teacherName: draft.docenteNombre,
+                mode: mode,
+                formatOverride: formatOverride
+            )
+        } catch is CancellationError {
+            return
+        } catch {
+            exportErrorMessage = error.localizedDescription
         }
     }
 }
