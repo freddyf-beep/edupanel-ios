@@ -582,7 +582,7 @@ enum GuiaDocumentParser {
             let sourceId = ReadGuia.optionalString(dictionary["id"])
             let rawType = ReadGuia.string(dictionary["tipo"])
             let kind = PruebaContentBlockKind.resolve(rawType)
-            if kind == PruebaContentBlockKind.unknown { issues.append("Bloque '\(rawType.isEmpty ? "sin tipo" : rawType)' preservado.") }
+            if case .unknown = kind { issues.append("Bloque '\(rawType.isEmpty ? "sin tipo" : rawType)' preservado.") }
             let data = ReadGuia.dictionary(dictionary["data"]) ?? [:]
             return PruebaContentBlock(
                 id: "\(path)/\(index)/\(sourceId ?? "missing")", sourceId: sourceId,

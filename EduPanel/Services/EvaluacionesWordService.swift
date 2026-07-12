@@ -19,7 +19,7 @@ struct EvaluacionesWordService {
 
         let attributed = try NSAttributedString(
             url: url,
-            options: [.documentType: NSAttributedString.DocumentType.officeOpenXML],
+            options: [.documentType: NSAttributedString.DocumentType.rtf],
             documentAttributes: nil
         )
         let lines = attributed.string.components(separatedBy: .newlines)
@@ -127,13 +127,13 @@ struct EvaluacionesWordService {
         let attributed = NSAttributedString(string: text)
         let data = try attributed.data(
             from: NSRange(location: 0, length: attributed.length),
-            documentAttributes: [.documentType: NSAttributedString.DocumentType.officeOpenXML]
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
         )
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("EduPanelExports", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let base = name.folding(options: .diacriticInsensitive, locale: Locale(identifier: "es_CL"))
             .replacingOccurrences(of: "[^A-Za-z0-9._-]+", with: "-", options: .regularExpression)
-        let url = directory.appendingPathComponent("\(base.isEmpty ? "documento" : base).docx")
+        let url = directory.appendingPathComponent("\(base.isEmpty ? "documento" : base).rtf")
         try data.write(to: url, options: .atomic)
         return EvaluacionesWordArtifact(url: url)
     }

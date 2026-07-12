@@ -335,7 +335,7 @@ struct ItemBankRepository {
     }
 
     private func setData(_ data: [String: Any], at reference: DocumentReference) async throws {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             reference.setData(data) { error in
                 if let error { continuation.resume(throwing: error) }
                 else { continuation.resume(returning: ()) }
@@ -344,7 +344,7 @@ struct ItemBankRepository {
     }
 
     private func deleteDocument(_ reference: DocumentReference) async throws {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             reference.delete { error in
                 if let error { continuation.resume(throwing: error) }
                 else { continuation.resume(returning: ()) }
