@@ -216,10 +216,18 @@ struct PlanificacionRepository {
         let docId = Self.buildVerUnidadId(asignatura: asignatura, curso: curso, unidadId: unidadId)
         let docRef = try userDoc(col: "ver_unidad", id: docId)
         let snapshot = try await getDocument(docRef)
-        guard snapshot.exists, let dict = snapshot.data() else {
+        guard snapshot.exists else {
             return nil
         }
-        return VerUnidadGuardada.from(dictionary: dict)
+        guard let dict = snapshot.data() else {
+            throw PlanificacionRepositoryError.invalidDocument(collection: "ver_unidad", documentID: docId)
+        }
+        return try decodeDocument(
+            VerUnidadGuardada.self,
+            from: dict,
+            collection: "ver_unidad",
+            documentID: docId
+        )
     }
 
     func cargarVerUnidadesCurso(asignatura: String, curso: String) async throws -> [String: VerUnidadGuardada] {
@@ -251,7 +259,7 @@ struct PlanificacionRepository {
         }
 
         for candidate in candidates {
-            if let data = try? await buscarVerUnidadPorCampos(asignatura: asignatura, curso: curso, unidadId: candidate) {
+            if let data = try await buscarVerUnidadPorCampos(asignatura: asignatura, curso: curso, unidadId: candidate) {
                 var resolved = data
                 if resolved.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     resolved.unidadId = candidate
@@ -268,30 +276,55 @@ struct PlanificacionRepository {
             .whereField("curso", isEqualTo: curso)
             .whereField("unidadId", isEqualTo: unidadId)
             .limit(to: 1)
-        guard let snapshot = try await getFirstDocument(query), let dict = snapshot.data() else {
+        guard let snapshot = try await getFirstDocument(query) else {
             return nil
         }
-        return VerUnidadGuardada.from(dictionary: dict)
+        guard let dict = snapshot.data() else {
+            throw PlanificacionRepositoryError.invalidDocument(
+                collection: "ver_unidad",
+                documentID: snapshot.documentID
+            )
+        }
+        return try decodeDocument(
+            VerUnidadGuardada.self,
+            from: dict,
+            collection: "ver_unidad",
+            documentID: snapshot.documentID
+        )
     }
 
-    func guardarVerUnidad(asignatura: String, curso: String, unidadId: String, data: VerUnidadGuardada) async throws {
+    func encolarVerUnidad(
+        asignatura: String,
+        curso: String,
+        unidadId: String,
+        data: VerUnidadGuardada,
+        completion: @escaping (Error?) -> Void
+    ) throws {
         let docId = Self.buildVerUnidadId(asignatura: asignatura, curso: curso, unidadId: unidadId)
         let docRef = try userDoc(col: "ver_unidad", id: docId)
         guard var dict = data.dictionary else {
             throw NSError(domain: "PlanificacionRepository", code: -1, userInfo: [NSLocalizedDescriptionKey: "Encoding error"])
         }
         dict["updatedAt"] = FieldValue.serverTimestamp()
-        try await setData(dict, at: docRef, merge: true)
+        docRef.setData(dict, merge: true, completion: completion)
     }
 
     func cargarCronogramaUnidad(asignatura: String, curso: String, unidadId: String) async throws -> CronogramaUnidadData? {
         let docId = Self.buildCronogramaUnidadId(asignatura: asignatura, curso: curso, unidadId: unidadId)
         let docRef = try userDoc(col: "cronograma_unidad", id: docId)
         let snapshot = try await getDocument(docRef)
-        guard snapshot.exists, let dict = snapshot.data() else {
+        guard snapshot.exists else {
             return nil
         }
-        return CronogramaUnidadData.from(dictionary: dict)
+        guard let dict = snapshot.data() else {
+            throw PlanificacionRepositoryError.invalidDocument(collection: "cronograma_unidad", documentID: docId)
+        }
+        return try decodeDocument(
+            CronogramaUnidadData.self,
+            from: dict,
+            collection: "cronograma_unidad",
+            documentID: docId
+        )
     }
 
     func cargarCronogramaUnidadConFallback(asignatura: String, curso: String, unidadIds: [String]) async throws -> CronogramaUnidadData? {
@@ -307,7 +340,7 @@ struct PlanificacionRepository {
         }
 
         for candidate in candidates {
-            if let data = try? await buscarCronogramaUnidadPorCampos(asignatura: asignatura, curso: curso, unidadId: candidate) {
+            if let data = try await buscarCronogramaUnidadPorCampos(asignatura: asignatura, curso: curso, unidadId: candidate) {
                 var resolved = data
                 if resolved.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     resolved.unidadId = candidate
@@ -324,10 +357,21 @@ struct PlanificacionRepository {
             .whereField("curso", isEqualTo: curso)
             .whereField("unidadId", isEqualTo: unidadId)
             .limit(to: 1)
-        guard let snapshot = try await getFirstDocument(query), let dict = snapshot.data() else {
+        guard let snapshot = try await getFirstDocument(query) else {
             return nil
         }
-        return CronogramaUnidadData.from(dictionary: dict)
+        guard let dict = snapshot.data() else {
+            throw PlanificacionRepositoryError.invalidDocument(
+                collection: "cronograma_unidad",
+                documentID: snapshot.documentID
+            )
+        }
+        return try decodeDocument(
+            CronogramaUnidadData.self,
+            from: dict,
+            collection: "cronograma_unidad",
+            documentID: snapshot.documentID
+        )
     }
 
     func cargarCronogramas(asignatura: String, planes: [PlanificacionCurso]) async -> [String: CronogramaUnidadData] {
@@ -347,7 +391,14 @@ struct PlanificacionRepository {
         return results
     }
 
-    func guardarCronogramaUnidad(asignatura: String, curso: String, unidadId: String, totalClases: Int, clases: [ClaseCronograma]) async throws {
+    func encolarCronogramaUnidad(
+        asignatura: String,
+        curso: String,
+        unidadId: String,
+        totalClases: Int,
+        clases: [ClaseCronograma],
+        completion: @escaping (Error?) -> Void
+    ) throws {
         let docId = Self.buildCronogramaUnidadId(asignatura: asignatura, curso: curso, unidadId: unidadId)
         let docRef = try userDoc(col: "cronograma_unidad", id: docId)
         let data = CronogramaUnidadData(asignatura: asignatura, curso: curso, unidadId: unidadId, totalClases: totalClases, clases: clases)
@@ -355,17 +406,25 @@ struct PlanificacionRepository {
             throw NSError(domain: "PlanificacionRepository", code: -1, userInfo: [NSLocalizedDescriptionKey: "Encoding error"])
         }
         dict["updatedAt"] = FieldValue.serverTimestamp()
-        try await setData(dict, at: docRef, merge: false)
+        docRef.setData(dict, merge: false, completion: completion)
     }
 
     func cargarActividadClase(curso: String, unidadId: String, numeroClase: Int, asignatura: String) async throws -> ActividadClase? {
         let docId = Self.buildActividadClaseId(curso: curso, unidadId: unidadId, numeroClase: numeroClase, asignatura: asignatura)
         let docRef = try userDoc(col: "actividades_clase", id: docId)
         let snapshot = try await getDocument(docRef)
-        guard snapshot.exists, let dict = snapshot.data() else {
+        guard snapshot.exists else {
             return nil
         }
-        return ActividadClase.from(dictionary: dict)
+        guard let dict = snapshot.data() else {
+            throw PlanificacionRepositoryError.invalidDocument(collection: "actividades_clase", documentID: docId)
+        }
+        return try decodeDocument(
+            ActividadClase.self,
+            from: dict,
+            collection: "actividades_clase",
+            documentID: docId
+        )
     }
 
     func cargarActividadClaseConFallback(curso: String, unidadId: String, numeroClase: Int, asignatura: String) async throws -> ActividadClase? {
@@ -381,7 +440,7 @@ struct PlanificacionRepository {
         }
 
         for candidate in candidates {
-            if let data = try? await buscarActividadClasePorCampos(curso: curso, unidadId: candidate, numeroClase: numeroClase, asignatura: asignatura) {
+            if let data = try await buscarActividadClasePorCampos(curso: curso, unidadId: candidate, numeroClase: numeroClase, asignatura: asignatura) {
                 var resolved = data
                 if resolved.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     resolved.unidadId = candidate
@@ -399,22 +458,117 @@ struct PlanificacionRepository {
             .whereField("unidadId", isEqualTo: unidadId)
             .whereField("numeroClase", isEqualTo: numeroClase)
             .limit(to: 1)
-        guard let snapshot = try await getFirstDocument(query), let dict = snapshot.data() else {
+        guard let snapshot = try await getFirstDocument(query) else {
             return nil
         }
-        return ActividadClase.from(dictionary: dict)
+        guard let dict = snapshot.data() else {
+            throw PlanificacionRepositoryError.invalidDocument(
+                collection: "actividades_clase",
+                documentID: snapshot.documentID
+            )
+        }
+        return try decodeDocument(
+            ActividadClase.self,
+            from: dict,
+            collection: "actividades_clase",
+            documentID: snapshot.documentID
+        )
     }
 
-    func guardarActividadClase(data: ActividadClase) async throws {
-        let docId = Self.buildActividadClaseId(curso: data.curso, unidadId: data.unidadId, numeroClase: data.numeroClase, asignatura: data.asignatura)
+    func encolarCambiosActividadClase(
+        original: ActividadClase,
+        updated: ActividadClase,
+        includeMetadata: Bool,
+        completion: @escaping (Error?) -> Void
+    ) throws {
+        let docId = Self.buildActividadClaseId(
+            curso: updated.curso,
+            unidadId: updated.unidadId,
+            numeroClase: updated.numeroClase,
+            asignatura: updated.asignatura
+        )
         let docRef = try userDoc(col: "actividades_clase", id: docId)
-        guard var dict = data.dictionary else {
-            throw NSError(domain: "PlanificacionRepository", code: -1, userInfo: [NSLocalizedDescriptionKey: "Encoding error"])
+
+        var patch: [String: Any] = [
+            "id": updated.id,
+            "asignatura": updated.asignatura,
+            "curso": updated.curso,
+            "unidadId": updated.unidadId,
+            "numeroClase": updated.numeroClase,
+            "sincronizada": false,
+            "updatedAt": FieldValue.serverTimestamp()
+        ]
+
+        if includeMetadata {
+            patch["fecha"] = updated.fecha
+            patch["oaIds"] = updated.oaIds
+            patch["estado"] = updated.estado
+            patch["objetivo"] = updated.objetivo
+            patch["inicio"] = updated.inicio
+            patch["desarrollo"] = updated.desarrollo
+            patch["cierre"] = updated.cierre
+            patch["adecuacion"] = updated.adecuacion
+            patch["habilidades"] = updated.habilidades
+            patch["actitudes"] = updated.actitudes
+            patch["materiales"] = updated.materiales
+            patch["tics"] = updated.tics
+            patch["contextoProfesor"] = updated.contextoProfesor ?? ""
+            patch["indicadoresPorOa"] = updated.indicadoresPorOa ?? [:]
         }
-        // Filter out NSNull values to preserve Firestore schema cleanliness
-        dict = dict.filter { !($1 is NSNull) }
-        dict["updatedAt"] = FieldValue.serverTimestamp()
-        try await setData(dict, at: docRef, merge: true)
+
+        if updated.objetivo != original.objetivo {
+            patch["objetivo"] = updated.objetivo
+            patch["objetivoClase"] = FieldValue.delete()
+        }
+        if updated.inicio != original.inicio { patch["inicio"] = updated.inicio }
+        if updated.desarrollo != original.desarrollo {
+            patch["desarrollo"] = updated.desarrollo
+            patch["actividad"] = FieldValue.delete()
+        }
+        if updated.cierre != original.cierre { patch["cierre"] = updated.cierre }
+        if updated.adecuacion != original.adecuacion { patch["adecuacion"] = updated.adecuacion }
+        if updated.habilidades != original.habilidades { patch["habilidades"] = updated.habilidades }
+        if updated.actitudes != original.actitudes { patch["actitudes"] = updated.actitudes }
+        if updated.materiales != original.materiales {
+            patch["materiales"] = updated.materiales
+            patch["recursos"] = FieldValue.delete()
+        }
+        if updated.tics != original.tics {
+            patch["tics"] = updated.tics
+            patch["herramientasTic"] = FieldValue.delete()
+        }
+        if updated.estado != original.estado { patch["estado"] = updated.estado }
+        if updated.contextoProfesor != original.contextoProfesor {
+            patch["contextoProfesor"] = updated.contextoProfesor ?? ""
+            patch["contextoDocente"] = FieldValue.delete()
+        }
+        if updated.indicadoresPorOa != original.indicadoresPorOa {
+            if let indicators = updated.indicadoresPorOa {
+                patch["indicadoresPorOa"] = indicators
+            } else {
+                patch["indicadoresPorOa"] = FieldValue.delete()
+            }
+        }
+
+        docRef.setData(patch, merge: true, completion: completion)
+    }
+
+    func encolarMetadatosActividadClase(
+        _ activity: ActividadClase,
+        completion: @escaping (Error?) -> Void
+    ) throws {
+        let docId = Self.buildActividadClaseId(
+            curso: activity.curso,
+            unidadId: activity.unidadId,
+            numeroClase: activity.numeroClase,
+            asignatura: activity.asignatura
+        )
+        let docRef = try userDoc(col: "actividades_clase", id: docId)
+        docRef.setData([
+            "fecha": activity.fecha,
+            "oaIds": activity.oaIds,
+            "updatedAt": FieldValue.serverTimestamp()
+        ], merge: true, completion: completion)
     }
 
     func eliminarUnidadCompleta(asignatura: String, curso: String, unidadId: String) async throws {
@@ -481,6 +635,21 @@ struct PlanificacionRepository {
         }
     }
 
+    private func decodeDocument<T: Decodable>(
+        _ type: T.Type,
+        from dictionary: [String: Any],
+        collection: String,
+        documentID: String
+    ) throws -> T {
+        guard let value = type.from(dictionary: dictionary) else {
+            throw PlanificacionRepositoryError.invalidDocument(
+                collection: collection,
+                documentID: documentID
+            )
+        }
+        return value
+    }
+
     private func setData(_ data: [String: Any], at ref: DocumentReference, merge: Bool) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             ref.setData(data, merge: merge) { error in
@@ -502,6 +671,17 @@ struct PlanificacionRepository {
                     continuation.resume(returning: ())
                 }
             }
+        }
+    }
+}
+
+private enum PlanificacionRepositoryError: LocalizedError {
+    case invalidDocument(collection: String, documentID: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidDocument(let collection, let documentID):
+            return "El documento \(collection)/\(documentID) existe, pero no tiene un formato válido."
         }
     }
 }

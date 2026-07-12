@@ -121,6 +121,154 @@ struct PerfilUsuario: Equatable {
     }
 }
 
+enum ExportFontPreset: String, Equatable {
+    case sans, serif, verdana, calibri, georgia
+
+    var cssStack: String {
+        switch self {
+        case .sans: return "Arial, Helvetica, sans-serif"
+        case .serif: return "'Times New Roman', Georgia, serif"
+        case .verdana: return "Verdana, Geneva, sans-serif"
+        case .calibri: return "Calibri, 'Segoe UI', sans-serif"
+        case .georgia: return "Georgia, 'Times New Roman', serif"
+        }
+    }
+}
+
+enum ExportHeaderMode: String, Equatable {
+    case completo, compacto, oculto
+}
+
+struct ExportDocumentStructure: Equatable {
+    var headerShading: String?
+    var usesBorders: Bool?
+    var signatureCount: Int?
+    var signatureLabels: [String]
+
+    static func from(_ value: Any?) -> Self? {
+        guard let dictionary = value as? [String: Any] else { return nil }
+        let table = dictionary["tablaPrincipal"] as? [String: Any]
+        let signatures = dictionary["firmas"] as? [String: Any]
+        let rawCount = ExportFormatRead.int(signatures?["cantidad"])
+        let labels = (signatures?["etiquetas"] as? [Any] ?? [])
+            .compactMap { ($0 as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .map { String($0.prefix(50)) }
+        let structure = Self(
+            headerShading: ExportFormatRead.hex(table?["sombreadoCabecera"]),
+            usesBorders: table?["usarBordes"] as? Bool,
+            signatureCount: rawCount.map { min(4, max(1, $0)) },
+            signatureLabels: Array(labels.prefix(4))
+        )
+        guard structure.headerShading != nil || structure.usesBorders != nil ||
+              structure.signatureCount != nil || !structure.signatureLabels.isEmpty else { return nil }
+        return structure
+    }
+}
+
+struct ExportFormat: Equatable {
+    var font: ExportFontPreset?
+    var baseFontSize: Double?
+    var primaryColor: String?
+    var marginMM: Double?
+    var titleAlignment: String?
+    var headerMode: ExportHeaderMode?
+    var showsCurricularData: Bool?
+    var showsInstructions: Bool?
+    var footerText: String?
+    var showsPageNumber: Bool?
+    var structure: ExportDocumentStructure?
+
+    static func from(_ value: Any?) -> Self? {
+        guard let dictionary = value as? [String: Any] else { return nil }
+        let titleAlignment = dictionary["alineacionTitulo"] as? String
+        let footerText = (dictionary["pieTexto"] as? String).flatMap { value -> String? in
+            let clean = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return clean.isEmpty ? nil : String(clean.prefix(180))
+        }
+        let format = Self(
+            font: (dictionary["fuente"] as? String).flatMap(ExportFontPreset.init(rawValue:)),
+            baseFontSize: ExportFormatRead.double(dictionary["tamanoBasePt"]).map { min(13, max(9, $0)) },
+            primaryColor: ExportFormatRead.hex(dictionary["colorPrimario"]),
+            marginMM: ExportFormatRead.double(dictionary["margenMm"]).map { min(22, max(8, $0)) },
+            titleAlignment: ["izquierda", "centro"].contains(titleAlignment ?? "") ? titleAlignment : nil,
+            headerMode: (dictionary["encabezadoModo"] as? String).flatMap(ExportHeaderMode.init(rawValue:)),
+            showsCurricularData: dictionary["mostrarDatosCurriculares"] as? Bool,
+            showsInstructions: dictionary["mostrarInstrucciones"] as? Bool,
+            footerText: footerText,
+            showsPageNumber: dictionary["mostrarNumeroPagina"] as? Bool,
+            structure: ExportDocumentStructure.from(dictionary["estructura"])
+        )
+        guard format != .empty else { return nil }
+        return format
+    }
+
+    static let empty = Self(
+        font: nil, baseFontSize: nil, primaryColor: nil, marginMM: nil,
+        titleAlignment: nil, headerMode: nil, showsCurricularData: nil,
+        showsInstructions: nil, footerText: nil, showsPageNumber: nil, structure: nil
+    )
+}
+
+struct ExportFormatTemplate: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let scope: String
+    let isDefault: Bool
+    let format: ExportFormat
+
+    static func from(id: String, dictionary: [String: Any]) -> Self? {
+        let rawScope = dictionary["alcance"] as? String ?? "todos"
+        let validScopes = Set(["todos", "prueba", "guia", "planificacion", "clase", "material_didactico", "rubrica", "lista_cotejo"])
+        let scope = validScopes.contains(rawScope) ? rawScope : "todos"
+        let format = ExportFormat.from(dictionary["formato"]) ?? .empty
+        let rawName = (dictionary["nombre"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return Self(
+            id: id,
+            name: String((rawName.isEmpty ? defaultName(scope) : rawName).prefix(90)),
+            scope: scope,
+            isDefault: dictionary["predeterminada"] as? Bool == true,
+            format: format
+        )
+    }
+
+    private static func defaultName(_ scope: String) -> String {
+        switch scope {
+        case "prueba": return "Pruebas"
+        case "guia": return "Guías"
+        case "planificacion": return "Planificaciones"
+        case "clase": return "Clases"
+        case "material_didactico": return "Material didáctico"
+        case "rubrica": return "Rúbricas"
+        case "lista_cotejo": return "Listas de cotejo"
+        default: return "Todos los documentos"
+        }
+    }
+}
+
+private enum ExportFormatRead {
+    static func double(_ value: Any?) -> Double? {
+        if value is Bool { return nil }
+        if let value = value as? NSNumber, value.doubleValue.isFinite { return value.doubleValue }
+        if let value = value as? String, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let result = Double(value), result.isFinite { return result }
+        return nil
+    }
+
+    static func int(_ value: Any?) -> Int? {
+        guard let value = double(value), value >= Double(Int.min), value <= Double(Int.max) else { return nil }
+        return Int(value.rounded())
+    }
+
+    static func hex(_ value: Any?) -> String? {
+        guard let value = (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              value.range(of: "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$", options: .regularExpression) != nil else {
+            return nil
+        }
+        return value
+    }
+}
+
 struct InfoColegio: Equatable {
     var nombre: String
     var logoBase64: String?
@@ -128,6 +276,8 @@ struct InfoColegio: Equatable {
     var encabezadoTextoIzq: String
     var encabezadoTextoDer: String
     var logoDerBase64: String?
+    var formato: ExportFormat?
+    var formatos: [ExportFormatTemplate]
 
     static let empty = InfoColegio(
         nombre: "",
@@ -135,19 +285,39 @@ struct InfoColegio: Equatable {
         encabezadoHabilitado: false,
         encabezadoTextoIzq: "",
         encabezadoTextoDer: "",
-        logoDerBase64: nil
+        logoDerBase64: nil,
+        formato: nil,
+        formatos: []
     )
 
     static func from(dictionary: [String: Any]?) -> InfoColegio {
         guard let dictionary else { return .empty }
+        let embeddedTemplates = (dictionary["formatos"] as? [[String: Any]] ?? []).enumerated().compactMap { index, item in
+            ExportFormatTemplate.from(id: item["id"] as? String ?? "formato_\(index)", dictionary: item)
+        }
         return InfoColegio(
             nombre: dictionary["nombre"] as? String ?? "",
             logoBase64: dictionary["logoBase64"] as? String,
             encabezadoHabilitado: dictionary["encabezadoHabilitado"] as? Bool ?? false,
             encabezadoTextoIzq: dictionary["encabezadoTextoIzq"] as? String ?? "",
             encabezadoTextoDer: dictionary["encabezadoTextoDer"] as? String ?? "",
-            logoDerBase64: dictionary["logoDerBase64"] as? String
+            logoDerBase64: dictionary["logoDerBase64"] as? String,
+            formato: ExportFormat.from(dictionary["formato"]),
+            formatos: embeddedTemplates
         )
+    }
+
+    var guideExportTemplates: [ExportFormatTemplate] {
+        formatos.filter { $0.scope == "guia" || $0.scope == "todos" }
+    }
+
+    var guideExportFormat: ExportFormat? {
+        let candidates = guideExportTemplates
+        return candidates.first { $0.scope == "guia" && $0.isDefault }?.format
+            ?? candidates.first { $0.scope == "guia" }?.format
+            ?? candidates.first { $0.scope == "todos" && $0.isDefault }?.format
+            ?? candidates.first { $0.scope == "todos" }?.format
+            ?? formato
     }
 
     var dictionary: [String: Any] {
@@ -173,13 +343,15 @@ struct PreferenciasUsuario: Equatable {
     var onboardingCompletado: Bool
     var googleCalendarConnected: Bool
     var googleDriveConnected: Bool
+    var colegioActivoId: String?
 
     static let empty = PreferenciasUsuario(
         asignaturasHabilitadas: [],
         bannerStyle: "rosa",
         onboardingCompletado: false,
         googleCalendarConnected: false,
-        googleDriveConnected: false
+        googleDriveConnected: false,
+        colegioActivoId: nil
     )
 
     static func from(dictionary: [String: Any]?) -> PreferenciasUsuario {
@@ -189,18 +361,23 @@ struct PreferenciasUsuario: Equatable {
             bannerStyle: dictionary["bannerStyle"] as? String ?? "rosa",
             onboardingCompletado: dictionary["onboardingCompletado"] as? Bool ?? false,
             googleCalendarConnected: dictionary["googleCalendarConnected"] as? Bool ?? false,
-            googleDriveConnected: dictionary["googleDriveConnected"] as? Bool ?? false
+            googleDriveConnected: dictionary["googleDriveConnected"] as? Bool ?? false,
+            colegioActivoId: (dictionary["colegioActivoId"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         )
     }
 
     var dictionary: [String: Any] {
-        [
+        var result: [String: Any] = [
             "asignaturasHabilitadas": asignaturasHabilitadas,
             "bannerStyle": bannerStyle,
             "onboardingCompletado": onboardingCompletado,
             "googleCalendarConnected": googleCalendarConnected,
             "googleDriveConnected": googleDriveConnected
         ]
+        if let colegioActivoId, !colegioActivoId.isEmpty {
+            result["colegioActivoId"] = colegioActivoId
+        }
+        return result
     }
 }
 

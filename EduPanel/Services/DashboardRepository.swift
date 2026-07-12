@@ -110,6 +110,58 @@ struct DashboardRepository {
         return snapshot
     }
 
+    /// Carga el colegio del mismo ámbito que usa Evaluaciones y sus plantillas
+    /// `formatos_export`. El documento legado queda como fallback para cuentas
+    /// todavía no migradas a `users/{uid}/colegios/{id}`.
+    func fetchExportSchool(scope: EvaluacionScope) async throws -> InfoColegio {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            throw DashboardRepositoryError.missingUser
+        }
+        let schoolId: String
+        switch scope {
+        case .principal:
+            schoolId = "principal"
+        case .colegio(let id):
+            let clean = id.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !clean.isEmpty, !clean.contains("/") else {
+                return .empty
+            }
+            schoolId = clean
+        }
+
+        let user = db.collection("users").document(uid)
+        let scopedSchool = user.collection("colegios").document(schoolId)
+        async let scopedTask = getDocument(scopedSchool)
+        async let formatsTask: QuerySnapshot? = try? await getDocuments(
+            scopedSchool.collection("formatos_export")
+        )
+        let modernSchools: QuerySnapshot?
+        if schoolId == "principal" {
+            modernSchools = try await getDocuments(user.collection("colegios").limit(to: 1))
+        } else {
+            modernSchools = nil
+        }
+        let scoped = try await scopedTask
+        let formatsSnapshot = await formatsTask
+        let canUseLegacy = schoolId == "principal" && modernSchools?.documents.isEmpty == true
+        let data: [String: Any]?
+        if scoped.exists {
+            data = scoped.data()
+        } else if canUseLegacy {
+            data = try await getDocument(user.collection("perfil_info").document("colegio")).data()
+        } else {
+            data = nil
+        }
+        var school = InfoColegio.from(dictionary: data)
+        let templates = formatsSnapshot?.documents.compactMap { document in
+            ExportFormatTemplate.from(id: document.documentID, dictionary: document.data())
+        } ?? []
+        if let formatsSnapshot, !formatsSnapshot.documents.isEmpty {
+            school.formatos = templates
+        }
+        return school
+    }
+
     func saveClassState(_ state: [String: Bool], for date: Date = Date()) async throws {
         guard let uid = Auth.auth().currentUser?.uid else {
             throw DashboardRepositoryError.missingUser
@@ -163,6 +215,10 @@ struct DashboardRepository {
         }
 
         var data = school.dictionary
+        if let logoBase64 = school.logoBase64 { data["logoBase64"] = logoBase64 }
+        else { data["logoBase64"] = FieldValue.delete() }
+        if let logoDerBase64 = school.logoDerBase64 { data["logoDerBase64"] = logoDerBase64 }
+        else { data["logoDerBase64"] = FieldValue.delete() }
         data["updatedAt"] = FieldValue.serverTimestamp()
 
         try await setData(
@@ -391,6 +447,20 @@ struct DashboardRepository {
     private func getDocument(_ ref: DocumentReference) async throws -> DocumentSnapshot {
         try await withCheckedThrowingContinuation { continuation in
             ref.getDocument { snapshot, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let snapshot {
+                    continuation.resume(returning: snapshot)
+                } else {
+                    continuation.resume(throwing: DashboardRepositoryError.missingUser)
+                }
+            }
+        }
+    }
+
+    private func getDocuments(_ ref: Query) async throws -> QuerySnapshot {
+        try await withCheckedThrowingContinuation { continuation in
+            ref.getDocuments { snapshot, error in
                 if let error {
                     continuation.resume(throwing: error)
                 } else if let snapshot {

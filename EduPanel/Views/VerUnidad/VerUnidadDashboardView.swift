@@ -45,6 +45,8 @@ struct VerUnidadDashboardView: View {
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let loadErrorMessage = viewModel.loadErrorMessage {
+                loadErrorState(message: loadErrorMessage)
             } else {
                 Group {
                     switch selectedTab {
@@ -70,7 +72,7 @@ struct VerUnidadDashboardView: View {
                     Task { await viewModel.saveAll() }
                 } label: {
                     Group {
-                        if viewModel.isSaving {
+                        if viewModel.isSaving || viewModel.isReloadingActivities {
                             ProgressView()
                         } else {
                             Image(systemName: "square.and.arrow.down.fill")
@@ -81,16 +83,54 @@ struct VerUnidadDashboardView: View {
                     .frame(width: 34, height: 34)
                     .background(EPTheme.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                 }
-                .disabled(viewModel.isSaving)
+                .disabled(
+                    viewModel.isSaving ||
+                    viewModel.isLoading ||
+                    viewModel.isReloadingActivities ||
+                    viewModel.loadErrorMessage != nil
+                )
                 .accessibilityLabel("Guardar unidad")
             }
         }
-        .sensoryFeedback(.success, trigger: viewModel.saveStatus) { _, newValue in
+        .sensoryFeedback(.success, trigger: displayedSaveStatus) { _, newValue in
             !newValue.isEmpty && !newValue.contains("Error")
         }
         .task {
             await viewModel.load(curso: curso, unidadId: unidadId, asignatura: asignatura)
         }
+    }
+
+    private func loadErrorState(message: String) -> some View {
+        VStack(spacing: 14) {
+            Image(systemName: "exclamationmark.icloud.fill")
+                .font(.system(size: 34, weight: .bold))
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+            Text("No se pudo cargar esta unidad")
+                .font(.title3.weight(.black))
+            Text(message)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 420)
+
+            Button {
+                Task {
+                    await viewModel.retryLoad()
+                }
+            } label: {
+                Label("Reintentar carga", systemImage: "arrow.clockwise")
+                    .font(.subheadline.weight(.black))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(EPTheme.primary)
+            .disabled(viewModel.isLoading || viewModel.isSaving)
+            .accessibilityIdentifier("reintentar-carga-unidad")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(24)
     }
 
     private var header: some View {
@@ -117,11 +157,11 @@ struct VerUnidadDashboardView: View {
 
                 Spacer(minLength: 8)
 
-                if !viewModel.saveStatus.isEmpty {
+                if !displayedSaveStatus.isEmpty {
                     EPStatusPill(
-                        text: viewModel.saveStatus,
-                        icon: viewModel.saveStatus.contains("Error") ? "xmark.octagon.fill" : "checkmark.circle.fill",
-                        tint: viewModel.saveStatus.contains("Error") ? .red : .green
+                        text: displayedSaveStatus,
+                        icon: displayedSaveStatus.contains("Error") ? "xmark.octagon.fill" : "checkmark.circle.fill",
+                        tint: displayedSaveStatus.contains("Error") ? .red : .green
                     )
                 }
             }
@@ -145,5 +185,9 @@ struct VerUnidadDashboardView: View {
         }
         let selectedOAs = verUnidad.oas.filter(\.seleccionado).count
         return "\(verUnidad.horas) horas · \(crono.totalClases) clases · \(selectedOAs) OA seleccionados"
+    }
+
+    private var displayedSaveStatus: String {
+        viewModel.saveStatus.isEmpty ? viewModel.activitySyncStatus : viewModel.saveStatus
     }
 }

@@ -16,12 +16,26 @@ final class VerUnidadViewModel {
     var unidadId = ""
     
     var isLoading = false
+    var isReloadingActivities = false
     var isSaving = false
     var saveStatus = ""
+    var activitySyncStatus = ""
+    var loadErrorMessage: String?
     
     let dashboardRepository: DashboardRepository
     let planificacionRepository: PlanificacionRepository
     private let curriculoRepository = CurriculoRepository()
+    @ObservationIgnored private var activitySaveTokens: [Int: UUID] = [:]
+    @ObservationIgnored private var persistedActivityClassNumbers = Set<Int>()
+    @ObservationIgnored private var pendingActivityClassNumbers = Set<Int>()
+    @ObservationIgnored private var activitySyncErrorClassNumbers = Set<Int>()
+    @ObservationIgnored private var activityLoadErrorClassNumbers = Set<Int>()
+    @ObservationIgnored private var saveAllOperationToken: UUID?
+    @ObservationIgnored private var saveAllPendingAcknowledgements = 0
+    @ObservationIgnored private var saveAllHadError = false
+    @ObservationIgnored private var requestedCurso = ""
+    @ObservationIgnored private var requestedUnidadId = ""
+    @ObservationIgnored private var requestedAsignatura: String?
 
     init(dashboardRepository: DashboardRepository, planificacionRepository: PlanificacionRepository) {
         self.dashboardRepository = dashboardRepository
@@ -29,10 +43,16 @@ final class VerUnidadViewModel {
     }
     
     func load(curso: String, unidadId: String, asignatura: String? = nil) async {
+        guard !isLoading else { return }
+        requestedCurso = curso
+        requestedUnidadId = unidadId
+        requestedAsignatura = asignatura
         self.curso = curso
         self.unidadId = unidadId
         self.isLoading = true
         self.saveStatus = ""
+        self.activitySyncStatus = ""
+        self.loadErrorMessage = nil
         
         do {
             let snap = try await dashboardRepository.fetchDashboard()
@@ -112,24 +132,104 @@ final class VerUnidadViewModel {
             
         } catch {
             print("Error loading ver-unidad: \(error)")
-            self.saveStatus = "Error al cargar"
+            self.verUnidad = nil
+            self.cronograma = nil
+            self.clasesActividades.removeAll()
+            self.activitySaveTokens.removeAll()
+            self.persistedActivityClassNumbers.removeAll()
+            self.pendingActivityClassNumbers.removeAll()
+            self.activitySyncErrorClassNumbers.removeAll()
+            self.activityLoadErrorClassNumbers.removeAll()
+            self.loadErrorMessage = "No pudimos cargar la unidad y su cronograma. Reintenta antes de editar para proteger los datos existentes."
+            self.saveStatus = "Error al cargar unidad"
         }
         self.isLoading = false
     }
+
+    func retryLoad() async {
+        guard !isLoading, !isSaving else { return }
+        let curso = requestedCurso.isEmpty ? self.curso : requestedCurso
+        let unidadId = requestedUnidadId.isEmpty ? self.unidadId : requestedUnidadId
+        await load(curso: curso, unidadId: unidadId, asignatura: requestedAsignatura)
+    }
     
     func loadAllClasses() async {
-        guard let cronograma else { return }
+        guard let cronograma, !isReloadingActivities else { return }
+        isReloadingActivities = true
+        defer { isReloadingActivities = false }
+
         let total = max(cronograma.totalClases, cronograma.clases.map(\.numero).max() ?? 0)
         guard total > 0 else { return }
         clasesActividades.removeAll()
+        activitySaveTokens.removeAll()
+        persistedActivityClassNumbers.removeAll()
+        pendingActivityClassNumbers.removeAll()
+        activitySyncErrorClassNumbers.removeAll()
+        activityLoadErrorClassNumbers.removeAll()
         
         for n in 1...total {
-            if let act = try? await planificacionRepository.cargarActividadClaseConFallback(curso: curso, unidadId: unidadId, numeroClase: n, asignatura: activeSubject) {
-                clasesActividades[n] = normalizedActivity(act, classNum: n)
+            var baseActivity = activityTemplate(for: n)
+            var loadFailed = false
+
+            do {
+                if let activity = try await planificacionRepository.cargarActividadClaseConFallback(
+                    curso: curso,
+                    unidadId: unidadId,
+                    numeroClase: n,
+                    asignatura: activeSubject
+                ) {
+                    baseActivity = normalizedActivity(activity, classNum: n)
+                    persistedActivityClassNumbers.insert(n)
+                }
+            } catch {
+                loadFailed = true
+                print("Error loading class \(n): \(error)")
+            }
+
+            if let pending = ActivityClassDraftStore.load(id: baseActivity.id) {
+                persistedActivityClassNumbers.insert(n)
+                pendingActivityClassNumbers.insert(n)
+                let pendingOriginal = normalizedActivity(pending.original, classNum: n)
+                let pendingUpdated = normalizedActivity(pending.updated, classNum: n)
+                if loadFailed {
+                    baseActivity = pendingOriginal
+                }
+                clasesActividades[n] = mergingPendingChanges(
+                    original: pendingOriginal,
+                    updated: pendingUpdated,
+                    into: baseActivity
+                )
+                try? enqueueActivityPatch(
+                    original: pendingOriginal,
+                    updated: pendingUpdated,
+                    classNumber: n,
+                    includeMetadata: pending.includeMetadata
+                )
             } else {
-                clasesActividades[n] = activityTemplate(for: n)
+                if loadFailed {
+                    activityLoadErrorClassNumbers.insert(n)
+                }
+                clasesActividades[n] = baseActivity
             }
         }
+
+        refreshActivitySyncStatus()
+    }
+
+    func canEditActivity(_ classNumber: Int) -> Bool {
+        loadErrorMessage == nil &&
+        !isReloadingActivities &&
+        !activityLoadErrorClassNumbers.contains(classNumber)
+    }
+
+    func retryActivityLoads() async {
+        guard !isSaving, !isReloadingActivities else { return }
+        if loadErrorMessage != nil {
+            await retryLoad()
+            return
+        }
+        activitySyncStatus = "Reintentando carga de clases..."
+        await loadAllClasses()
     }
 
     func activityTemplate(for classNum: Int) -> ActividadClase {
@@ -191,50 +291,242 @@ final class VerUnidadViewModel {
         }
         return result
     }
+
+    private func mergingPendingChanges(
+        original: ActividadClase,
+        updated: ActividadClase,
+        into remote: ActividadClase
+    ) -> ActividadClase {
+        var merged = remote
+        if original.objetivo != updated.objetivo { merged.objetivo = updated.objetivo }
+        if original.inicio != updated.inicio { merged.inicio = updated.inicio }
+        if original.desarrollo != updated.desarrollo { merged.desarrollo = updated.desarrollo }
+        if original.cierre != updated.cierre { merged.cierre = updated.cierre }
+        if original.adecuacion != updated.adecuacion { merged.adecuacion = updated.adecuacion }
+        if original.habilidades != updated.habilidades { merged.habilidades = updated.habilidades }
+        if original.actitudes != updated.actitudes { merged.actitudes = updated.actitudes }
+        if original.materiales != updated.materiales { merged.materiales = updated.materiales }
+        if original.tics != updated.tics { merged.tics = updated.tics }
+        if original.estado != updated.estado { merged.estado = updated.estado }
+        if original.sincronizada != updated.sincronizada { merged.sincronizada = updated.sincronizada }
+        if original.contextoProfesor != updated.contextoProfesor {
+            merged.contextoProfesor = updated.contextoProfesor
+        }
+        if original.indicadoresPorOa != updated.indicadoresPorOa {
+            merged.indicadoresPorOa = updated.indicadoresPorOa
+        }
+        return merged
+    }
     
-    // Save everything (Unidad details + Cronograma + Classes)
+    // Save unit, cronograma and class routing metadata. Class content uses its dedicated editor.
     func saveAll() async {
-        guard let verUnidad, let cronograma else { return }
+        guard loadErrorMessage == nil,
+              let verUnidad,
+              let cronograma,
+              !isSaving,
+              !isReloadingActivities else { return }
         isSaving = true
-        saveStatus = "Guardando..."
-        
+        saveStatus = "Guardando localmente..."
+        defer { isSaving = false }
+
+        let operationToken = UUID()
+        saveAllOperationToken = operationToken
+        saveAllHadError = false
+
+        let activities = persistedActivityClassNumbers.sorted().compactMap { classNumber -> ActividadClase? in
+            guard let activity = clasesActividades[classNumber] else { return nil }
+            let updated = normalizedActivity(activity, classNum: classNumber)
+            clasesActividades[classNumber] = updated
+            return updated
+        }
+        saveAllPendingAcknowledgements = 2 + activities.count
+
         do {
-            // 1. Save ver unidad
-            try await planificacionRepository.guardarVerUnidad(asignatura: activeSubject, curso: curso, unidadId: unidadId, data: verUnidad)
-            
-            // 2. Save cronograma
-            try await planificacionRepository.guardarCronogramaUnidad(
+            saveStatus = "Unidad guardada localmente"
+
+            try planificacionRepository.encolarVerUnidad(
+                asignatura: activeSubject,
+                curso: curso,
+                unidadId: unidadId,
+                data: verUnidad
+            ) { [weak self] error in
+                Task { @MainActor [weak self] in
+                    self?.handleSaveAllAcknowledgement(token: operationToken, error: error)
+                }
+            }
+
+            try planificacionRepository.encolarCronogramaUnidad(
                 asignatura: activeSubject,
                 curso: curso,
                 unidadId: unidadId,
                 totalClases: cronograma.totalClases,
                 clases: cronograma.clases
-            )
-            
-            // 3. Save modified classes
-            for (_, act) in clasesActividades {
-                // Update dates / OAs to match cronograma if changed
-                var cleanAct = act
-                cleanAct.unidadId = unidadId
-                cleanAct.curso = curso
-                cleanAct.asignatura = activeSubject
-                if let cronoClase = cronograma.clases.first(where: { $0.numero == act.numeroClase }) {
-                    cleanAct.fecha = cronoClase.fecha
-                    cleanAct.oaIds = cronoClase.oaIds
+            ) { [weak self] error in
+                Task { @MainActor [weak self] in
+                    self?.handleSaveAllAcknowledgement(token: operationToken, error: error)
                 }
-                try await planificacionRepository.guardarActividadClase(data: cleanAct)
             }
-            
-            saveStatus = "Guardado"
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
-            if saveStatus == "Guardado" {
-                saveStatus = ""
+
+            for activity in activities {
+                try planificacionRepository.encolarMetadatosActividadClase(activity) { [weak self] error in
+                    Task { @MainActor [weak self] in
+                        self?.handleSaveAllAcknowledgement(token: operationToken, error: error)
+                    }
+                }
             }
         } catch {
+            saveAllOperationToken = nil
+            saveAllPendingAcknowledgements = 0
+            saveAllHadError = true
             print("Error saving: \(error)")
-            saveStatus = "Error al guardar"
+            saveStatus = "Error al guardar unidad"
         }
-        isSaving = false
+    }
+
+    private func handleSaveAllAcknowledgement(token: UUID, error: Error?) {
+        guard saveAllOperationToken == token else { return }
+
+        if error != nil {
+            saveAllHadError = true
+            saveStatus = "Error al sincronizar unidad"
+        }
+        saveAllPendingAcknowledgements = max(saveAllPendingAcknowledgements - 1, 0)
+        guard saveAllPendingAcknowledgements == 0 else { return }
+
+        saveAllOperationToken = nil
+        guard !saveAllHadError else { return }
+
+        let syncedStatus = "Unidad sincronizada"
+        saveStatus = syncedStatus
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_800_000_000)
+            guard !Task.isCancelled, self?.saveStatus == syncedStatus else { return }
+            self?.saveStatus = ""
+        }
+    }
+
+    func saveActivity(original: ActividadClase, updated: ActividadClase) throws {
+        guard !isReloadingActivities else {
+            throw VerUnidadViewModelError.activityLoadInProgress
+        }
+        guard canEditActivity(updated.numeroClase) else {
+            throw VerUnidadViewModelError.activityLoadUnavailable
+        }
+        guard !isSaving else { throw VerUnidadViewModelError.saveInProgress }
+        isSaving = true
+        activitySyncStatus = "Guardando clase \(updated.numeroClase)..."
+        defer { isSaving = false }
+
+        do {
+            let classNumber = updated.numeroClase
+            let normalizedOriginal = normalizedActivity(original, classNum: classNumber)
+            let normalizedUpdated = normalizedActivity(updated, classNum: classNumber)
+            let existingDraft = ActivityClassDraftStore.load(id: normalizedUpdated.id)
+            let patchOriginal = existingDraft
+                .map { normalizedActivity($0.original, classNum: classNumber) } ?? normalizedOriginal
+            let includeMetadata = existingDraft?.includeMetadata
+                ?? !persistedActivityClassNumbers.contains(classNumber)
+
+            try ActivityClassDraftStore.save(
+                original: patchOriginal,
+                updated: normalizedUpdated,
+                includeMetadata: includeMetadata
+            )
+            try enqueueActivityPatch(
+                original: patchOriginal,
+                updated: normalizedUpdated,
+                classNumber: classNumber,
+                includeMetadata: includeMetadata
+            )
+            persistedActivityClassNumbers.insert(classNumber)
+            clasesActividades[classNumber] = normalizedUpdated
+            refreshActivitySyncStatus()
+        } catch {
+            activitySaveTokens[updated.numeroClase] = nil
+            activitySyncStatus = "Error al guardar clase"
+            throw error
+        }
+    }
+
+    private func enqueueActivityPatch(
+        original: ActividadClase,
+        updated: ActividadClase,
+        classNumber: Int,
+        includeMetadata: Bool
+    ) throws {
+        let operationToken = UUID()
+        let pendingDraftID = updated.id
+        activitySaveTokens[classNumber] = operationToken
+        pendingActivityClassNumbers.insert(classNumber)
+        activitySyncErrorClassNumbers.remove(classNumber)
+
+        do {
+            try planificacionRepository.encolarCambiosActividadClase(
+                original: original,
+                updated: updated,
+                includeMetadata: includeMetadata
+            ) { [weak self] error in
+                Task { @MainActor [weak self] in
+                    guard let self,
+                          self.activitySaveTokens[classNumber] == operationToken else { return }
+                    self.activitySaveTokens[classNumber] = nil
+
+                    if error != nil {
+                        self.activitySyncErrorClassNumbers.insert(classNumber)
+                        self.refreshActivitySyncStatus()
+                    } else {
+                        ActivityClassDraftStore.remove(id: pendingDraftID)
+                        self.pendingActivityClassNumbers.remove(classNumber)
+                        self.activitySyncErrorClassNumbers.remove(classNumber)
+                        self.refreshActivitySyncStatus(lastSyncedClass: classNumber)
+                    }
+                }
+            }
+        } catch {
+            activitySaveTokens[classNumber] = nil
+            activitySyncErrorClassNumbers.insert(classNumber)
+            refreshActivitySyncStatus()
+            throw error
+        }
+    }
+
+    private func refreshActivitySyncStatus(lastSyncedClass: Int? = nil) {
+        if !activityLoadErrorClassNumbers.isEmpty {
+            let count = activityLoadErrorClassNumbers.count
+            activitySyncStatus = count == 1
+                ? "Error al cargar la planificación de 1 clase"
+                : "Error al cargar la planificación de \(count) clases"
+            return
+        }
+
+        if !activitySyncErrorClassNumbers.isEmpty {
+            let count = activitySyncErrorClassNumbers.count
+            activitySyncStatus = count == 1
+                ? "Error de sincronización · 1 clase pendiente"
+                : "Error de sincronización · \(count) clases pendientes"
+            return
+        }
+
+        if !pendingActivityClassNumbers.isEmpty {
+            let count = pendingActivityClassNumbers.count
+            activitySyncStatus = count == 1
+                ? "1 clase guardada localmente"
+                : "\(count) clases guardadas localmente"
+            return
+        }
+
+        guard let lastSyncedClass else {
+            activitySyncStatus = ""
+            return
+        }
+
+        let syncedStatus = "Clase \(lastSyncedClass) sincronizada"
+        activitySyncStatus = syncedStatus
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_800_000_000)
+            guard !Task.isCancelled, self?.activitySyncStatus == syncedStatus else { return }
+            self?.activitySyncStatus = ""
+        }
     }
 
     // Auto-calculate dates based on schedule blocks
@@ -388,5 +680,85 @@ final class VerUnidadViewModel {
             result.append(clean)
         }
         return result
+    }
+}
+
+private enum VerUnidadViewModelError: LocalizedError {
+    case saveInProgress
+    case activityLoadInProgress
+    case activityLoadUnavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .saveInProgress:
+            return "Ya hay un guardado en curso. Espera un momento e intenta nuevamente."
+        case .activityLoadInProgress:
+            return "Las clases se están cargando. Espera un momento antes de guardar."
+        case .activityLoadUnavailable:
+            return "No pudimos cargar esta clase. Reintenta antes de editar para proteger los datos que ya existen."
+        }
+    }
+}
+
+private enum ActivityClassDraftStore {
+    private static let keyPrefix = "cl.edupanel.pending-activity"
+
+    static func save(
+        original: ActividadClase,
+        updated: ActividadClase,
+        includeMetadata: Bool
+    ) throws {
+        guard let key = storageKey(id: updated.id) else {
+            throw DashboardRepositoryError.missingUser
+        }
+        let draft = PendingActivityClassDraft(
+            original: original,
+            updated: updated,
+            includeMetadata: includeMetadata
+        )
+        UserDefaults.standard.set(try JSONEncoder().encode(draft), forKey: key)
+    }
+
+    static func load(id: String) -> PendingActivityClassDraft? {
+        guard let key = storageKey(id: id),
+              let data = UserDefaults.standard.data(forKey: key) else { return nil }
+        guard let draft = try? JSONDecoder().decode(PendingActivityClassDraft.self, from: data) else {
+            UserDefaults.standard.removeObject(forKey: key)
+            return nil
+        }
+        return draft
+    }
+
+    static func remove(id: String) {
+        guard let key = storageKey(id: id) else { return }
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
+    private static func storageKey(id: String) -> String? {
+        guard let uid = Auth.auth().currentUser?.uid else { return nil }
+        return "\(keyPrefix).\(uid).\(id)"
+    }
+}
+
+private struct PendingActivityClassDraft: Codable {
+    let original: ActividadClase
+    let updated: ActividadClase
+    let includeMetadata: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case original, updated, includeMetadata
+    }
+
+    init(original: ActividadClase, updated: ActividadClase, includeMetadata: Bool) {
+        self.original = original
+        self.updated = updated
+        self.includeMetadata = includeMetadata
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        original = try container.decode(ActividadClase.self, forKey: .original)
+        updated = try container.decode(ActividadClase.self, forKey: .updated)
+        includeMetadata = try container.decodeIfPresent(Bool.self, forKey: .includeMetadata) ?? true
     }
 }

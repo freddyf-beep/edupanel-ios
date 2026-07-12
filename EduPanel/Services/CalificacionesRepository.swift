@@ -20,18 +20,34 @@ struct CalificacionesRepository {
         db.collection("users").document(uid).collection(col).document(id)
     }
 
-    func cargar(asignatura: String, curso: String) async throws -> CalificacionesDoc? {
+    private func doc(uid: String, scope: EvaluacionScope, col: String, id: String) -> DocumentReference {
+        let user = db.collection("users").document(uid)
+        switch scope {
+        case .principal:
+            return user.collection(col).document(id)
+        case .colegio(let colegioId):
+            return user.collection("colegios").document(colegioId).collection(col).document(id)
+        }
+    }
+
+    func cargar(
+        asignatura: String,
+        curso: String,
+        scope: EvaluacionScope = .principal
+    ) async throws -> CalificacionesDoc? {
         let id = EvaluacionesRepository.buildCalificacionesId(asignatura: asignatura, curso: curso)
         let uid = try getUid()
 
-        let propio = try await getDocument(doc(uid: uid, col: "calificaciones", id: id))
+        let propio = try await getDocument(doc(uid: uid, scope: scope, col: "calificaciones", id: id))
         if propio.exists {
             return decode(from: propio)
         }
 
-        if let invitado = try? await getDocument(doc(uid: EvaluacionesRepository.invitadoUid, col: "calificaciones", id: id)),
-           invitado.exists {
-            return decode(from: invitado)
+        if scope == .principal {
+            if let invitado = try? await getDocument(doc(uid: EvaluacionesRepository.invitadoUid, col: "calificaciones", id: id)),
+               invitado.exists {
+                return decode(from: invitado)
+            }
         }
 
         return nil

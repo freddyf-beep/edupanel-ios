@@ -27,6 +27,11 @@ enum AppRoute: Hashable {
     case rubricaEditor(rubricaId: String?, curso: String, asignatura: String)
     case rubricaEvaluacion(rubricaId: String)
     case rubricaResultados(rubricaId: String)
+    case pruebaDetalle(pruebaId: String, scope: EvaluacionScope)
+    case pruebaEditor(pruebaId: String?, curso: String, asignatura: String, scope: EvaluacionScope)
+    case pruebaResultados(pruebaId: String, scope: EvaluacionScope)
+    case guiaDetalle(guiaId: String, scope: EvaluacionScope)
+    case guiaEditor(guiaId: String?, curso: String, asignatura: String, scope: EvaluacionScope)
 
     var title: String {
         switch self {
@@ -56,6 +61,11 @@ enum AppRoute: Hashable {
         case .rubricaEditor(let rubricaId, _, _): return rubricaId == nil ? "Nueva rúbrica" : "Editar rúbrica"
         case .rubricaEvaluacion: return "Evaluar rúbrica"
         case .rubricaResultados: return "Resultados de rúbrica"
+        case .pruebaDetalle: return "Detalle de prueba"
+        case .pruebaEditor(let pruebaId, _, _, _): return pruebaId == nil ? "Nueva prueba" : "Editar prueba"
+        case .pruebaResultados: return "Aplicar y corregir"
+        case .guiaDetalle: return "Detalle de guía"
+        case .guiaEditor(let guiaId, _, _, _): return guiaId == nil ? "Nueva guía" : "Editar guía"
         }
     }
 
@@ -87,6 +97,11 @@ enum AppRoute: Hashable {
         case .rubricaEditor: return "square.grid.2x2"
         case .rubricaEvaluacion: return "checkmark.circle.fill"
         case .rubricaResultados: return "chart.bar.fill"
+        case .pruebaDetalle: return "doc.text.fill"
+        case .pruebaEditor: return "square.and.pencil"
+        case .pruebaResultados: return "checkmark.rectangle.stack.fill"
+        case .guiaDetalle: return "book.pages.fill"
+        case .guiaEditor: return "square.and.pencil"
         }
     }
 
@@ -98,6 +113,7 @@ struct AppShell: View {
     let user: AuthenticatedUser
     let dashboardRepository: DashboardRepository
     private let planificacionRepository = PlanificacionRepository()
+    private let evaluacionesRepository = EvaluacionesRepository()
 
     @State private var selectedTab: AppTab = .inicio
     @State private var selectedRoute: AppRoute = .module(.inicio)
@@ -211,7 +227,10 @@ struct AppShell: View {
             }
         case .evaluaciones:
             tabStack(path: $evaluacionesPath) {
-                EvaluacionesShell(dashboardRepository: dashboardRepository)
+                EvaluacionesShell(
+                    dashboardRepository: dashboardRepository,
+                    evaluacionesRepository: evaluacionesRepository
+                )
             }
         case .clases:
             tabStack(path: $clasesPath) {
@@ -287,13 +306,21 @@ struct AppShell: View {
                 dashboardRepository: dashboardRepository,
                 planificacionRepository: planificacionRepository
             )
-        case .module(.cronograma), .cronograma, .actividades:
+        case .module(.cronograma), .cronograma:
             CronogramaView(
                 dashboardRepository: dashboardRepository,
                 planificacionRepository: planificacionRepository
             )
+        case .actividades:
+            ActividadesHubView(
+                dashboardRepository: dashboardRepository,
+                planificacionRepository: planificacionRepository
+            )
         case .module(.evaluaciones), .evaluacionNueva:
-            EvaluacionesShell(dashboardRepository: dashboardRepository)
+            EvaluacionesShell(
+                dashboardRepository: dashboardRepository,
+                evaluacionesRepository: evaluacionesRepository
+            )
         case .module(.clases):
             ClasesView(
                 dashboardRepository: dashboardRepository,
@@ -365,6 +392,43 @@ struct AppShell: View {
             RubricaEvaluacionView(rubricaId: rubricaId, dashboardRepository: dashboardRepository)
         case .rubricaResultados(let rubricaId):
             RubricaResultadosView(rubricaId: rubricaId, dashboardRepository: dashboardRepository)
+        case .pruebaDetalle(let pruebaId, let scope):
+            PruebaDetalleView(
+                pruebaId: pruebaId,
+                scope: scope,
+                repository: evaluacionesRepository
+            )
+        case .pruebaEditor(let pruebaId, let curso, let asignatura, let scope):
+            PruebaEditorView(
+                pruebaId: pruebaId,
+                curso: curso,
+                asignatura: asignatura,
+                scope: scope,
+                repository: evaluacionesRepository,
+                dashboardRepository: dashboardRepository
+            )
+        case .pruebaResultados(let pruebaId, let scope):
+            PruebaResultadosView(
+                pruebaId: pruebaId,
+                scope: scope,
+                repository: evaluacionesRepository
+            )
+        case .guiaDetalle(let guiaId, let scope):
+            GuiaDetalleView(
+                guiaId: guiaId,
+                scope: scope,
+                repository: evaluacionesRepository,
+                dashboardRepository: dashboardRepository
+            )
+        case .guiaEditor(let guiaId, let curso, let asignatura, let scope):
+            GuiaEditorView(
+                guiaId: guiaId,
+                curso: curso,
+                asignatura: asignatura,
+                scope: scope,
+                repository: evaluacionesRepository,
+                dashboardRepository: dashboardRepository
+            )
         }
     }
 }

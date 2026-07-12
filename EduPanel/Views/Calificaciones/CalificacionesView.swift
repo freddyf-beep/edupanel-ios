@@ -168,7 +168,7 @@ struct CalificacionesView: View {
             EPEmptyState(
                 icon: "tray",
                 title: "Aun no hay calificaciones sincronizadas",
-                message: "Sincroniza desde los resultados de una rubrica o lista para revisar las notas de este curso."
+                message: "Sincroniza desde los resultados de una prueba, rúbrica o lista para revisar las notas de este curso."
             )
         }
     }
@@ -671,7 +671,12 @@ struct CalificacionesView: View {
                 selectedSubject = availableSubjects.first ?? activeSubject
             }
             let subject = activeSubject
-            doc = try await repository.cargar(asignatura: subject, curso: selectedCurso)
+            let scope = EvaluacionScope.resolve(snap.preferences.colegioActivoId)
+            doc = try await repository.cargar(
+                asignatura: subject,
+                curso: selectedCurso,
+                scope: scope
+            )
             oaOpciones = await cargarOpcionesOA(asignatura: subject, curso: selectedCurso, snapshot: snap)
         } catch {
             doc = nil

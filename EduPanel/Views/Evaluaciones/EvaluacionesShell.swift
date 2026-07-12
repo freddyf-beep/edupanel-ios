@@ -2,17 +2,27 @@ import SwiftUI
 
 struct EvaluacionesShell: View {
     let dashboardRepository: DashboardRepository
+    let evaluacionesRepository: EvaluacionesRepository
 
     @State private var viewModel: EvaluacionesViewModel
-    @State private var selectedTab = "rubricas"
+    @State private var selectedTab = "pruebas"
     @State private var hasLoaded = false
 
-    init(dashboardRepository: DashboardRepository) {
+    init(
+        dashboardRepository: DashboardRepository,
+        evaluacionesRepository: EvaluacionesRepository = EvaluacionesRepository()
+    ) {
         self.dashboardRepository = dashboardRepository
-        _viewModel = State(initialValue: EvaluacionesViewModel(dashboardRepository: dashboardRepository))
+        self.evaluacionesRepository = evaluacionesRepository
+        _viewModel = State(initialValue: EvaluacionesViewModel(
+            dashboardRepository: dashboardRepository,
+            evaluacionesRepository: evaluacionesRepository
+        ))
     }
 
     private let tabs = [
+        EPWebTab(id: "pruebas", title: "Pruebas", icon: "doc.text.fill"),
+        EPWebTab(id: "guias", title: "Guías", icon: "book.pages.fill"),
         EPWebTab(id: "rubricas", title: "R\u{00FA}bricas", icon: "square.grid.2x2"),
         EPWebTab(id: "listas", title: "Listas", icon: "checklist")
     ]
@@ -37,13 +47,22 @@ struct EvaluacionesShell: View {
                         EPEmptyState(
                             icon: "graduationcap",
                             title: "Configura tus cursos en Mi Perfil",
-                            message: "Para crear r\u{00FA}bricas y listas necesitas al menos un curso en tu horario semanal."
+                            message: "Para usar pruebas, guías, rúbricas y listas necesitas al menos un curso en tu horario semanal."
                         )
                     }
-                } else if selectedTab == "rubricas" {
-                    RubricasHubView(viewModel: viewModel)
                 } else {
-                    ListasHubView(viewModel: viewModel)
+                    switch selectedTab {
+                    case "pruebas":
+                        PruebasHubView(viewModel: viewModel)
+                    case "guias":
+                        GuiasHubView(viewModel: viewModel)
+                    case "rubricas":
+                        RubricasHubView(viewModel: viewModel)
+                    case "listas":
+                        ListasHubView(viewModel: viewModel)
+                    default:
+                        EmptyView()
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -66,8 +85,8 @@ struct EvaluacionesShell: View {
     private var header: some View {
         EPModuleHeader(
             eyebrow: "Evaluaciones",
-            title: "R\u{00FA}bricas y listas de cotejo",
-            subtitle: "Crea instrumentos vinculados al curr\u{00ED}culum, eval\u{00FA}a por grupos y revisa resultados con nota chilena.",
+            title: "Pruebas, guías, rúbricas y listas",
+            subtitle: "Instrumentos vinculados al currículum, aplicación por estudiante y resultados con nota chilena.",
             icon: "checkmark.seal.fill",
             accent: .evaluaciones
         )
@@ -105,6 +124,42 @@ struct EvaluacionesShell: View {
 
                 Spacer()
             }
+        }
+    }
+}
+
+struct EvaluacionesRetryCard: View {
+    let title: String
+    let message: String
+    let isLoading: Bool
+    let action: () -> Void
+
+    var body: some View {
+        EPWebCard {
+            VStack(spacing: 12) {
+                Image(systemName: "exclamationmark.icloud.fill")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(.orange)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(.system(size: 15, weight: .black))
+                    .multilineTextAlignment(.center)
+                Text(message)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Button(action: action) {
+                    Label("Reintentar", systemImage: "arrow.clockwise")
+                        .font(.footnote.weight(.black))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(EPTheme.primary)
+                .disabled(isLoading)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
         }
     }
 }

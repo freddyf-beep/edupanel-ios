@@ -7,6 +7,23 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		44A7FE96CF35AA9F1177F440 /* PruebaAplicacionEditorModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44840D1763FBEAE18595B07A /* PruebaAplicacionEditorModels.swift */; };
+		44C0E5669733CD3D979DF03F /* PruebaResponseEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44B5583A7800FAC73AA6C7E9 /* PruebaResponseEditor.swift */; };
+		44D1F40953045DBEF1993CB1 /* PruebaResultadosView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 445C0AED9FF77BE710DFEFED /* PruebaResultadosView.swift */; };
+		442E229A6E8A2AA841EC64C4 /* PruebasEditorModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44F17BBF7EF4B6FA0AFE68B1 /* PruebasEditorModels.swift */; };
+		44B1C204424EEB297B287967 /* PruebaContentEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4414E0601E358A476EA39C48 /* PruebaContentEditorView.swift */; };
+		44C9866DAC8C6AC8A1163B4B /* PruebaEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44E5BD2432D74F75DC0C0838 /* PruebaEditorView.swift */; };
+		44DC6BAD6D11783489AEFF53 /* PruebaItemsEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C7ABE539E37806E53E1C08 /* PruebaItemsEditor.swift */; };
+		448B1548F8B367A26D794CBA /* GuiaPDFExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 446F867A46D76D6C30AA9514 /* GuiaPDFExporter.swift */; };
+		44B04FE699F98474BB0B533F /* GuiaPDFShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D3F50AABB9F7E47F7E6412 /* GuiaPDFShareSheet.swift */; };
+		44C3C20B44C666A30F8006A9 /* EvaluacionesMediaRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 449BCE2AA48FA76435A810A8 /* EvaluacionesMediaRepository.swift */; };
+		44DC3F5D3A6EE5751C06D5A4 /* GuiaActivitiesEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A799543DCD5EA9C81A7898 /* GuiaActivitiesEditor.swift */; };
+		4450A688DC00142D7285689A /* GuiaContentEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A982DA2B508440C5D86889 /* GuiaContentEditorView.swift */; };
+		442FCDD1D64B2E9CC1B59FFF /* GuiaEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44EEE9F8F46C37074BD45DD8 /* GuiaEditorView.swift */; };
+		44E017037C94E55E035B86D3 /* GuiasModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44315942655A128BBE01D17D /* GuiasModels.swift */; };
+		44491209402D576C3D19CEB7 /* GuiaDetalleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 441F6923B87ACDD17064D382 /* GuiaDetalleView.swift */; };
+		4474089002C0DE2550EA77D3 /* GuiasHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A50E4744A4F0FFA5D59AFD /* GuiasHubView.swift */; };
+		4416A0A07D818B533C2B99EC /* ClassPlanningEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44312F25765DADECE80EBCCD /* ClassPlanningEditorView.swift */; };
 		44D5CB1CB04778EAD0156B4A /* ClassDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 446E5C9DB5BE65C282C326B7 /* ClassDetailView.swift */; };
 		44633FCF8B517719166BE927 /* ClasesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C54F4B74CBAEC92AF24E66 /* ClasesView.swift */; };
 		445338F8B5666B8B9BAC92B7 /* FloatingTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 449F462A164495012A2700B4 /* FloatingTabBar.swift */; };
@@ -48,6 +65,7 @@
 		100000000000000000000051 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000062 /* FirebaseCore */; };
 		100000000000000000000052 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000063 /* FirebaseAuth */; };
 		100000000000000000000053 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000064 /* FirebaseFirestore */; };
+		44F200000000000000000002 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 44F200000000000000000001 /* FirebaseStorage */; };
 		100000000000000000000054 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 100000000000000000000065 /* GoogleSignIn */; };
 		100000000000000000000055 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000036 /* GoogleService-Info.plist */; };
 		200000000000000000000101 /* PlanificacionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000001 /* PlanificacionModels.swift */; };
@@ -55,6 +73,7 @@
 		200000000000000000000103 /* PlanificacionesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000003 /* PlanificacionesViewModel.swift */; };
 		200000000000000000000104 /* VerUnidadViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000004 /* VerUnidadViewModel.swift */; };
 		200000000000000000000105 /* PlanificacionesHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000005 /* PlanificacionesHubView.swift */; };
+		44A1C7000000000000000002 /* ActividadesHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A1C7000000000000000001 /* ActividadesHubView.swift */; };
 		200000000000000000000106 /* PlanificacionesDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000006 /* PlanificacionesDetailView.swift */; };
 		200000000000000000000107 /* VerUnidadDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* VerUnidadDashboardView.swift */; };
 		200000000000000000000108 /* VerUnidadBaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000008 /* VerUnidadBaseView.swift */; };
@@ -76,6 +95,9 @@
 		30000000000000000000010D /* SchoolLogoEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000D /* SchoolLogoEditView.swift */; };
 		30000000000000000000010E /* GoogleConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000E /* GoogleConnectionView.swift */; };
 		400000000000000000000101 /* EvaluacionesModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000001 /* EvaluacionesModels.swift */; };
+		44B100000000000000000002 /* PruebasModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44B100000000000000000001 /* PruebasModels.swift */; };
+		44B100000000000000000004 /* PruebasHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44B100000000000000000003 /* PruebasHubView.swift */; };
+		44B100000000000000000006 /* PruebaDetalleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44B100000000000000000005 /* PruebaDetalleView.swift */; };
 		400000000000000000000102 /* EvaluacionesRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000002 /* EvaluacionesRepository.swift */; };
 		400000000000000000000103 /* EvaluacionesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000003 /* EvaluacionesViewModel.swift */; };
 		400000000000000000000104 /* EvaluacionesShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000004 /* EvaluacionesShell.swift */; };
@@ -99,6 +121,23 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		44840D1763FBEAE18595B07A /* PruebaAplicacionEditorModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PruebaAplicacionEditorModels.swift; sourceTree = "<group>"; };
+		44B5583A7800FAC73AA6C7E9 /* PruebaResponseEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PruebaResponseEditor.swift; sourceTree = "<group>"; };
+		445C0AED9FF77BE710DFEFED /* PruebaResultadosView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PruebaResultadosView.swift; sourceTree = "<group>"; };
+		44F17BBF7EF4B6FA0AFE68B1 /* PruebasEditorModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PruebasEditorModels.swift; sourceTree = "<group>"; };
+		4414E0601E358A476EA39C48 /* PruebaContentEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PruebaContentEditorView.swift; sourceTree = "<group>"; };
+		44E5BD2432D74F75DC0C0838 /* PruebaEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PruebaEditorView.swift; sourceTree = "<group>"; };
+		44C7ABE539E37806E53E1C08 /* PruebaItemsEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PruebaItemsEditor.swift; sourceTree = "<group>"; };
+		446F867A46D76D6C30AA9514 /* GuiaPDFExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuiaPDFExporter.swift; sourceTree = "<group>"; };
+		44D3F50AABB9F7E47F7E6412 /* GuiaPDFShareSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuiaPDFShareSheet.swift; sourceTree = "<group>"; };
+		449BCE2AA48FA76435A810A8 /* EvaluacionesMediaRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvaluacionesMediaRepository.swift; sourceTree = "<group>"; };
+		44A799543DCD5EA9C81A7898 /* GuiaActivitiesEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuiaActivitiesEditor.swift; sourceTree = "<group>"; };
+		44A982DA2B508440C5D86889 /* GuiaContentEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuiaContentEditorView.swift; sourceTree = "<group>"; };
+		44EEE9F8F46C37074BD45DD8 /* GuiaEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuiaEditorView.swift; sourceTree = "<group>"; };
+		44315942655A128BBE01D17D /* GuiasModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuiasModels.swift; sourceTree = "<group>"; };
+		441F6923B87ACDD17064D382 /* GuiaDetalleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuiaDetalleView.swift; sourceTree = "<group>"; };
+		44A50E4744A4F0FFA5D59AFD /* GuiasHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuiasHubView.swift; sourceTree = "<group>"; };
+		44312F25765DADECE80EBCCD /* ClassPlanningEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClassPlanningEditorView.swift; sourceTree = "<group>"; };
 		446E5C9DB5BE65C282C326B7 /* ClassDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClassDetailView.swift; sourceTree = "<group>"; };
 		44C54F4B74CBAEC92AF24E66 /* ClasesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClasesView.swift; sourceTree = "<group>"; };
 		449F462A164495012A2700B4 /* FloatingTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingTabBar.swift; sourceTree = "<group>"; };
@@ -149,6 +188,7 @@
 		200000000000000000000003 /* PlanificacionesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanificacionesViewModel.swift; sourceTree = "<group>"; };
 		200000000000000000000004 /* VerUnidadViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerUnidadViewModel.swift; sourceTree = "<group>"; };
 		200000000000000000000005 /* PlanificacionesHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanificacionesHubView.swift; sourceTree = "<group>"; };
+		44A1C7000000000000000001 /* ActividadesHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActividadesHubView.swift; sourceTree = "<group>"; };
 		200000000000000000000006 /* PlanificacionesDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanificacionesDetailView.swift; sourceTree = "<group>"; };
 		200000000000000000000007 /* VerUnidadDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerUnidadDashboardView.swift; sourceTree = "<group>"; };
 		200000000000000000000008 /* VerUnidadBaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerUnidadBaseView.swift; sourceTree = "<group>"; };
@@ -170,6 +210,9 @@
 		30000000000000000000000D /* SchoolLogoEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/SchoolLogoEditView.swift; sourceTree = "<group>"; };
 		30000000000000000000000E /* GoogleConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/GoogleConnectionView.swift; sourceTree = "<group>"; };
 		400000000000000000000001 /* EvaluacionesModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvaluacionesModels.swift; sourceTree = "<group>"; };
+		44B100000000000000000001 /* PruebasModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PruebasModels.swift; sourceTree = "<group>"; };
+		44B100000000000000000003 /* PruebasHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PruebasHubView.swift; sourceTree = "<group>"; };
+		44B100000000000000000005 /* PruebaDetalleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PruebaDetalleView.swift; sourceTree = "<group>"; };
 		400000000000000000000002 /* EvaluacionesRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvaluacionesRepository.swift; sourceTree = "<group>"; };
 		400000000000000000000003 /* EvaluacionesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvaluacionesViewModel.swift; sourceTree = "<group>"; };
 		400000000000000000000004 /* EvaluacionesShell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvaluacionesShell.swift; sourceTree = "<group>"; };
@@ -200,6 +243,7 @@
 				100000000000000000000051 /* FirebaseCore in Frameworks */,
 				100000000000000000000052 /* FirebaseAuth in Frameworks */,
 				100000000000000000000053 /* FirebaseFirestore in Frameworks */,
+				44F200000000000000000002 /* FirebaseStorage in Frameworks */,
 				100000000000000000000054 /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -251,8 +295,12 @@
 		100000000000000000000012 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				44840D1763FBEAE18595B07A /* PruebaAplicacionEditorModels.swift */,
+				44F17BBF7EF4B6FA0AFE68B1 /* PruebasEditorModels.swift */,
+				44315942655A128BBE01D17D /* GuiasModels.swift */,
 				400000000000000000000030 /* CalificacionesModels.swift */,
 				400000000000000000000001 /* EvaluacionesModels.swift */,
+				44B100000000000000000001 /* PruebasModels.swift */,
 				200000000000000000000001 /* PlanificacionModels.swift */,
 				100000000000000000000022 /* AppTab.swift */,
 				100000000000000000000023 /* DashboardModels.swift */,
@@ -264,6 +312,8 @@
 		100000000000000000000013 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				446F867A46D76D6C30AA9514 /* GuiaPDFExporter.swift */,
+				449BCE2AA48FA76435A810A8 /* EvaluacionesMediaRepository.swift */,
 				400000000000000000000031 /* CalificacionesRepository.swift */,
 				443B548B642897ACDA7F5B2F /* CronogramaRepository.swift */,
 				400000000000000000000002 /* EvaluacionesRepository.swift */,
@@ -295,6 +345,7 @@
 		100000000000000000000015 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				44A1C7000000000000000003 /* Actividades */,
 				400000000000000000000042 /* Calificaciones */,
 				443A6D15AA5486619142AEBB /* Cronograma */,
 				400000000000000000000040 /* Evaluaciones */,
@@ -353,9 +404,18 @@
 			path = Planificaciones;
 			sourceTree = "<group>";
 		};
+		44A1C7000000000000000003 /* Actividades */ = {
+			isa = PBXGroup;
+			children = (
+				44A1C7000000000000000001 /* ActividadesHubView.swift */,
+			);
+			path = Actividades;
+			sourceTree = "<group>";
+		};
 		200000000000000000000030 /* VerUnidad */ = {
 			isa = PBXGroup;
 			children = (
+				44312F25765DADECE80EBCCD /* ClassPlanningEditorView.swift */,
 				200000000000000000000007 /* VerUnidadDashboardView.swift */,
 				200000000000000000000008 /* VerUnidadBaseView.swift */,
 				200000000000000000000009 /* VerUnidadCronogramaView.swift */,
@@ -418,7 +478,9 @@
 		400000000000000000000040 /* Evaluaciones */ = {
 			isa = PBXGroup;
 			children = (
+				4471325015CE4F0D7432F691 /* Guias */,
 				400000000000000000000004 /* EvaluacionesShell.swift */,
+				44B100000000000000000007 /* Pruebas */,
 				400000000000000000000005 /* ListasHubView.swift */,
 				400000000000000000000006 /* ListaCotejoEditorView.swift */,
 				400000000000000000000007 /* ListaEvaluacionView.swift */,
@@ -430,6 +492,20 @@
 				400000000000000000000041 /* Shared */,
 			);
 			path = Evaluaciones;
+			sourceTree = "<group>";
+		};
+		44B100000000000000000007 /* Pruebas */ = {
+			isa = PBXGroup;
+			children = (
+				44B5583A7800FAC73AA6C7E9 /* PruebaResponseEditor.swift */,
+				445C0AED9FF77BE710DFEFED /* PruebaResultadosView.swift */,
+				4414E0601E358A476EA39C48 /* PruebaContentEditorView.swift */,
+				44E5BD2432D74F75DC0C0838 /* PruebaEditorView.swift */,
+				44C7ABE539E37806E53E1C08 /* PruebaItemsEditor.swift */,
+				44B100000000000000000003 /* PruebasHubView.swift */,
+				44B100000000000000000005 /* PruebaDetalleView.swift */,
+			);
+			path = Pruebas;
 			sourceTree = "<group>";
 		};
 		400000000000000000000041 /* Shared */ = {
@@ -464,6 +540,19 @@
 			path = Settings;
 			sourceTree = "<group>";
 		};
+		4471325015CE4F0D7432F691 /* Guias */ = {
+			isa = PBXGroup;
+			children = (
+				44D3F50AABB9F7E47F7E6412 /* GuiaPDFShareSheet.swift */,
+				44A799543DCD5EA9C81A7898 /* GuiaActivitiesEditor.swift */,
+				44A982DA2B508440C5D86889 /* GuiaContentEditorView.swift */,
+				44EEE9F8F46C37074BD45DD8 /* GuiaEditorView.swift */,
+				441F6923B87ACDD17064D382 /* GuiaDetalleView.swift */,
+				44A50E4744A4F0FFA5D59AFD /* GuiasHubView.swift */,
+			);
+			path = Guias;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -484,6 +573,7 @@
 				100000000000000000000062 /* FirebaseCore */,
 				100000000000000000000063 /* FirebaseAuth */,
 				100000000000000000000064 /* FirebaseFirestore */,
+				44F200000000000000000001 /* FirebaseStorage */,
 				100000000000000000000065 /* GoogleSignIn */,
 			);
 			productName = EduPanel;
@@ -546,6 +636,23 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				44A7FE96CF35AA9F1177F440 /* PruebaAplicacionEditorModels.swift in Sources */,
+				44C0E5669733CD3D979DF03F /* PruebaResponseEditor.swift in Sources */,
+				44D1F40953045DBEF1993CB1 /* PruebaResultadosView.swift in Sources */,
+				442E229A6E8A2AA841EC64C4 /* PruebasEditorModels.swift in Sources */,
+				44B1C204424EEB297B287967 /* PruebaContentEditorView.swift in Sources */,
+				44C9866DAC8C6AC8A1163B4B /* PruebaEditorView.swift in Sources */,
+				44DC6BAD6D11783489AEFF53 /* PruebaItemsEditor.swift in Sources */,
+				448B1548F8B367A26D794CBA /* GuiaPDFExporter.swift in Sources */,
+				44B04FE699F98474BB0B533F /* GuiaPDFShareSheet.swift in Sources */,
+				44C3C20B44C666A30F8006A9 /* EvaluacionesMediaRepository.swift in Sources */,
+				44DC3F5D3A6EE5751C06D5A4 /* GuiaActivitiesEditor.swift in Sources */,
+				4450A688DC00142D7285689A /* GuiaContentEditorView.swift in Sources */,
+				442FCDD1D64B2E9CC1B59FFF /* GuiaEditorView.swift in Sources */,
+				44E017037C94E55E035B86D3 /* GuiasModels.swift in Sources */,
+				44491209402D576C3D19CEB7 /* GuiaDetalleView.swift in Sources */,
+				4474089002C0DE2550EA77D3 /* GuiasHubView.swift in Sources */,
+				4416A0A07D818B533C2B99EC /* ClassPlanningEditorView.swift in Sources */,
 				445338F8B5666B8B9BAC92B7 /* FloatingTabBar.swift in Sources */,
 				442B01AC756AB7E3B158A220 /* CronogramaRepository.swift in Sources */,
 				445DC4E3D37D709B200EBDF4 /* DisplayMode.swift in Sources */,
@@ -588,6 +695,7 @@
 				200000000000000000000103 /* PlanificacionesViewModel.swift in Sources */,
 				200000000000000000000104 /* VerUnidadViewModel.swift in Sources */,
 				200000000000000000000105 /* PlanificacionesHubView.swift in Sources */,
+				44A1C7000000000000000002 /* ActividadesHubView.swift in Sources */,
 				200000000000000000000106 /* PlanificacionesDetailView.swift in Sources */,
 				200000000000000000000107 /* VerUnidadDashboardView.swift in Sources */,
 				200000000000000000000108 /* VerUnidadBaseView.swift in Sources */,
@@ -612,6 +720,9 @@
 				400000000000000000000131 /* CalificacionesRepository.swift in Sources */,
 				400000000000000000000132 /* CalificacionesView.swift in Sources */,
 				400000000000000000000101 /* EvaluacionesModels.swift in Sources */,
+				44B100000000000000000002 /* PruebasModels.swift in Sources */,
+				44B100000000000000000004 /* PruebasHubView.swift in Sources */,
+				44B100000000000000000006 /* PruebaDetalleView.swift in Sources */,
 				400000000000000000000102 /* EvaluacionesRepository.swift in Sources */,
 				400000000000000000000103 /* EvaluacionesViewModel.swift in Sources */,
 				400000000000000000000104 /* EvaluacionesShell.swift in Sources */,
@@ -855,6 +966,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 100000000000000000000060 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseFirestore;
+		};
+		44F200000000000000000001 /* FirebaseStorage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 100000000000000000000060 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseStorage;
 		};
 		100000000000000000000065 /* GoogleSignIn */ = {
 			isa = XCSwiftPackageProductDependency;

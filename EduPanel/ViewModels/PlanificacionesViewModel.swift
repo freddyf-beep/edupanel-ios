@@ -21,6 +21,7 @@ final class PlanificacionesViewModel {
     }
     
     func load() async {
+        guard !isLoading else { return }
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }

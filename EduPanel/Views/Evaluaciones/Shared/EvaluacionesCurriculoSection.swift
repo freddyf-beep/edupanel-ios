@@ -7,6 +7,7 @@ struct EvaluacionesCurriculoSection: View {
     let asignatura: String
     let curso: String
     let nivelMapping: [String: String]
+    let autoResolveExistingUnit: Bool
     @Binding var unidadId: String?
     @Binding var unidadNombre: String?
     @Binding var oas: [OAEditado]?
@@ -18,6 +19,24 @@ struct EvaluacionesCurriculoSection: View {
 
     private let curriculoRepository = CurriculoRepository()
     private let planificacionRepository = PlanificacionRepository()
+
+    init(
+        asignatura: String,
+        curso: String,
+        nivelMapping: [String: String],
+        autoResolveExistingUnit: Bool = true,
+        unidadId: Binding<String?>,
+        unidadNombre: Binding<String?>,
+        oas: Binding<[OAEditado]?>
+    ) {
+        self.asignatura = asignatura
+        self.curso = curso
+        self.nivelMapping = nivelMapping
+        self.autoResolveExistingUnit = autoResolveExistingUnit
+        _unidadId = unidadId
+        _unidadNombre = unidadNombre
+        _oas = oas
+    }
 
     private var nivel: String? {
         CurriculoNivel.resolver(curso: curso, mapping: nivelMapping)
@@ -124,7 +143,7 @@ struct EvaluacionesCurriculoSection: View {
             unidades = try await curriculoRepository.getUnidades(asignatura: asignatura, nivel: nivel)
             if unidades.isEmpty {
                 aviso = "No hay unidades en el curr\u{00ED}culum para \(asignatura) \u{00B7} \(nivel)."
-            } else if let unidadId, (oas ?? []).isEmpty,
+            } else if autoResolveExistingUnit, let unidadId, (oas ?? []).isEmpty,
                       let unidad = unidades.first(where: { $0.id == unidadId }) {
                 await seleccionarUnidad(unidad)
             }

@@ -1,13 +1,11 @@
 import SwiftUI
 
-/// Visualizador de clases de la unidad (solo lectura).
-/// La creación y edición de clases se hace desde la web; aquí el docente
-/// revisa su planificación de forma limpia y puede lanzar la clase en vivo.
+/// Planificación y visualización de las clases de una unidad.
 struct VerUnidadClasesView: View {
     var viewModel: VerUnidadViewModel
 
     @State private var selectedClassNum = 1
-    @State private var showingLiveMode = false
+    @State private var presentedSheet: ClassSheet?
 
     @Environment(\.displayMode) private var displayMode
 
@@ -19,7 +17,11 @@ struct VerUnidadClasesView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     resumenCard
 
-                    if isClassPlanificable(classNum: selectedClassNum) {
+                    if viewModel.isReloadingActivities {
+                        activityLoadingCard
+                    } else if !viewModel.canEditActivity(selectedClassNum) {
+                        activityLoadErrorCard
+                    } else if isClassPlanificable(classNum: selectedClassNum) {
                         planCard
                         oasCard
                         extrasSection
@@ -31,7 +33,9 @@ struct VerUnidadClasesView: View {
                         emptyPlanCard
                     }
 
-                    avisoVisualizador
+                    if viewModel.canEditActivity(selectedClassNum) {
+                        editingSyncNote
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)
@@ -44,10 +48,16 @@ struct VerUnidadClasesView: View {
         .onChange(of: classNumbers) { _, _ in
             normalizeSelectedClass()
         }
-        .sheet(isPresented: $showingLiveMode) {
-            if let act = viewModel.clasesActividades[selectedClassNum] {
+        .sheet(item: $presentedSheet) { sheet in
+            switch sheet {
+            case .editor(let classNumber):
+                ClassPlanningEditorView(viewModel: viewModel, classNumber: classNumber)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            case .live(let classNumber):
                 LiveClassModeView(
-                    actividad: act,
+                    actividad: viewModel.clasesActividades[classNumber]
+                        ?? viewModel.activityTemplate(for: classNumber),
                     students: getStudents(),
                     dashboardRepository: viewModel.planificacionRepository
                 )
@@ -127,18 +137,31 @@ struct VerUnidadClasesView: View {
 
                     Spacer(minLength: 8)
 
-                    Button {
-                        viewModel.ensureActivity(for: selectedClassNum)
-                        showingLiveMode = true
-                    } label: {
-                        Label("Clase en vivo", systemImage: "play.fill")
-                            .font(.system(size: 12, weight: .black))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 13)
-                            .padding(.vertical, 10)
-                            .background(EPTheme.heroGradient, in: Capsule())
+                    HStack(spacing: 7) {
+                        Button(action: openEditor) {
+                            Label("Editar", systemImage: "pencil")
+                                .font(.system(size: 12, weight: .black))
+                                .foregroundStyle(EPTheme.primary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(EPTheme.primary.opacity(0.1), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(viewModel.isSaving || !viewModel.canEditActivity(selectedClassNum))
+                        .accessibilityLabel("Editar planificación de la clase \(selectedClassNum)")
+
+                        Button(action: openLiveMode) {
+                            Label("En vivo", systemImage: "play.fill")
+                                .font(.system(size: 12, weight: .black))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(EPTheme.heroGradient, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Iniciar clase \(selectedClassNum) en vivo")
+                        .disabled(viewModel.isReloadingActivities)
                     }
-                    .buttonStyle(.plain)
                 }
 
                 HStack(spacing: 7) {
@@ -415,22 +438,85 @@ struct VerUnidadClasesView: View {
                     .foregroundStyle(.secondary)
                 Text("Esta clase aún no está planificada")
                     .font(.system(size: 15, weight: .black))
-                Text("Crea la planificación de esta clase desde EduPanel web. Aquí la verás lista para revisar y hacer la clase en vivo.")
+                Text("Define el objetivo, los momentos de la sesión y sus recursos directamente desde tu iPhone.")
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+
+                Button(action: openEditor) {
+                    Label("Planificar esta clase", systemImage: "square.and.pencil")
+                        .font(.footnote.weight(.black))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(EPTheme.primary)
+                .disabled(viewModel.isSaving)
+                .accessibilityIdentifier("planificar-clase-\(selectedClassNum)")
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
         }
     }
 
-    private var avisoVisualizador: some View {
-        Label("Modo visualización · las clases se editan desde la web", systemImage: "eye.fill")
+    private var editingSyncNote: some View {
+        Label("Los cambios se guardan en el iPhone y se sincronizan con EduPanel web", systemImage: "checkmark.icloud.fill")
             .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 4)
+    }
+
+    private var activityLoadErrorCard: some View {
+        EPWebCard {
+            VStack(spacing: 12) {
+                Image(systemName: "exclamationmark.icloud.fill")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(.orange)
+                    .accessibilityHidden(true)
+                Text("No pudimos cargar esta planificación")
+                    .font(.system(size: 15, weight: .black))
+                Text("Para proteger lo que ya existe en EduPanel, la edición queda bloqueada hasta recuperar la clase.")
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+
+                Button {
+                    Task {
+                        await viewModel.retryActivityLoads()
+                    }
+                } label: {
+                    Label("Reintentar carga", systemImage: "arrow.clockwise")
+                        .font(.footnote.weight(.black))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(EPTheme.primary)
+                .disabled(viewModel.isSaving || viewModel.isReloadingActivities)
+                .accessibilityIdentifier("reintentar-carga-clase-\(selectedClassNum)")
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+        }
+    }
+
+    private var activityLoadingCard: some View {
+        EPWebCard {
+            VStack(spacing: 12) {
+                ProgressView()
+                    .controlSize(.large)
+                Text("Recuperando planificaciones...")
+                    .font(.system(size: 14, weight: .black))
+                Text("La edición se habilitará cuando termine la carga.")
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 18)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Recuperando planificaciones de clases")
+        }
     }
 
     // MARK: - Datos derivados
@@ -467,6 +553,18 @@ struct VerUnidadClasesView: View {
         }
     }
 
+    private func openEditor() {
+        guard !viewModel.isSaving, viewModel.canEditActivity(selectedClassNum) else { return }
+        viewModel.ensureActivity(for: selectedClassNum)
+        presentedSheet = .editor(selectedClassNum)
+    }
+
+    private func openLiveMode() {
+        guard !viewModel.isReloadingActivities else { return }
+        viewModel.ensureActivity(for: selectedClassNum)
+        presentedSheet = .live(selectedClassNum)
+    }
+
     private func isClassPlanificable(classNum: Int) -> Bool {
         guard let act = viewModel.clasesActividades[classNum] else { return false }
         return !RichTextHTML.plainText(from: act.objetivo).isEmpty ||
@@ -475,19 +573,21 @@ struct VerUnidadClasesView: View {
         !RichTextHTML.plainText(from: act.cierre).isEmpty ||
         !RichTextHTML.plainText(from: act.adecuacion).isEmpty ||
         !RichTextHTML.plainText(from: act.contextoProfesor ?? "").isEmpty ||
-        !act.oaIds.isEmpty ||
         !act.habilidades.isEmpty ||
         !act.actitudes.isEmpty ||
         !act.materiales.isEmpty ||
         !act.tics.isEmpty ||
+        act.indicadoresPorOa?.values.contains(where: { !$0.isEmpty }) == true ||
         !(act.archivos ?? []).isEmpty ||
         hasExternalPedagogyData(act)
     }
 
     private func indicatorsForClass(_ oa: OAEditado) -> [IndicadorEditado] {
-        guard let raw = indicatorSelectionValues(for: oa), !raw.isEmpty else {
+        guard let raw = indicatorSelectionValues(for: oa) else {
             return oa.indicadores.filter(\.seleccionado)
         }
+
+        guard !raw.isEmpty else { return [] }
 
         let selected = Set(raw.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
         let normalizedSelected = Set(selected.map(normalizePedagogicalId))
@@ -538,13 +638,13 @@ struct VerUnidadClasesView: View {
         guard let map = activeActivity.indicadoresPorOa else { return nil }
         let keys = oaIdCandidates(for: oa)
         for key in keys {
-            if let values = map[key], !values.isEmpty {
+            if let values = map[key] {
                 return values
             }
         }
 
         let normalizedKeys = Set(keys.map(normalizePedagogicalId))
-        if let match = map.first(where: { normalizedKeys.contains(normalizePedagogicalId($0.key)) && !$0.value.isEmpty }) {
+        if let match = map.first(where: { normalizedKeys.contains(normalizePedagogicalId($0.key)) }) {
             return match.value
         }
         return nil
@@ -584,6 +684,18 @@ struct VerUnidadClasesView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+        }
+    }
+}
+
+private enum ClassSheet: Identifiable {
+    case editor(Int)
+    case live(Int)
+
+    var id: String {
+        switch self {
+        case .editor(let classNumber): return "editor-\(classNumber)"
+        case .live(let classNumber): return "live-\(classNumber)"
         }
     }
 }

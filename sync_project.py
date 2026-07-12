@@ -122,7 +122,7 @@ def sync_project():
             content = content[:idx] + "\n".join(new_groups_defs) + "\n" + content[idx:]
 
     for group_id, additions in group_children_additions.items():
-        pattern_str = r"^([ \t]*" + re.escape(group_id) + r"[ \t]*/\*[^\n]*?\*/[ \t]*=[ \t]*\{[^{}]*?children[ \t]*=[ \t]*$)"
+        pattern_str = r"^([ \t]*" + re.escape(group_id) + r"[ \t]*/\*[^\n]*?\*/[ \t]*=[ \t]*\{[^{}]*?children[ \t]*=[ \t]*\([ \t]*$)"
         group_pattern = re.compile(pattern_str, re.MULTILINE | re.DOTALL)
         match = group_pattern.search(content)
         if match:
@@ -132,7 +132,7 @@ def sync_project():
                 insert_pos = content.find(matched_str) + len(matched_str)
                 content = content[:insert_pos] + "\n" + "\n".join(valid_additions) + content[insert_pos:]
 
-    sources_pattern = re.compile(r"^\s*(100000000000000000000006\s*/\*\s*Sources\s*\*/\s*=\s*\{.*?files\s*=\s*$)", re.MULTILINE | re.DOTALL)
+    sources_pattern = re.compile(r"^\s*(100000000000000000000006\s*/\*\s*Sources\s*\*/\s*=\s*\{.*?files\s*=\s*\(\s*$)", re.MULTILINE | re.DOTALL)
     match = sources_pattern.search(content)
     if match:
         matched_str = match.group(1)

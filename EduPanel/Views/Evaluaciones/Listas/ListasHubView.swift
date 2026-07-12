@@ -27,6 +27,14 @@ struct ListasHubView: View {
 
             if viewModel.isLoadingContenido {
                 EvaluacionesLoadingCard(texto: "Cargando listas...")
+            } else if let error = viewModel.listasErrorMessage {
+                EvaluacionesRetryCard(
+                    title: "No se pudieron cargar las listas",
+                    message: error,
+                    isLoading: viewModel.isLoadingContenido
+                ) {
+                    Task { await viewModel.loadContenido() }
+                }
             } else if viewModel.listas.isEmpty {
                 EPWebCard {
                     EPEmptyState(

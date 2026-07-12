@@ -27,6 +27,14 @@ struct RubricasHubView: View {
 
             if viewModel.isLoadingContenido {
                 EvaluacionesLoadingCard(texto: "Cargando r\u{00FA}bricas...")
+            } else if let error = viewModel.rubricasErrorMessage {
+                EvaluacionesRetryCard(
+                    title: "No se pudieron cargar las rúbricas",
+                    message: error,
+                    isLoading: viewModel.isLoadingContenido
+                ) {
+                    Task { await viewModel.loadContenido() }
+                }
             } else if viewModel.rubricas.isEmpty {
                 EPWebCard {
                     EPEmptyState(

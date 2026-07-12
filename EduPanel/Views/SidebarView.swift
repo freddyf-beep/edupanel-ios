@@ -135,6 +135,7 @@ struct SidebarView: View {
                     
                     // Tools Nav
                     navButton(route: .cronograma, label: "Cronograma", systemName: "calendar")
+                    navButton(route: .actividades, label: "Actividades de clase", systemName: "lightbulb.fill")
                     navButton(route: .module(.clases), label: "Libro de clases", systemName: "calendar.badge.clock")
                     navButton(route: .calificaciones, label: "Calificaciones", systemName: "checkmark.clipboard.fill")
                     navButton(route: .module(.evaluaciones), label: "Evaluaciones", systemName: "checklist.checked")

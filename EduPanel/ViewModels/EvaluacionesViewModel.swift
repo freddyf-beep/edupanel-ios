@@ -7,15 +7,26 @@ final class EvaluacionesViewModel {
     var snapshot: DashboardSnapshot?
     var listas: [ListaCotejoTemplate] = []
     var rubricas: [RubricaTemplate] = []
+    var pruebas: [PruebaTemplate] = []
+    var guias: [GuiaTemplate] = []
     var isLoading = false
     var isLoadingContenido = false
     var errorMessage: String?
+    var listasErrorMessage: String?
+    var rubricasErrorMessage: String?
+    var pruebasErrorMessage: String?
+    var guiasErrorMessage: String?
+    var pruebasConAdvertencias = 0
+    var pruebasDesdeCache = false
+    var guiasConAdvertencias = 0
+    var guiasDesdeCache = false
     var selectedCurso: String = ""
     var selectedSubject: String?
 
     private let dashboardRepository: DashboardRepository
     private let evaluacionesRepository: EvaluacionesRepository
     private static let defaultSubject = "M\u{00FA}sica"
+    @ObservationIgnored private var contentLoadGeneration = 0
 
     init(dashboardRepository: DashboardRepository, evaluacionesRepository: EvaluacionesRepository = EvaluacionesRepository()) {
         self.dashboardRepository = dashboardRepository
@@ -73,6 +84,10 @@ final class EvaluacionesViewModel {
         snapshot?.courses ?? []
     }
 
+    var evaluacionScope: EvaluacionScope {
+        EvaluacionScope.resolve(snapshot?.preferences.colegioActivoId)
+    }
+
     /// Cambia de curso reseteando la asignatura elegida para que se re-derive del nuevo curso.
     func seleccionarCurso(_ curso: String) async {
         selectedCurso = curso
@@ -90,6 +105,7 @@ final class EvaluacionesViewModel {
     }
 
     func load() async {
+        guard !isLoading else { return }
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
@@ -107,29 +123,95 @@ final class EvaluacionesViewModel {
     }
 
     func loadContenido() async {
+        contentLoadGeneration += 1
+        let generation = contentLoadGeneration
+
         guard !selectedCurso.isEmpty else {
+            isLoadingContenido = false
             listas = []
             rubricas = []
+            pruebas = []
+            guias = []
+            listasErrorMessage = nil
+            rubricasErrorMessage = nil
+            pruebasErrorMessage = nil
+            guiasErrorMessage = nil
             return
         }
 
+        errorMessage = nil
         isLoadingContenido = true
-        defer { isLoadingContenido = false }
-
-        do {
-            // Mostramos TODAS las asignaturas del curso (cada tarjeta indica la suya);
-            // el selector de asignatura solo define con qué asignatura se crea una nueva.
-            async let listasCargadas = evaluacionesRepository.cargarListasCotejo(asignatura: nil, curso: selectedCurso)
-            async let rubricasCargadas = evaluacionesRepository.cargarRubricas(asignatura: nil, curso: selectedCurso)
-            listas = try await listasCargadas
-            rubricas = try await rubricasCargadas
-            errorMessage = nil
-        } catch {
-            listas = []
-            rubricas = []
-            errorMessage = "No se pudieron cargar las evaluaciones de este curso."
+        defer {
+            if generation == contentLoadGeneration {
+                isLoadingContenido = false
+            }
         }
 
+        let course = selectedCurso
+        let scope = evaluacionScope
+
+        async let listasTask = evaluacionesRepository.cargarListasCotejo(asignatura: nil, curso: course)
+        async let rubricasTask = evaluacionesRepository.cargarRubricas(asignatura: nil, curso: course)
+        async let pruebasTask = evaluacionesRepository.cargarPruebas(curso: course, scope: scope)
+        async let guiasTask = evaluacionesRepository.cargarGuias(curso: course, scope: scope)
+
+        let loadedListas: [ListaCotejoTemplate]?
+        let listasError: String?
+        do {
+            loadedListas = try await listasTask
+            listasError = nil
+        } catch {
+            loadedListas = nil
+            listasError = "No se pudieron cargar las listas de cotejo."
+        }
+
+        let loadedRubricas: [RubricaTemplate]?
+        let rubricasError: String?
+        do {
+            loadedRubricas = try await rubricasTask
+            rubricasError = nil
+        } catch {
+            loadedRubricas = nil
+            rubricasError = "No se pudieron cargar las rúbricas."
+        }
+
+        let loadedPruebas: PruebasCargaResultado?
+        let pruebasError: String?
+        do {
+            loadedPruebas = try await pruebasTask
+            pruebasError = nil
+        } catch {
+            loadedPruebas = nil
+            pruebasError = "No se pudieron cargar las pruebas de este curso."
+        }
+
+        let loadedGuias: GuiasCargaResultado?
+        let guiasError: String?
+        do {
+            loadedGuias = try await guiasTask
+            guiasError = nil
+        } catch {
+            loadedGuias = nil
+            guiasError = "No se pudieron cargar las guías de este curso."
+        }
+
+        guard generation == contentLoadGeneration, course == selectedCurso else { return }
+        if let loadedListas { listas = loadedListas }
+        if let loadedRubricas { rubricas = loadedRubricas }
+        if let loadedPruebas {
+            pruebas = loadedPruebas.pruebas
+            pruebasConAdvertencias = loadedPruebas.documentosConAdvertencias
+            pruebasDesdeCache = loadedPruebas.isFromCache
+        }
+        if let loadedGuias {
+            guias = loadedGuias.guias
+            guiasConAdvertencias = loadedGuias.warningCount
+            guiasDesdeCache = loadedGuias.isFromCache
+        }
+        listasErrorMessage = listasError
+        rubricasErrorMessage = rubricasError
+        pruebasErrorMessage = pruebasError
+        guiasErrorMessage = guiasError
     }
 
     func eliminarLista(_ lista: ListaCotejoTemplate) async {
@@ -183,6 +265,42 @@ final class EvaluacionesViewModel {
             }
         } catch {
             errorMessage = "No se pudo duplicar la r\u{00FA}brica."
+        }
+    }
+
+    func eliminarPrueba(_ test: PruebaTemplate) async {
+        do {
+            try await evaluacionesRepository.eliminarPrueba(id: test.id, scope: test.scope)
+            pruebas.removeAll { $0.id == test.id }
+        } catch {
+            pruebasErrorMessage = "No se pudo eliminar la prueba."
+        }
+    }
+
+    func duplicarPrueba(_ test: PruebaTemplate, cursoDestino: String) async {
+        do {
+            _ = try await evaluacionesRepository.duplicarPrueba(test, cursoDestino: cursoDestino, scope: test.scope)
+            if cursoDestino == selectedCurso { await loadContenido() }
+        } catch {
+            pruebasErrorMessage = "No se pudo duplicar la prueba."
+        }
+    }
+
+    func eliminarGuia(_ guide: GuiaTemplate) async {
+        do {
+            try await evaluacionesRepository.eliminarGuia(id: guide.id, scope: guide.scope)
+            guias.removeAll { $0.id == guide.id }
+        } catch {
+            guiasErrorMessage = "No se pudo eliminar la guía."
+        }
+    }
+
+    func duplicarGuia(_ guide: GuiaTemplate, cursoDestino: String) async {
+        do {
+            _ = try await evaluacionesRepository.duplicarGuia(guide, cursoDestino: cursoDestino, scope: guide.scope)
+            if cursoDestino == selectedCurso { await loadContenido() }
+        } catch {
+            guiasErrorMessage = "No se pudo duplicar la guía."
         }
     }
 }
