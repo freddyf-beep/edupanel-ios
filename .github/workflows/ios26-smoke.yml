@@ -47,6 +47,7 @@ jobs:
       - name: Build for iOS Simulator
         run: |
           set -o pipefail
+          mkdir -p build
           xcodebuild \
             -project "$PROJECT_PATH" \
             -scheme "$SCHEME" \
