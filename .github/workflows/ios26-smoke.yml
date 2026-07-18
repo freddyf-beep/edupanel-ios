@@ -33,6 +33,17 @@ jobs:
           xcodebuild -version
           xcrun simctl list runtimes | grep -E 'iOS 26|iOS 27' || true
 
+      - name: Restore Firebase iOS config
+        env:
+          GOOGLE_SERVICE_INFO_PLIST_BASE64: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
+        run: |
+          if [ -z "$GOOGLE_SERVICE_INFO_PLIST_BASE64" ]; then
+            echo "Falta el secreto GOOGLE_SERVICE_INFO_PLIST_BASE64."
+            exit 1
+          fi
+          mkdir -p EduPanel/Resources
+          ruby -rbase64 -e 'File.binwrite("EduPanel/Resources/GoogleService-Info.plist", Base64.decode64(ENV.fetch("GOOGLE_SERVICE_INFO_PLIST_BASE64")))'
+
       - name: Build for iOS Simulator
         run: |
           set -o pipefail
