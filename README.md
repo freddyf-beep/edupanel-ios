@@ -17,9 +17,13 @@ Antes de compilar en Xcode:
 1. Crea una app iOS en Firebase con bundle id `cl.edupanel.app`.
 2. Descarga `GoogleService-Info.plist`.
 3. Agrega ese archivo a `EduPanel/Resources/` con target membership `EduPanel`.
-4. Edita `Config/Shared.xcconfig`:
-   - `EDUPANEL_API_BASE_URL`: URL HTTPS de Vercel, por ejemplo `https:/$()/tu-app.vercel.app`.
-   - `GOOGLE_REVERSED_CLIENT_ID`: valor `REVERSED_CLIENT_ID` del `GoogleService-Info.plist`.
+4. Para desarrollo local, `Config/Shared.xcconfig` apunta al backend en
+   `http://127.0.0.1:3000` y contiene el `REVERSED_CLIENT_ID` de esta app de
+   Firebase. Inicia el proyecto web vecino con `npm run dev` antes de probar
+   funciones que llamen a la API.
+
+Los builds de CI/TestFlight sobrescriben `EDUPANEL_API_BASE_URL` con la URL de
+produccion, por lo que la configuracion local no afecta la distribucion.
 
 `GoogleService-Info.plist` queda ignorado por git para evitar subir credenciales de cliente.
 
@@ -101,9 +105,9 @@ base64 -i GoogleService-Info.plist | pbcopy
 
 Luego ejecuta el workflow manualmente desde GitHub Actions: `Build iOS and Upload to TestFlight`.
 
-## Flujo recomendado en Mac online
+## Flujo recomendado en Mac
 
-Desde el Mac online:
+Desde este Mac:
 
 ```bash
 cd /ruta/a/edupanel_IOS

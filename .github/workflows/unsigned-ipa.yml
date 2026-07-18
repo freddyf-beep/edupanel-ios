@@ -19,6 +19,7 @@ on:
   push:
     branches:
       - main
+      - agent/**
       - feature/planificaciones-unidades
       - codex/**
       - preview-planificaciones
@@ -26,7 +27,7 @@ on:
 jobs:
   unsigned-ipa:
     name: Build unsigned IPA for sideloading
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 45
     permissions:
       contents: read

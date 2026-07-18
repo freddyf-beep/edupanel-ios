@@ -29,8 +29,6 @@ struct DashboardView: View {
     @State private var reminderColor: ReminderColor = .amarillo
     @AppStorage("edupanel_dashboard_reminders") private var remindersData = "[]"
 
-    @Environment(\.displayMode) private var displayMode
-
     let user: AuthenticatedUser
     let onOpenProfile: () -> Void
     let onOpenPlanificaciones: () -> Void
@@ -62,20 +60,9 @@ struct DashboardView: View {
             .padding(.top, 10)
             .padding(.bottom, 28)
         }
+        .reportsTabBarScroll()
         .background(EPTheme.background)
         .navigationTitle("Inicio")
-        .toolbar {
-            if displayMode.isSimple {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    NavigationLink(value: AppRoute.calificaciones) {
-                        toolbarIcon("checkmark.clipboard")
-                    }
-                    NavigationLink(value: AppRoute.cronograma) {
-                        toolbarIcon("calendar.badge.clock")
-                    }
-                }
-            }
-        }
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
     }
@@ -98,8 +85,6 @@ struct DashboardView: View {
 
             if snapshot.horario.isEmpty {
                 noScheduleCard
-            } else if displayMode.isSimple {
-                todayTimeline(snapshot)
             } else {
                 dashboardTabs(snapshot)
 
@@ -126,89 +111,103 @@ struct DashboardView: View {
         let isCurrent = currentOrNext.map { isClassCurrent($0, now: Date()) } ?? false
         let progress = currentOrNext.map { blockProgress($0, now: Date()) } ?? 0
 
-        return VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center, spacing: 10) {
-                Label("\(greeting.greet), \(user.firstName)", systemImage: greeting.icon)
-                    .font(.system(size: 17, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+        return VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("\(greeting.greet),")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    Text(user.firstName)
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                }
 
-                Spacer(minLength: 0)
+                Spacer(minLength: 8)
 
-                Text(formattedHeroDate)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.8))
+                Image(systemName: greeting.icon)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(EPTheme.primary)
+                    .frame(width: 46, height: 46)
+                    .background(EPTheme.primaryLight, in: Circle())
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                if let item = currentOrNext {
-                    HStack(spacing: 10) {
-                        Image(systemName: isCurrent ? "flame.fill" : "clock.fill")
-                            .font(.system(size: 13, weight: .black))
-                            .foregroundStyle(.white)
-                            .frame(width: 32, height: 32)
-                            .background(.white.opacity(0.2), in: Circle())
+            Text(formattedHeroDate)
+                .font(.system(size: 11, weight: .black))
+                .tracking(0.7)
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(isCurrent ? "BLOQUE ACTUAL" : "PRÓXIMO BLOQUE")
-                                .font(.system(size: 8.5, weight: .black))
-                                .tracking(0.8)
-                                .foregroundStyle(.white.opacity(0.75))
-                            Text(item.resumen.isEmpty ? item.tipo.label : item.resumen)
-                                .font(.system(size: 15, weight: .black))
+            ZStack(alignment: .topTrailing) {
+                Circle()
+                    .fill(.white.opacity(0.09))
+                    .frame(width: 180, height: 180)
+                    .offset(x: 65, y: -85)
+
+                Circle()
+                    .stroke(.white.opacity(0.12), lineWidth: 24)
+                    .frame(width: 120, height: 120)
+                    .offset(x: 58, y: 82)
+
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Label(
+                            currentOrNext == nil ? "Resumen del día" : (isCurrent ? "Ahora" : "A continuación"),
+                            systemImage: isCurrent ? "flame.fill" : "clock.fill"
+                        )
+                            .font(.system(size: 11, weight: .black))
+                            .foregroundStyle(.white.opacity(0.88))
+                        Spacer()
+                        if let item = currentOrNext {
+                            Text(item.timeRange)
+                                .font(.system(size: 12, weight: .black, design: .rounded))
                                 .foregroundStyle(.white)
-                                .lineLimit(1)
+                        }
+                    }
+
+                    if let item = currentOrNext {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.resumen.isEmpty ? item.tipo.label : item.resumen)
+                                .font(.system(size: 25, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .lineLimit(2)
+                            Text(item.asignatura ?? item.tipo.label)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.72))
                         }
 
-                        Spacer(minLength: 6)
-
-                        Text(item.timeRange)
-                            .font(.system(size: 11, weight: .black))
+                        if isCurrent {
+                            ProgressView(value: progress)
+                                .tint(.white)
+                                .background(.white.opacity(0.2), in: Capsule())
+                        }
+                    } else {
+                        Text(snapshot.academicTodayClasses.isEmpty ? "Hoy no tienes clases programadas" : "Jornada finalizada")
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 5)
-                            .background(.white.opacity(0.18), in: Capsule())
                     }
 
-                    if isCurrent {
-                        ProgressView(value: progress)
-                            .tint(.white)
-                            .background(.white.opacity(0.22), in: Capsule())
+                    HStack(spacing: 10) {
+                        HeroKPI(
+                            label: "Clases hoy",
+                            value: "\(snapshot.completedAcademicCount)/\(snapshot.totalAcademicCount)",
+                            subtitle: "\(Int(snapshot.progress * 100))% completadas"
+                        )
+                        HeroKPI(
+                            label: "Pendientes",
+                            value: "\(snapshot.pendingClasses.count)",
+                            subtitle: snapshot.pendingClasses.isEmpty ? "Todo en orden" : "Por registrar"
+                        )
                     }
-                } else {
-                    Label(
-                        snapshot.academicTodayClasses.isEmpty ? "Hoy no tienes clases programadas." : "Jornada finalizada — todas las clases registradas.",
-                        systemImage: snapshot.academicTodayClasses.isEmpty ? "moon.zzz.fill" : "checkmark.seal.fill"
-                    )
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.white)
                 }
             }
-            .padding(12)
-            .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-
-            if !displayMode.isSimple {
-                HStack(spacing: 10) {
-                    HeroKPI(
-                        label: "Clases hoy",
-                        value: "\(snapshot.completedAcademicCount)/\(snapshot.totalAcademicCount)",
-                        subtitle: "\(Int(snapshot.progress * 100))% completadas"
-                    )
-                    HeroKPI(
-                        label: "Pendientes",
-                        value: "\(snapshot.pendingClasses.count)",
-                        subtitle: snapshot.pendingClasses.isEmpty ? "todo en orden" : "por registrar"
-                    )
-                }
-            }
+            .padding(20)
+            .background(
+                LinearGradient(colors: [EPTheme.primaryDark, EPTheme.primary, EPTheme.rose], startPoint: .topLeading, endPoint: .bottomTrailing),
+                in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+            )
+            .shadow(color: EPTheme.primary.opacity(0.22), radius: 18, y: 10)
         }
-        .padding(16)
-        .background(
-            LinearGradient(colors: greeting.colors, startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: EPTheme.heroRadius, style: .continuous)
-        )
-        .shadow(color: (greeting.colors.first ?? .black).opacity(0.25), radius: 14, y: 7)
         .scrollTransition(axis: .vertical) { content, phase in
             content
                 .scaleEffect(phase.isIdentity ? 1 : 0.95)
@@ -311,17 +310,23 @@ struct DashboardView: View {
 
     private var quickActions: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Acciones rápidas", systemImage: "bolt.fill")
-                .font(.subheadline.weight(.black))
+            HStack {
+                Text("Hazlo rápido")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                Spacer()
+                Image(systemName: "bolt.fill")
+                    .foregroundStyle(EPTheme.primary)
+            }
 
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                QuickAction(title: "Calificar", icon: "checkmark.clipboard.fill", colors: [.green, .teal], kind: .route(.calificaciones))
-                QuickAction(title: "Actividades", icon: "lightbulb.fill", colors: [.cyan, .blue], kind: .route(.actividades))
-                QuickAction(title: "Planificar", icon: "lightbulb.fill", colors: [.purple, EPTheme.primary], kind: .action(onOpenPlanificaciones))
-                QuickAction(title: "Mi Perfil", icon: "person.crop.circle.fill", colors: [.indigo, .purple], kind: .action(onOpenProfile))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    QuickAction(title: "Calificar", icon: "checkmark.clipboard.fill", colors: [.green, .teal], kind: .route(.calificaciones))
+                    QuickAction(title: "Actividades", icon: "lightbulb.fill", colors: [.cyan, .blue], kind: .route(.actividades))
+                    QuickAction(title: "Planificar", icon: "square.and.pencil", colors: [.purple, EPTheme.primary], kind: .action(onOpenPlanificaciones))
+                    QuickAction(title: "Mi Perfil", icon: "person.crop.circle.fill", colors: [.indigo, .purple], kind: .action(onOpenProfile))
+                }
             }
         }
-        .webCard()
     }
 
     // MARK: - Pendientes
@@ -533,12 +538,12 @@ struct DashboardView: View {
     private var greetingInfo: GreetingInfo {
         let hour = Calendar.current.component(.hour, from: Date())
         if hour >= 5 && hour < 12 {
-            return GreetingInfo(greet: "Buenos días", icon: "sunrise.fill", colors: [.orange, .pink])
+            return GreetingInfo(greet: "Buenos días", icon: "sunrise.fill")
         }
         if hour >= 12 && hour < 19 {
-            return GreetingInfo(greet: "Buenas tardes", icon: "sun.max.fill", colors: [.purple, .pink])
+            return GreetingInfo(greet: "Buenas tardes", icon: "sun.max.fill")
         }
-        return GreetingInfo(greet: "Buenas noches", icon: "moon.fill", colors: [.purple, .indigo, .blue])
+        return GreetingInfo(greet: "Buenas noches", icon: "moon.fill")
     }
 
     private var formattedHeroDate: String {
@@ -603,7 +608,6 @@ struct DashboardView: View {
 private struct GreetingInfo {
     let greet: String
     let icon: String
-    let colors: [Color]
 }
 
 private struct HeroKPI: View {
@@ -616,7 +620,7 @@ private struct HeroKPI: View {
             Text(label.uppercased())
                 .font(.system(size: 9, weight: .black))
                 .tracking(0.6)
-                .foregroundStyle(.white.opacity(0.78))
+                .foregroundStyle(.white.opacity(0.72))
             Text(value)
                 .font(.system(size: 21, weight: .black, design: .rounded))
                 .foregroundStyle(.white)
@@ -630,7 +634,7 @@ private struct HeroKPI: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(11)
-        .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(.white.opacity(0.13), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -661,28 +665,31 @@ private struct QuickAction: View {
     }
 
     private var label: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 14) {
             Image(systemName: icon)
-                .font(.system(size: 17, weight: .bold))
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(colors.first ?? EPTheme.primary)
+                .frame(width: 38, height: 38)
+                .background((colors.first ?? EPTheme.primary).opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             Text(title)
-                .font(.system(size: 13, weight: .black))
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             HStack {
-                Spacer()
-                Image(systemName: "arrow.right")
+                Text("Abrir")
                     .font(.system(size: 10, weight: .black))
-                    .opacity(0.8)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundStyle(.secondary)
             }
         }
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(13)
-        .background(
-            LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-        )
-        .shadow(color: colors.first?.opacity(0.25) ?? .clear, radius: 7, y: 4)
+        .frame(width: 118, alignment: .leading)
+        .padding(14)
+        .background(EPTheme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(EPTheme.border, lineWidth: 0.75))
     }
 }
 

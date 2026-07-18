@@ -357,11 +357,21 @@ struct GuiaEditorView: View {
 
     private func load() async {
         if nivelMapping.isEmpty || school == .empty {
-            async let dashboardTask: DashboardSnapshot? = try? await dashboardRepository.fetchDashboard()
-            async let schoolTask: InfoColegio? = try? await dashboardRepository.fetchExportSchool(scope: scope)
-            if let snapshot = await dashboardTask { nivelMapping = snapshot.nivelMapping }
-            if let exportSchool = await schoolTask { school = exportSchool }
+            // SwiftUI cancela esta tarea al abandonar el editor. Dos `async let`
+            // podían seguir vivos durante el desmontaje y provocar un abort en
+            // swift_task_dealloc. La carga secuencial conserva cancelación
+            // estructurada y evita dejar tareas hijas pendientes.
+            if let snapshot = try? await dashboardRepository.fetchDashboard() {
+                guard !Task.isCancelled else { return }
+                nivelMapping = snapshot.nivelMapping
+            }
+
+            if let exportSchool = try? await dashboardRepository.fetchExportSchool(scope: scope) {
+                guard !Task.isCancelled else { return }
+                school = exportSchool
+            }
         }
+        guard !Task.isCancelled else { return }
         guard let guiaId, draft.id == nil else { return }
         isLoading = true
         errorMessage = nil

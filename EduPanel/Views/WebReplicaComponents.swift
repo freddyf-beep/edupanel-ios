@@ -10,22 +10,22 @@ enum EPTheme {
     static let rose = dynamic(light: "#F41F6A", dark: "#F03E6E")
     static let fuchsia = dynamic(light: "#C031D4", dark: "#A855F7")
 
-    static let background = dynamic(light: "#F8F9FC", dark: "#0F0F0F")
-    static let ink = dynamic(light: "#1A1D2E", dark: "#F0F0F0")
-    static let muted = dynamic(light: "#7B809A", dark: "#888888")
-    static let card = dynamic(light: "#FFFFFF", dark: "#1A1A1A")
-    static let subtle = dynamic(light: "#F3F5FA", dark: "#242424")
-    static let border = dynamic(light: "#ECEEF5", dark: "#2A2A2A")
+    static let background = Color(uiColor: .systemGroupedBackground)
+    static let ink = Color(uiColor: .label)
+    static let muted = Color(uiColor: .secondaryLabel)
+    static let card = Color(uiColor: .secondarySystemGroupedBackground)
+    static let subtle = Color(uiColor: .tertiarySystemGroupedBackground)
+    static let border = Color(uiColor: .separator).opacity(0.22)
 
     static let statusGreen = dynamic(light: "#22C55E", dark: "#4ADE80")
     static let statusAmber = dynamic(light: "#F59E0B", dark: "#FBBF24")
     static let statusRed = dynamic(light: "#EF4444", dark: "#F87171")
     static let statusBlue = dynamic(light: "#3B82F6", dark: "#60A5FA")
 
-    static let cardRadius: CGFloat = 14
-    static let heroRadius: CGFloat = 18
-    static let controlRadius: CGFloat = 10
-    static let smallRadius: CGFloat = 8
+    static let cardRadius: CGFloat = 18
+    static let heroRadius: CGFloat = 22
+    static let controlRadius: CGFloat = 12
+    static let smallRadius: CGFloat = 10
     static let spring = Animation.spring(response: 0.35, dampingFraction: 0.82)
 
     static let heroGradient = LinearGradient(
@@ -106,6 +106,72 @@ struct EPModuleAccent {
     )
 }
 
+/// Cabecera editorial para las pantallas principales. Mantiene el contenido
+/// fuera de superficies translúcidas y reserva el material para los controles.
+struct EPPageHeader: View {
+    let eyebrow: String
+    let title: String
+    let subtitle: String
+    let icon: String
+    var tint: Color = EPTheme.primary
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            VStack(alignment: .leading, spacing: 7) {
+                Text(eyebrow.uppercased())
+                    .font(.system(size: 10, weight: .black))
+                    .tracking(1.1)
+                    .foregroundStyle(tint)
+
+                Text(title)
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(subtitle)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 4)
+
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 44, height: 44)
+                .background(tint.opacity(0.11), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .accessibilityHidden(true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct EPFocusSurface<Content: View>: View {
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .padding(16)
+            .background(EPTheme.card, in: RoundedRectangle(cornerRadius: EPTheme.heroRadius, style: .continuous))
+            .overlay(alignment: .top) {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(EPTheme.primary)
+                    .frame(width: 44, height: 4)
+                    .padding(.top, 1)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: EPTheme.heroRadius, style: .continuous)
+                    .stroke(EPTheme.border, lineWidth: 0.75)
+            }
+            .shadow(color: .black.opacity(0.04), radius: 12, y: 4)
+    }
+}
+
 struct EPWebCard<Content: View>: View {
     var padding: CGFloat = 16
     var content: Content
@@ -121,9 +187,9 @@ struct EPWebCard<Content: View>: View {
             .background(EPTheme.card, in: RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: EPTheme.cardRadius, style: .continuous)
-                    .stroke(EPTheme.border, lineWidth: 1)
+                    .stroke(EPTheme.border, lineWidth: 0.75)
             )
-            .shadow(color: .black.opacity(0.035), radius: 5, y: 1)
+            .shadow(color: .black.opacity(0.025), radius: 4, y: 1)
     }
 }
 
@@ -132,9 +198,9 @@ extension View {
         background(EPTheme.card, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(EPTheme.border, lineWidth: 1)
+                    .stroke(EPTheme.border, lineWidth: 0.75)
             )
-            .shadow(color: .black.opacity(0.035), radius: 5, y: 1)
+            .shadow(color: .black.opacity(0.025), radius: 4, y: 1)
     }
 }
 

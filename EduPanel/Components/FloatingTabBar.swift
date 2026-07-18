@@ -3,34 +3,47 @@ import SwiftUI
 struct FloatingTabBar: View {
     @Binding var selected: AppTab
     var badges: [AppTab: Int] = [:]
-    var onMore: () -> Void = {}
+    var isCompact = false
 
     @Namespace private var barNamespace
 
-    private let visibles: [AppTab] = [.inicio, .planificaciones, .cronograma, .perfil]
+    private let visibles: [AppTab] = [.inicio, .planificaciones, .evaluaciones, .cronograma, .perfil]
 
+    @ViewBuilder
     var body: some View {
-        HStack(spacing: 2) {
+#if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: 10) {
+                barContent
+                    .glassEffect(.regular.interactive(), in: .capsule)
+            }
+        } else {
+            fallbackBar
+        }
+#else
+        fallbackBar
+#endif
+    }
+
+    private var fallbackBar: some View {
+        barContent
+            .background(.regularMaterial, in: Capsule())
+            .overlay {
+                Capsule()
+                    .strokeBorder(Color.primary.opacity(0.09), lineWidth: 0.75)
+            }
+            .shadow(color: .black.opacity(0.12), radius: 18, y: 8)
+    }
+
+    private var barContent: some View {
+        HStack(spacing: 3) {
             ForEach(visibles) { tab in
                 tabItem(tab)
             }
-            moreItem
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(
-            Capsule()
-                .stroke(
-                    LinearGradient(
-                        colors: [.white.opacity(0.35), Color(.separator).opacity(0.12)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: .black.opacity(0.15), radius: 20, y: 8)
+        .padding(isCompact ? 4 : 6)
+        .frame(maxWidth: isCompact ? 286 : 360)
+        .animation(EPTheme.spring, value: isCompact)
         .sensoryFeedback(.selection, trigger: selected)
     }
 
@@ -43,9 +56,15 @@ struct FloatingTabBar: View {
                 selected = tab
             }
         } label: {
-            VStack(spacing: 3) {
+            ZStack {
+                if isSelected {
+                    Capsule()
+                        .fill(Color.primary.opacity(0.11))
+                        .matchedGeometryEffect(id: "floating-tab-pill", in: barNamespace)
+                }
+
                 Image(systemName: tab.systemImage)
-                    .font(.system(size: 21, weight: .semibold))
+                    .font(.system(size: isCompact ? 17 : 20, weight: isSelected ? .bold : .semibold))
                     .symbolVariant(isSelected ? .fill : .none)
                     .symbolEffect(.bounce, value: isSelected)
                     .overlay(alignment: .topTrailing) {
@@ -55,49 +74,52 @@ struct FloatingTabBar: View {
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 1.5)
-                                .background(.green, in: Capsule())
-                                .offset(x: 11, y: -7)
+                                .background(EPTheme.primary, in: Capsule())
+                                .offset(x: 12, y: -9)
                         }
                     }
-
-                Text(tab.title)
-                    .font(.system(size: 10, weight: isSelected ? .black : .semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
             }
-            .foregroundStyle(isSelected ? .white : .secondary)
+            .foregroundStyle(isSelected ? Color.primary : Color.secondary)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background {
-                if isSelected {
-                    Capsule()
-                        .fill(EPTheme.primary)
-                        .matchedGeometryEffect(id: "floating-tab-pill", in: barNamespace)
-                        .shadow(color: EPTheme.primary.opacity(0.35), radius: 8, y: 3)
-                }
-            }
+            .frame(height: isCompact ? 38 : 48)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(tab.title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
+}
 
-    private var moreItem: some View {
-        Button {
-            onMore()
-        } label: {
-            VStack(spacing: 3) {
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 21, weight: .semibold))
-                Text("Más")
-                    .font(.system(size: 10, weight: .semibold))
+private struct TabBarScrollReporterKey: EnvironmentKey {
+    static let defaultValue: (Bool) -> Void = { _ in }
+}
+
+extension EnvironmentValues {
+    var tabBarScrollReporter: (Bool) -> Void {
+        get { self[TabBarScrollReporterKey.self] }
+        set { self[TabBarScrollReporterKey.self] = newValue }
+    }
+}
+
+private struct TabBarScrollReporterModifier: ViewModifier {
+    @Environment(\.tabBarScrollReporter) private var report
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top > 56
+            } action: { _, isAwayFromTop in
+                report(isAwayFromTop)
             }
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .contentShape(Capsule())
+        } else {
+            content
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Abrir menú")
+    }
+}
+
+extension View {
+    func reportsTabBarScroll() -> some View {
+        modifier(TabBarScrollReporterModifier())
     }
 }

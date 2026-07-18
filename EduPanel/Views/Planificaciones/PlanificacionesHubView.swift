@@ -8,9 +8,8 @@ struct PlanificacionesHubView: View {
     @State private var filtroCurso: Set<String> = []
     @State private var filtroEstado: Set<UnitPlanningState> = []
     @State private var mesActual = Calendar.current.startOfDay(for: Date())
-    @State private var filtrosVisibles = false
-
-    @Environment(\.displayMode) private var displayMode
+    @State private var courseForSubjectPicker: CoursePlanningGroup?
+    @State private var planningDestination: PlanningDestination?
 
     let dashboardRepository: DashboardRepository
     let planificacionRepository: PlanificacionRepository
@@ -46,8 +45,39 @@ struct PlanificacionesHubView: View {
             .padding(.top, 10)
             .padding(.bottom, 28)
         }
+        .reportsTabBarScroll()
         .background(EPTheme.background)
         .navigationTitle("Mis Planificaciones")
+        .navigationDestination(item: $planningDestination) { destination in
+            PlanificacionesDetailView(
+                curso: destination.course,
+                asignatura: destination.subject,
+                dashboardRepository: dashboardRepository,
+                planificacionRepository: planificacionRepository
+            )
+        }
+        .confirmationDialog(
+            courseForSubjectPicker?.course ?? "Asignaturas",
+            isPresented: Binding(
+                get: { courseForSubjectPicker != nil },
+                set: { isPresented in
+                    if !isPresented { courseForSubjectPicker = nil }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let group = courseForSubjectPicker {
+                ForEach(group.plans) { plan in
+                    Button(plan.asignatura) {
+                        open(plan)
+                    }
+                }
+            }
+
+            Button("Cancelar", role: .cancel) {}
+        } message: {
+            Text("Elige una asignatura")
+        }
         .task {
             await viewModel.load()
         }
@@ -84,70 +114,10 @@ struct PlanificacionesHubView: View {
 
             heroCard
 
-            if viewModel.availableSubjects.count > 1 {
-                subjectSelector
-            }
-
             if cursosInfo.isEmpty {
                 emptyCoursesState
             } else {
-                kpiGrid
-
-                if displayMode.isSimple {
-                    Button {
-                        withAnimation(EPTheme.spring) {
-                            filtrosVisibles.toggle()
-                        }
-                    } label: {
-                        HStack {
-                            Label("Filtros", systemImage: "slider.horizontal.3")
-                                .font(.footnote.weight(.black))
-                                .foregroundStyle(EPTheme.primary)
-                            Spacer()
-                            if hasActiveFilters {
-                                Text("activos")
-                                    .font(.caption2.weight(.black))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(EPTheme.primary, in: Capsule())
-                            } else {
-                                Image(systemName: filtrosVisibles ? "chevron.up" : "chevron.down")
-                                    .font(.caption.weight(.bold))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(12)
-                        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-
-                    if filtrosVisibles {
-                        filtrosCard
-                            .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
-                } else {
-                    filtrosCard
-                }
-
-                EPWebTabBar(tabs: tabs, selected: $selectedVista)
-
-                switch selectedVista {
-                case "timeline":
-                    TimelineAnualView(
-                        cursos: cursosInfo,
-                        unidades: unidadesFiltradas,
-                        cronogramasByUnit: viewModel.cronogramasByUnit
-                    )
-                case "cursos":
-                    CursosGridView(cursos: cursosInfo)
-                case "calendario":
-                    CalendarioMensualView(mes: $mesActual, unidades: unidadesFiltradas)
-                case "insights":
-                    InsightsReplicaView(cursos: cursosInfo, unidades: todasUnidades, stats: stats)
-                default:
-                    EmptyView()
-                }
+                CoursePlanningGrid(groups: courseGroups, onOpen: openCourse)
             }
         }
     }
@@ -155,48 +125,17 @@ struct PlanificacionesHubView: View {
     // MARK: - Hero
 
     private var heroCard: some View {
-        EPModuleHeader(
-            eyebrow: "Mis Planificaciones",
-            title: "\(viewModel.activeSubject) - \(cursosInfo.count) curso\(cursosInfo.count == 1 ? "" : "s")",
-            subtitle: "Vista global de tus unidades did\u{00E1}cticas: timeline anual, calendario de hitos y m\u{00E9}tricas en tiempo real.",
-            icon: "sparkles",
-            accent: .planificaciones
-        ) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 7) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.white.opacity(0.72))
-                        .font(.system(size: 12, weight: .semibold))
-                    TextField("", text: $searchQuery, prompt: Text("Buscar unidad o curso...").foregroundStyle(.white.opacity(0.62)))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .tint(.white)
-                        .textFieldStyle(.plain)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(.white.opacity(0.16), in: RoundedRectangle(cornerRadius: EPTheme.controlRadius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: EPTheme.controlRadius, style: .continuous)
-                        .stroke(.white.opacity(0.25), lineWidth: 1)
-                )
+        VStack(alignment: .leading, spacing: 18) {
+            EPPageHeader(
+                eyebrow: "Planificación",
+                title: "Tus cursos",
+                subtitle: "Un toque para continuar planificando.",
+                icon: "books.vertical.fill"
+            )
 
-                HStack(spacing: 8) {
-                    NavigationLink(value: AppRoute.driveConnect) {
-                        Label("Drive", systemImage: "externaldrive.fill")
-                            .font(.system(size: 12, weight: .black))
-                            .padding(.horizontal, 13)
-                            .padding(.vertical, 9)
-                            .foregroundStyle(.white)
-                            .background {
-                                Capsule().fill(.white.opacity(0.22))
-                                    .overlay(Capsule().stroke(.white.opacity(0.3), lineWidth: 1))
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    Spacer()
-                }
-            }
+            Label("\(courseGroups.count) cursos", systemImage: "rectangle.grid.2x2.fill")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -237,14 +176,20 @@ struct PlanificacionesHubView: View {
     // MARK: - KPIs
 
     private var kpiGrid: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: displayMode.isSimple ? 105 : 150), spacing: 10)], spacing: 10) {
-            EPKPIBox(title: "Total unidades", value: "\(stats.total)", subtitle: "\(stats.totalHoras)h totales", icon: "square.stack.3d.up.fill", tint: EPTheme.primary)
-            EPKPIBox(title: "En curso", value: "\(stats.enCurso)", subtitle: "ahora", icon: "play.circle.fill", tint: stats.enCurso > 0 ? .green : .gray)
-            EPKPIBox(title: "Cobertura", value: "\(stats.cobertura)%", subtitle: "con fechas", icon: "checkmark.seal.fill", tint: coberturaTint(stats.cobertura))
-            if !displayMode.isSimple {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                EPKPIBox(title: "Total unidades", value: "\(stats.total)", subtitle: "\(stats.totalHoras)h totales", icon: "square.stack.3d.up.fill", tint: EPTheme.primary)
+                    .frame(width: 145)
+                EPKPIBox(title: "En curso", value: "\(stats.enCurso)", subtitle: "ahora", icon: "play.circle.fill", tint: stats.enCurso > 0 ? .green : .gray)
+                    .frame(width: 145)
+                EPKPIBox(title: "Cobertura", value: "\(stats.cobertura)%", subtitle: "con fechas", icon: "checkmark.seal.fill", tint: coberturaTint(stats.cobertura))
+                    .frame(width: 145)
                 EPKPIBox(title: "Próximas", value: "\(stats.proximas)", subtitle: "planificadas", icon: "calendar.badge.clock", tint: .blue)
+                    .frame(width: 145)
                 EPKPIBox(title: "Sin fechas", value: "\(stats.incompletas)", subtitle: "por completar", icon: "exclamationmark.triangle.fill", tint: stats.incompletas == 0 ? .green : .orange)
+                    .frame(width: 145)
                 EPKPIBox(title: "Cursos", value: "\(cursosInfo.count)", subtitle: "activos", icon: "person.3.fill", tint: EPTheme.primary)
+                    .frame(width: 145)
             }
         }
     }
@@ -416,6 +361,43 @@ struct PlanificacionesHubView: View {
         }
     }
 
+    private var filteredCursos: [CursoInfo] {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return cursosInfo }
+        return cursosInfo.filter {
+            $0.curso.localizedCaseInsensitiveContains(query) ||
+            $0.asignatura.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    private var courseGroups: [CoursePlanningGroup] {
+        var groups: [CoursePlanningGroup] = []
+
+        for plan in cursosInfo {
+            let id = normalizeCourseName(plan.curso)
+            if let index = groups.firstIndex(where: { $0.id == id }) {
+                groups[index].plans.append(plan)
+            } else {
+                groups.append(CoursePlanningGroup(id: id, course: plan.curso, color: plan.color, plans: [plan]))
+            }
+        }
+
+        return groups
+    }
+
+    private func openCourse(_ group: CoursePlanningGroup) {
+        guard group.plans.count == 1, let plan = group.plans.first else {
+            courseForSubjectPicker = group
+            return
+        }
+        open(plan)
+    }
+
+    private func open(_ plan: CursoInfo) {
+        courseForSubjectPicker = nil
+        planningDestination = PlanningDestination(course: plan.curso, subject: plan.asignatura)
+    }
+
     private var todasUnidades: [UnidadConCurso] {
         cursosInfo.flatMap { curso in
             curso.unidades.map { unit in
@@ -468,40 +450,29 @@ struct PlanificacionesHubView: View {
     }
 
     private var mergedPlanes: [PlanificacionCurso] {
-        let subject = viewModel.activeSubject
-        guard let snapshot = viewModel.snapshot else {
-            return uniquePlanes(viewModel.planes.filter { $0.asignatura == subject })
-        }
-
-        let uniqueSnapshotCourses = uniqueNormalizedCourses(snapshot.courses)
         var merged: [PlanificacionCurso] = []
-        var seenCourses = Set<String>()
+        var seenRoutes = Set<String>()
 
-        for curso in uniqueSnapshotCourses {
-            let normalizedCurso = normalizeCourseName(curso)
-            guard !seenCourses.contains(normalizedCurso) else { continue }
-            seenCourses.insert(normalizedCurso)
-
-            if let existing = viewModel.planes.first(where: {
-                normalizeCourseName($0.curso) == normalizedCurso && $0.asignatura == subject
-            }) {
-                var planCopy = existing
-                planCopy.curso = curso
-                merged.append(planCopy)
-            } else {
-                merged.append(PlanificacionCurso(curso: curso, asignatura: subject, units: []))
-            }
+        for plan in viewModel.planes {
+            let key = "\(normalizeCourseName(plan.curso))::\(normalizeCourseName(plan.asignatura))"
+            guard seenRoutes.insert(key).inserted else { continue }
+            merged.append(plan)
         }
 
-        for plan in viewModel.planes where plan.asignatura == subject {
-            let normalized = normalizeCourseName(plan.curso)
-            if !seenCourses.contains(normalized) {
-                seenCourses.insert(normalized)
-                merged.append(plan)
-            }
+        let fallbackSubject = viewModel.availableSubjects.first ?? "Música"
+        for course in uniqueNormalizedCourses(viewModel.snapshot?.courses ?? []) {
+            let normalizedCourse = normalizeCourseName(course)
+            guard !merged.contains(where: { normalizeCourseName($0.curso) == normalizedCourse }) else { continue }
+            merged.append(PlanificacionCurso(curso: course, asignatura: fallbackSubject, units: []))
         }
 
-        return merged
+        return merged.sorted {
+            let courseOrder = $0.curso.localizedStandardCompare($1.curso)
+            if courseOrder == .orderedSame {
+                return $0.asignatura.localizedStandardCompare($1.asignatura) == .orderedAscending
+            }
+            return courseOrder == .orderedAscending
+        }
     }
 
     private func normalizeCourseName(_ name: String) -> String {
@@ -948,102 +919,72 @@ private struct TimelineAnualView: View {
     }
 }
 
-// MARK: - Grid de cursos
+// MARK: - Navegación rápida por curso
 
-private struct CursosGridView: View {
-    let cursos: [CursoInfo]
+private struct CoursePlanningGroup: Identifiable {
+    let id: String
+    let course: String
+    let color: String
+    var plans: [CursoInfo]
+}
+
+private struct PlanningDestination: Identifiable, Hashable {
+    let course: String
+    let subject: String
+
+    var id: String { "\(course)::\(subject)" }
+}
+
+private struct CoursePlanningGrid: View {
+    let groups: [CoursePlanningGroup]
+    let onOpen: (CoursePlanningGroup) -> Void
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 165), spacing: 12)], spacing: 12) {
-            ForEach(cursos) { curso in
-                cursoCard(curso)
-            }
-        }
-    }
-
-    private func cursoCard(_ curso: CursoInfo) -> some View {
-        let enCurso = curso.unidades.filter { UnitPlanningState.state(for: $0) == .actual }.count
-        let proximas = curso.unidades.filter { UnitPlanningState.state(for: $0) == .futura }.count
-
-        return NavigationLink(value: AppRoute.coursePlanificaciones(curso: curso.curso, asignatura: curso.asignatura)) {
-            EPWebCard(padding: 14) {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 10) {
-                        Text(iniciales(curso.curso))
-                            .font(.caption.weight(.black))
-                            .foregroundStyle(.white)
-                            .frame(width: 42, height: 42)
-                            .background(EPTheme.color(hex: curso.color), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(curso.curso)
-                                .font(.footnote.weight(.black))
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                            Text(curso.asignatura)
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-
-                        Spacer(minLength: 0)
-
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    VStack(alignment: .leading, spacing: 7) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 10)], spacing: 10) {
+            ForEach(groups) { group in
+                Button {
+                    onOpen(group)
+                } label: {
+                    VStack(alignment: .leading, spacing: 14) {
                         HStack {
-                            Text("Unidades")
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text("\(curso.unidades.count)")
-                                .fontWeight(.black)
-                        }
-                        .font(.caption.weight(.semibold))
+                            Text(initials(group.course))
+                                .font(.system(size: 14, weight: .black, design: .rounded))
+                                .foregroundStyle(EPTheme.color(hex: group.color))
+                                .frame(width: 44, height: 44)
+                                .background(EPTheme.color(hex: group.color).opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-                        HStack {
-                            Text("Total horas")
-                                .foregroundStyle(.secondary)
                             Spacer()
-                            Text("\(curso.totalHoras)h")
-                                .fontWeight(.black)
+
+                            Image(systemName: group.plans.count > 1 ? "ellipsis" : "arrow.up.right")
+                                .font(.system(size: 11, weight: .black))
+                                .foregroundStyle(.secondary)
                         }
-                        .font(.caption.weight(.semibold))
 
                         VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text("Cobertura de fechas")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                                Text("\(curso.cobertura)%")
-                                    .font(.caption.weight(.black))
-                                    .foregroundStyle(coberturaColor(curso.cobertura))
-                            }
-                            ProgressView(value: Double(curso.cobertura) / 100.0)
-                                .tint(coberturaColor(curso.cobertura))
+                            Text(group.course)
+                                .font(.system(size: 17, weight: .bold, design: .rounded))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+
+                            Text(group.plans.count == 1 ? "Abrir planificación" : "\(group.plans.count) asignaturas")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
                         }
                     }
-
-                    HStack(spacing: 6) {
-                        EPStatusPill(text: "\(enCurso) en curso", icon: "waveform.path.ecg", tint: enCurso > 0 ? .green : .gray)
-                        EPStatusPill(text: "\(proximas) próximas", icon: "clock.fill", tint: proximas > 0 ? .blue : .gray)
-                    }
+                    .frame(maxWidth: .infinity, minHeight: 105, alignment: .topLeading)
+                    .padding(14)
+                    .background(EPTheme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(EPTheme.border, lineWidth: 0.75))
                 }
+                .buttonStyle(.plain)
+                .accessibilityHint(group.plans.count == 1 ? "Abre directamente la planificación" : "Muestra las asignaturas del curso")
             }
         }
-        .buttonStyle(.plain)
     }
 
-    private func iniciales(_ curso: String) -> String {
-        let letras = curso.split(separator: " ").compactMap(\.first)
-        return String(letras.prefix(3)).uppercased()
-    }
-
-    private func coberturaColor(_ pct: Int) -> Color {
-        pct >= 80 ? .green : pct >= 50 ? .orange : .red
+    private func initials(_ value: String) -> String {
+        let compact = value.replacingOccurrences(of: " ", with: "")
+        return String(compact.prefix(3)).uppercased()
     }
 }
 

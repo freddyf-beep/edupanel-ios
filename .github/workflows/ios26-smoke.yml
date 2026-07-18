@@ -1,0 +1,73 @@
+name: iOS 26 smoke test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - agent/**
+      - codex/**
+
+jobs:
+  build-and-smoke-test:
+    name: Build with Xcode 26 and launch Simulator
+    runs-on: macos-26
+    timeout-minutes: 45
+    permissions:
+      contents: read
+
+    env:
+      PROJECT_PATH: EduPanel.xcodeproj
+      SCHEME: EduPanel
+      DERIVED_DATA_PATH: build/iOS26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        run: |
+          XCODE_PATH="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' | sort | tail -n 1)"
+          test -n "$XCODE_PATH"
+          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+          xcrun simctl list runtimes | grep -E 'iOS 26|iOS 27' || true
+
+      - name: Build for iOS Simulator
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            2>&1 | tee build/ios26-xcodebuild.log
+
+      - name: Launch smoke test on an available iOS 26 simulator
+        run: |
+          SIMULATOR_UDID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone 17 \(/ {print $2; exit}')"
+          test -n "$SIMULATOR_UDID"
+          xcrun simctl boot "$SIMULATOR_UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+          APP_PATH="$(find "$DERIVED_DATA_PATH/Build/Products" -path '*/EduPanel.app' -type d | head -n 1)"
+          test -d "$APP_PATH"
+          xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
+          xcrun simctl launch "$SIMULATOR_UDID" cl.edupanel.app
+          mkdir -p build/artifacts
+          xcrun simctl io "$SIMULATOR_UDID" screenshot build/artifacts/ios26-smoke.png
+
+      - name: Upload iOS 26 artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: edupanel-ios26-smoke
+          path: |
+            build/ios26-xcodebuild.log
+            build/artifacts/ios26-smoke.png
+          if-no-files-found: warn

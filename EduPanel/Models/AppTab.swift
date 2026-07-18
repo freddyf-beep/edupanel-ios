@@ -24,9 +24,9 @@ enum AppTab: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .inicio: return "house"
-        case .planificaciones: return "book.closed"
+        case .planificaciones: return "square.and.pencil"
         case .cronograma: return "calendar"
-        case .evaluaciones: return "checklist.checked"
+        case .evaluaciones: return "checkmark.circle"
         case .clases: return "calendar.badge.clock"
         case .perfil: return "person.crop.circle"
         }

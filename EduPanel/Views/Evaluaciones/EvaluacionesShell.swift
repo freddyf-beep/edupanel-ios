@@ -32,9 +32,9 @@ struct EvaluacionesShell: View {
             VStack(alignment: .leading, spacing: 16) {
                 header
 
-                EPWebTabBar(tabs: tabs, selected: $selectedTab)
-
                 selectorCurso
+
+                EvaluacionesInstrumentSwitcher(tabs: tabs, selected: $selectedTab)
 
                 if let error = viewModel.errorMessage {
                     EvaluacionesErrorBanner(message: error)
@@ -69,6 +69,7 @@ struct EvaluacionesShell: View {
             .padding(.top, 8)
             .padding(.bottom, 24)
         }
+        .reportsTabBarScroll()
         .background(EPTheme.background)
         .navigationTitle("Evaluaciones")
         .task {
@@ -83,12 +84,11 @@ struct EvaluacionesShell: View {
     }
 
     private var header: some View {
-        EPModuleHeader(
+        EPPageHeader(
             eyebrow: "Evaluaciones",
-            title: "Pruebas, guías, rúbricas y listas",
-            subtitle: "Instrumentos vinculados al currículum, aplicación por estudiante y resultados con nota chilena.",
-            icon: "checkmark.seal.fill",
-            accent: .evaluaciones
+            title: "Todo lo que necesitas para evaluar",
+            subtitle: "Elige un instrumento y continúa exactamente donde lo dejaste.",
+            icon: "checkmark.seal.fill"
         )
     }
 
@@ -125,6 +125,55 @@ struct EvaluacionesShell: View {
                 Spacer()
             }
         }
+    }
+}
+
+private struct EvaluacionesInstrumentSwitcher: View {
+    let tabs: [EPWebTab]
+    @Binding var selected: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(tabs) { tab in
+                let isSelected = selected == tab.id
+                Button {
+                    withAnimation(EPTheme.spring) {
+                        selected = tab.id
+                    }
+                } label: {
+                    VStack(spacing: 9) {
+                        Image(systemName: tab.icon)
+                            .font(.system(size: 18, weight: .bold))
+                            .symbolVariant(isSelected ? .fill : .none)
+                            .frame(width: 38, height: 38)
+                            .background(
+                                isSelected ? AnyShapeStyle(.white.opacity(0.18)) : AnyShapeStyle(EPTheme.subtle),
+                                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            )
+
+                        Text(tab.title)
+                            .font(.system(size: 10, weight: .black))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    .foregroundStyle(isSelected ? .white : .secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        isSelected ? AnyShapeStyle(EPTheme.primary) : AnyShapeStyle(EPTheme.card),
+                        in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(isSelected ? Color.clear : EPTheme.border, lineWidth: 0.75)
+                    }
+                    .shadow(color: isSelected ? EPTheme.primary.opacity(0.2) : .clear, radius: 10, y: 5)
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .sensoryFeedback(.selection, trigger: selected)
     }
 }
 

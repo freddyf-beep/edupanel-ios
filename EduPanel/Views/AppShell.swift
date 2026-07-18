@@ -119,6 +119,7 @@ struct AppShell: View {
     @State private var selectedRoute: AppRoute = .module(.inicio)
     @State private var isSidebarOpen = false
     @State private var tabBadges: [AppTab: Int] = [:]
+    @State private var isTabBarCompact = false
 
     @State private var inicioPath = NavigationPath()
     @State private var planificacionesPath = NavigationPath()
@@ -159,15 +160,14 @@ struct AppShell: View {
                             Color.clear.frame(height: 70)
                         }
 
-                    FloatingTabBar(selected: $selectedTab, badges: tabBadges) {
-                        withAnimation(EPTheme.spring) {
-                            isSidebarOpen = true
-                        }
-                    }
-                    .padding(.horizontal, 22)
-                    .padding(.bottom, 14)
+                    FloatingTabBar(selected: $selectedTab, badges: tabBadges, isCompact: isTabBarCompact)
+                        .padding(.horizontal, isTabBarCompact ? 52 : 28)
+                        .padding(.bottom, isTabBarCompact ? 7 : 10)
+                        .animation(EPTheme.spring, value: isTabBarCompact)
                 }
+                .environment(\.tabBarScrollReporter, updateTabBarForScrollPosition)
                 .onChange(of: selectedTab) { _, newTab in
+                    isTabBarCompact = false
                     if case .coursePlanificaciones = selectedRoute, newTab == .planificaciones {
                         return
                     }
@@ -266,14 +266,11 @@ struct AppShell: View {
                 }
             } label: {
                 Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(EPTheme.primary)
-                    .frame(width: 34, height: 34)
-                    .background(EPTheme.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 32, height: 32)
             }
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            DisplayModeToggleButton()
+            .accessibilityLabel("Abrir herramientas")
         }
     }
 
@@ -281,6 +278,12 @@ struct AppShell: View {
         guard let snapshot = try? await dashboardRepository.fetchDashboard() else { return }
         let pendientes = snapshot.pendingClasses.count
         tabBadges[.inicio] = pendientes > 0 ? pendientes : nil
+    }
+
+    private func updateTabBarForScrollPosition(_ isAwayFromTop: Bool) {
+        withAnimation(EPTheme.spring) {
+            isTabBarCompact = isAwayFromTop
+        }
     }
 
     @ViewBuilder
