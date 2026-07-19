@@ -88,6 +88,8 @@ jobs:
         run: |
           APP_PATH="$(find "$DERIVED_DATA_PATH/Build/Products" -path '*/EduPanel.app' -type d | head -n 1)"
           test -d "$APP_PATH"
+          xcrun simctl boot "$SIMULATOR_UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$SIMULATOR_UDID" -b
           xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
           xcrun simctl launch "$SIMULATOR_UDID" cl.edupanel.app -attendance-preview -attendance-qr-preview
           sleep 3
