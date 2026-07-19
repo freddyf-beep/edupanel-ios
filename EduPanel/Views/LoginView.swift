@@ -35,6 +35,8 @@ struct LoginView: View {
                         switch authSession.state {
                         case .blocked(let user):
                             blockedAccessCard(user: user, session: $session)
+                        case .authorizationUnavailable(let user):
+                            authorizationUnavailableCard(user: user)
                         default:
                             signInCard
                         }
@@ -175,6 +177,44 @@ struct LoginView: View {
             .buttonStyle(.plain)
             .disabled(authSession.isRedeemingOrCodeEmpty)
             .opacity(authSession.isRedeemingOrCodeEmpty ? 0.5 : 1)
+
+            Button("Cambiar cuenta") {
+                Task { await authSession.signOut() }
+            }
+            .font(.system(size: 12, weight: .bold))
+            .tint(EPTheme.primary)
+        }
+    }
+
+    private func authorizationUnavailableCard(user: AuthenticatedUser) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label("No pudimos verificar el acceso", systemImage: "wifi.exclamationmark")
+                .font(.system(size: 15, weight: .black))
+                .foregroundStyle(.orange)
+
+            Text(user.email ?? "Sesión actual")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color(.systemGray6), in: Capsule())
+
+            Text("Tu cuenta sigue conectada. Solo necesitamos recuperar la conexión para confirmar tu acceso a EduPanel.")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            Button {
+                Task { await authSession.retryAuthorization() }
+            } label: {
+                Label("Intentar nuevamente", systemImage: "arrow.clockwise")
+                    .font(.system(size: 15, weight: .black))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(EPTheme.heroGradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .shadow(color: EPTheme.primary.opacity(0.25), radius: 10, y: 5)
+            }
+            .buttonStyle(.plain)
 
             Button("Cambiar cuenta") {
                 Task { await authSession.signOut() }

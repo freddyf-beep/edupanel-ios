@@ -12,36 +12,37 @@ struct SidebarContainer<SidebarContent: View, MainContent: View>: View {
     var body: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
-            let actualSidebarWidth = min(width * 0.82, 290)
-            
+            let actualSidebarWidth = min(width * 0.78, 330)
+            // 0 = cerrado, 1 = abierto. El scrim y la sombra siguen el dedo
+            // durante el arrastre, igual que en el menu de Twitter/X.
+            let openProgress = max(0, min(1, isOpen
+                ? 1 + dragOffset / actualSidebarWidth
+                : dragOffset / actualSidebarWidth))
+
             ZStack(alignment: .leading) {
                 // Main Content View
                 content()
                     .frame(width: width, height: geometry.size.height)
                     .overlay(
-                        Group {
-                            if isOpen {
-                                Color.black
-                                    .opacity(0.3)
-                                    .ignoresSafeArea()
-                                    .transition(.opacity)
-                                    .onTapGesture {
-                                        withAnimation(EPTheme.spring) {
-                                            isOpen = false
-                                        }
-                                    }
+                        Color.black
+                            .opacity(0.45 * openProgress)
+                            .ignoresSafeArea()
+                            .allowsHitTesting(isOpen)
+                            .onTapGesture {
+                                withAnimation(EPTheme.spring) {
+                                    isOpen = false
+                                }
                             }
-                        }
                     )
 
-                // Sidebar Menu View
+                // Sidebar Menu View (full-bleed y bordes cuadrados, como X)
                 sidebar()
                     .frame(width: actualSidebarWidth)
-                    .clipShape(.rect(bottomTrailingRadius: 28, topTrailingRadius: 28))
+                    .ignoresSafeArea()
                     .offset(x: isOpen
                             ? max(-actualSidebarWidth, min(0, dragOffset))
                             : -actualSidebarWidth + max(0, min(actualSidebarWidth, dragOffset)))
-                    .shadow(color: Color.black.opacity(isOpen ? 0.22 : 0.0), radius: 24, x: 8, y: 0)
+                    .shadow(color: Color.black.opacity(0.25 * openProgress), radius: 24, x: 8, y: 0)
             }
             .gesture(
                 DragGesture()
@@ -60,16 +61,17 @@ struct SidebarContainer<SidebarContent: View, MainContent: View>: View {
                     }
                     .onEnded { value in
                         let threshold = actualSidebarWidth * 0.35
+                        let predicted = value.predictedEndTranslation.width
                         if isOpen {
-                            // Dragged to the left enough to close
-                            if value.translation.width < -threshold {
+                            // Dragged or flung to the left enough to close
+                            if predicted < -threshold {
                                 withAnimation(EPTheme.spring) {
                                     isOpen = false
                                 }
                             }
                         } else {
-                            // Dragged to the right enough starting from the edge to open
-                            if value.startLocation.x < 45 && value.translation.width > threshold {
+                            // Dragged or flung to the right enough starting from the edge to open
+                            if value.startLocation.x < 45 && predicted > threshold {
                                 withAnimation(EPTheme.spring) {
                                     isOpen = true
                                 }

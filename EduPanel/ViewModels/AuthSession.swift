@@ -1,6 +1,59 @@
 import Foundation
 import Observation
 import FirebaseAuth
+import FirebaseFirestore
+
+@MainActor
+private protocol AllowlistChecking {
+    func isAllowed(firebaseUser: User) async throws -> Bool
+}
+
+@MainActor
+private struct FirestoreAllowlistChecker: AllowlistChecking {
+    private let db = Firestore.firestore()
+
+    func isAllowed(firebaseUser: User) async throws -> Bool {
+        let email = Self.normalizedEmail(firebaseUser.email)
+
+        if firebaseUser.isEmailVerified, let email, Self.defaultAdminEmails.contains(email) {
+            return true
+        }
+
+        if let email {
+            let emailDocument = db.collection("allowlist").document(email)
+            if try await documentExists(emailDocument) {
+                return true
+            }
+        }
+
+        let uidDocument = db.collection("allowlist_uids").document(firebaseUser.uid)
+        return try await documentExists(uidDocument)
+    }
+
+    private func documentExists(_ reference: DocumentReference) async throws -> Bool {
+        try await withCheckedThrowingContinuation { continuation in
+            reference.getDocument { snapshot, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: snapshot?.exists == true)
+                }
+            }
+        }
+    }
+
+    private static func normalizedEmail(_ email: String?) -> String? {
+        guard let email else { return nil }
+        let normalized = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    // Debe mantenerse sincronizado con los administradores base del backend web.
+    private static let defaultAdminEmails: Set<String> = [
+        "freddyfigueroagea@gmail.com",
+        "freddyfiguea@gmail.com"
+    ]
+}
 
 @MainActor
 @Observable
@@ -9,6 +62,7 @@ final class AuthSession {
         case checking
         case signedOut
         case blocked(AuthenticatedUser)
+        case authorizationUnavailable(AuthenticatedUser)
         case signedIn(AuthenticatedUser)
         case configurationError(String)
     }
@@ -105,6 +159,16 @@ final class AuthSession {
         state = .signedOut
     }
 
+    func retryAuthorization() async {
+        guard let firebaseUser = Auth.auth().currentUser else {
+            state = .signedOut
+            return
+        }
+
+        errorMessage = nil
+        await validateAllowlist(for: AuthenticatedUser(firebaseUser: firebaseUser, role: .docente))
+    }
+
     private func validateAllowlist(for user: AuthenticatedUser) async {
         guard let client = apiClient else {
             state = .configurationError("La conexion API no esta configurada.")
@@ -115,14 +179,31 @@ final class AuthSession {
 
         do {
             let response: CheckAllowlistResponse = try await client.get("/api/check-allowlist")
+            errorMessage = nil
             if response.allowed {
                 state = .signedIn(user)
             } else {
                 state = .blocked(user)
             }
         } catch {
-            errorMessage = error.localizedDescription
-            state = .blocked(user)
+            await validateAllowlistWithFirestore(for: user)
+        }
+    }
+
+    private func validateAllowlistWithFirestore(for user: AuthenticatedUser) async {
+        guard let firebaseUser = Auth.auth().currentUser, firebaseUser.uid == user.id else {
+            errorMessage = "La sesión cambió. Vuelve a iniciar sesión para verificar tu acceso."
+            state = .authorizationUnavailable(user)
+            return
+        }
+
+        do {
+            let allowed = try await FirestoreAllowlistChecker().isAllowed(firebaseUser: firebaseUser)
+            errorMessage = nil
+            state = allowed ? .signedIn(user) : .blocked(user)
+        } catch {
+            errorMessage = "No pudimos verificar tu acceso en este momento. Revisa tu conexión e inténtalo nuevamente."
+            state = .authorizationUnavailable(user)
         }
     }
 

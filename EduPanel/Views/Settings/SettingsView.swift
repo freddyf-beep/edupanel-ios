@@ -8,6 +8,7 @@ struct SettingsView: View {
         ScrollView {
             VStack(spacing: 18) {
                 SettingsAppearanceSection()
+                SettingsTabBarSection()
                 SettingsAccountSection(user: user)
                 SettingsDataSection(repository: repository)
                 SettingsInfoSection()

@@ -32,6 +32,7 @@ enum AppRoute: Hashable {
     case pruebaResultados(pruebaId: String, scope: EvaluacionScope)
     case guiaDetalle(guiaId: String, scope: EvaluacionScope)
     case guiaEditor(guiaId: String?, curso: String, asignatura: String, scope: EvaluacionScope)
+    case attendance(course: String, subject: String, dateKey: String, blockID: String)
 
     var title: String {
         switch self {
@@ -66,6 +67,7 @@ enum AppRoute: Hashable {
         case .pruebaResultados: return "Aplicar y corregir"
         case .guiaDetalle: return "Detalle de guía"
         case .guiaEditor(let guiaId, _, _, _): return guiaId == nil ? "Nueva guía" : "Editar guía"
+        case .attendance: return "Asistencia"
         }
     }
 
@@ -102,6 +104,7 @@ enum AppRoute: Hashable {
         case .pruebaResultados: return "checkmark.rectangle.stack.fill"
         case .guiaDetalle: return "book.pages.fill"
         case .guiaEditor: return "square.and.pencil"
+        case .attendance: return "person.3.sequence.fill"
         }
     }
 
@@ -120,6 +123,7 @@ struct AppShell: View {
     @State private var isSidebarOpen = false
     @State private var tabBadges: [AppTab: Int] = [:]
     @State private var isTabBarCompact = false
+    @State private var isTabBarHidden = false
 
     @State private var inicioPath = NavigationPath()
     @State private var planificacionesPath = NavigationPath()
@@ -157,13 +161,10 @@ struct AppShell: View {
                 ZStack(alignment: .bottom) {
                     tabContent
                         .safeAreaInset(edge: .bottom, spacing: 0) {
-                            Color.clear.frame(height: 70)
+                            Color.clear.frame(height: isTabBarHidden ? 46 : 70)
                         }
 
-                    FloatingTabBar(selected: $selectedTab, badges: tabBadges, isCompact: isTabBarCompact)
-                        .padding(.horizontal, isTabBarCompact ? 52 : 28)
-                        .padding(.bottom, isTabBarCompact ? 7 : 10)
-                        .animation(EPTheme.spring, value: isTabBarCompact)
+                    tabBarControls
                 }
                 .environment(\.tabBarScrollReporter, updateTabBarForScrollPosition)
                 .onChange(of: selectedTab) { _, newTab in
@@ -191,6 +192,58 @@ struct AppShell: View {
         )
     }
 
+    /// Mantiene la manija junto a la barra sin crear una capa transparente
+    /// de pantalla completa que intercepte los enlaces del contenido.
+    private var tabBarControls: some View {
+        Group {
+            if isTabBarHidden {
+                HStack {
+                    Spacer()
+                    tabBarToggleButton
+                }
+                .padding(.trailing, 28)
+                .padding(.bottom, 10)
+            } else {
+                ZStack(alignment: .trailing) {
+                    FloatingTabBar(selected: $selectedTab, badges: tabBadges, isCompact: isTabBarCompact)
+                    tabBarToggleButton
+                        .offset(x: 17)
+                }
+                .frame(maxWidth: isTabBarCompact ? 286 : 360)
+                .padding(.horizontal, isTabBarCompact ? 52 : 28)
+                .padding(.bottom, isTabBarCompact ? 7 : 10)
+                .transition(.opacity.combined(with: .scale(scale: 0.92)))
+            }
+        }
+        .animation(EPTheme.spring, value: isTabBarCompact)
+        .animation(EPTheme.spring, value: isTabBarHidden)
+    }
+
+    /// Botón circular para ocultar/mostrar la barra de pestañas.
+    /// Vive al lado de la `FloatingTabBar` sin tocar su implementación.
+    private var tabBarToggleButton: some View {
+        Button {
+            withAnimation(EPTheme.spring) {
+                isTabBarHidden.toggle()
+            }
+        } label: {
+            Image(systemName: isTabBarHidden ? "chevron.up" : "chevron.down")
+                .font(.system(size: 13, weight: .black))
+                .foregroundStyle(.secondary)
+                .frame(width: 34, height: 34)
+                .background(.regularMaterial, in: Circle())
+                .overlay {
+                    Circle()
+                        .strokeBorder(Color.primary.opacity(0.09), lineWidth: 0.75)
+                }
+                .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .sensoryFeedback(.impact(flexibility: .soft), trigger: isTabBarHidden)
+        .accessibilityLabel(isTabBarHidden ? "Mostrar barra de navegación" : "Ocultar barra de navegación")
+    }
+
     @ViewBuilder
     private var tabContent: some View {
         switch selectedTab {
@@ -215,7 +268,8 @@ struct AppShell: View {
             tabStack(path: $planificacionesPath) {
                 PlanificacionesHubView(
                     dashboardRepository: dashboardRepository,
-                    planificacionRepository: planificacionRepository
+                    planificacionRepository: planificacionRepository,
+                    onOpenCourse: openCoursePlanning
                 )
             }
         case .cronograma:
@@ -286,6 +340,13 @@ struct AppShell: View {
         }
     }
 
+    private func openCoursePlanning(_ course: String, _ subject: String) {
+        selectedTab = .planificaciones
+        planificacionesPath.append(
+            AppRoute.coursePlanificaciones(curso: course, asignatura: subject)
+        )
+    }
+
     @ViewBuilder
     private func destination(for route: AppRoute) -> some View {
         switch route {
@@ -307,7 +368,8 @@ struct AppShell: View {
         case .module(.planificaciones), .planificacionNueva:
             PlanificacionesHubView(
                 dashboardRepository: dashboardRepository,
-                planificacionRepository: planificacionRepository
+                planificacionRepository: planificacionRepository,
+                onOpenCourse: openCoursePlanning
             )
         case .module(.cronograma), .cronograma:
             CronogramaView(
@@ -433,6 +495,23 @@ struct AppShell: View {
                 repository: evaluacionesRepository,
                 dashboardRepository: dashboardRepository
             )
+        case .attendance(let course, let subject, let dateKey, let blockID):
+            if let apiClient = authSession.apiClient {
+                AttendanceView(
+                    course: course,
+                    subject: subject,
+                    date: AttendanceDate.parse(dateKey) ?? Date(),
+                    initialBlockID: blockID,
+                    dashboardRepository: dashboardRepository,
+                    apiClient: apiClient
+                )
+            } else {
+                ContentUnavailableView(
+                    "Servicio QR no configurado",
+                    systemImage: "qrcode",
+                    description: Text("Revisa la conexión de EduPanel e inténtalo nuevamente.")
+                )
+            }
         }
     }
 }

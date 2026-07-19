@@ -519,11 +519,20 @@ struct PruebaEditorView: View {
     @MainActor
     private func load(force: Bool = false) async {
         if nivelMapping.isEmpty || school == .empty {
-            async let dashboardTask: DashboardSnapshot? = try? await dashboardRepository.fetchDashboard()
-            async let schoolTask: InfoColegio? = try? await dashboardRepository.fetchExportSchool(scope: scope)
-            if let snapshot = await dashboardTask { nivelMapping = snapshot.nivelMapping }
-            if let exportSchool = await schoolTask { school = exportSchool }
+            // SwiftUI cancela esta tarea al abandonar el editor. Mantener estas
+            // cargas secuenciales evita que queden tareas hijas de `async let`
+            // pendientes mientras la vista se desmonta.
+            if let snapshot = try? await dashboardRepository.fetchDashboard() {
+                guard !Task.isCancelled else { return }
+                nivelMapping = snapshot.nivelMapping
+            }
+
+            if let exportSchool = try? await dashboardRepository.fetchExportSchool(scope: scope) {
+                guard !Task.isCancelled else { return }
+                school = exportSchool
+            }
         }
+        guard !Task.isCancelled else { return }
         guard let pruebaId, force || draft.id == nil else { return }
         isLoading = true
         errorMessage = nil

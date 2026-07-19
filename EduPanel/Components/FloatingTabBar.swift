@@ -5,9 +5,14 @@ struct FloatingTabBar: View {
     var badges: [AppTab: Int] = [:]
     var isCompact = false
 
+    @AppStorage(TabBarPreferences.storageKey)
+    private var visibleTabsRaw = TabBarPreferences.defaultValue
+
     @Namespace private var barNamespace
 
-    private let visibles: [AppTab] = [.inicio, .planificaciones, .evaluaciones, .cronograma, .perfil]
+    private var visibleTabs: [AppTab] {
+        TabBarPreferences.decode(visibleTabsRaw)
+    }
 
     @ViewBuilder
     var body: some View {
@@ -37,7 +42,7 @@ struct FloatingTabBar: View {
 
     private var barContent: some View {
         HStack(spacing: 3) {
-            ForEach(visibles) { tab in
+            ForEach(visibleTabs) { tab in
                 tabItem(tab)
             }
         }
@@ -45,6 +50,10 @@ struct FloatingTabBar: View {
         .frame(maxWidth: isCompact ? 286 : 360)
         .animation(EPTheme.spring, value: isCompact)
         .sensoryFeedback(.selection, trigger: selected)
+        .onChange(of: visibleTabsRaw) { _, _ in
+            guard !visibleTabs.contains(selected), let firstTab = visibleTabs.first else { return }
+            selected = firstTab
+        }
     }
 
     private func tabItem(_ tab: AppTab) -> some View {

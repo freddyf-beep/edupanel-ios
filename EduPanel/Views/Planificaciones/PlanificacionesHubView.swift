@@ -9,10 +9,10 @@ struct PlanificacionesHubView: View {
     @State private var filtroEstado: Set<UnitPlanningState> = []
     @State private var mesActual = Calendar.current.startOfDay(for: Date())
     @State private var courseForSubjectPicker: CoursePlanningGroup?
-    @State private var planningDestination: PlanningDestination?
 
     let dashboardRepository: DashboardRepository
     let planificacionRepository: PlanificacionRepository
+    let onOpenCourse: (_ course: String, _ subject: String) -> Void
 
     private let tabs = [
         EPWebTab(id: "timeline", title: "Timeline anual", icon: "chart.bar.doc.horizontal"),
@@ -21,9 +21,14 @@ struct PlanificacionesHubView: View {
         EPWebTab(id: "insights", title: "Insights", icon: "chart.bar.xaxis")
     ]
 
-    init(dashboardRepository: DashboardRepository, planificacionRepository: PlanificacionRepository) {
+    init(
+        dashboardRepository: DashboardRepository,
+        planificacionRepository: PlanificacionRepository,
+        onOpenCourse: @escaping (_ course: String, _ subject: String) -> Void
+    ) {
         self.dashboardRepository = dashboardRepository
         self.planificacionRepository = planificacionRepository
+        self.onOpenCourse = onOpenCourse
         self._viewModel = State(initialValue: PlanificacionesViewModel(
             dashboardRepository: dashboardRepository,
             planificacionRepository: planificacionRepository
@@ -48,14 +53,6 @@ struct PlanificacionesHubView: View {
         .reportsTabBarScroll()
         .background(EPTheme.background)
         .navigationTitle("Mis Planificaciones")
-        .navigationDestination(item: $planningDestination) { destination in
-            PlanificacionesDetailView(
-                curso: destination.course,
-                asignatura: destination.subject,
-                dashboardRepository: dashboardRepository,
-                planificacionRepository: planificacionRepository
-            )
-        }
         .confirmationDialog(
             courseForSubjectPicker?.course ?? "Asignaturas",
             isPresented: Binding(
@@ -395,7 +392,7 @@ struct PlanificacionesHubView: View {
 
     private func open(_ plan: CursoInfo) {
         courseForSubjectPicker = nil
-        planningDestination = PlanningDestination(course: plan.curso, subject: plan.asignatura)
+        onOpenCourse(plan.curso, plan.asignatura)
     }
 
     private var todasUnidades: [UnidadConCurso] {
@@ -926,13 +923,6 @@ private struct CoursePlanningGroup: Identifiable {
     let course: String
     let color: String
     var plans: [CursoInfo]
-}
-
-private struct PlanningDestination: Identifiable, Hashable {
-    let course: String
-    let subject: String
-
-    var id: String { "\(course)::\(subject)" }
 }
 
 private struct CoursePlanningGrid: View {

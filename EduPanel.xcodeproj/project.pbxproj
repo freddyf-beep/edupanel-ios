@@ -7,6 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		500000000000000000000101 /* AttendanceRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500000000000000000000001 /* AttendanceRulesTests.swift */; };
+		44DAEDEB68159EF8DBB21A2C /* AttendanceViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44CC20E63DABD4E076EE0313 /* AttendanceViewModel.swift */; };
+		449CC2DFDCDBCC6AF11B11F6 /* AttendanceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 440BCD9FEC0F15DD7AD573AA /* AttendanceModels.swift */; };
+		4441635C509E160073486BB2 /* AttendanceRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 447A41A05D7F7305217E2E1C /* AttendanceRules.swift */; };
+		44DCC40B973929689FE2D3B2 /* AttendanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44634E99F2EF099458A03DB7 /* AttendanceView.swift */; };
+		44245EE07B783EADBEA88E7D /* AttendanceSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4451125C6489E91E948EB34F /* AttendanceSheets.swift */; };
+		44FD733C5697A56D15C70031 /* AttendanceComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A4C477C5F372DA1DC149B6 /* AttendanceComponents.swift */; };
+		44525D0A3C779012DA83DD2C /* AttendanceConnectivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 442F1CF522B9E88216A366A2 /* AttendanceConnectivity.swift */; };
+		4460E63AA2F7AF2F256F0E8F /* AttendanceRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C0014C5BFE2111BA9F8836 /* AttendanceRepository.swift */; };
+		44A770000000000000000101 /* AttendanceQRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A770000000000000000001 /* AttendanceQRService.swift */; };
+		44A770000000000000000102 /* AttendanceQRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A770000000000000000002 /* AttendanceQRScannerView.swift */; };
 		44D300000000000000000101 /* ItemBankModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D300000000000000000001 /* ItemBankModels.swift */; };
 		44D300000000000000000102 /* ItemBankRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D300000000000000000002 /* ItemBankRepository.swift */; };
 		44D300000000000000000103 /* EvaluacionesAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D300000000000000000003 /* EvaluacionesAIService.swift */; };
@@ -85,6 +96,11 @@
 		200000000000000000000106 /* PlanificacionesDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000006 /* PlanificacionesDetailView.swift */; };
 		200000000000000000000107 /* VerUnidadDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* VerUnidadDashboardView.swift */; };
 		200000000000000000000108 /* VerUnidadBaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000008 /* VerUnidadBaseView.swift */; };
+		20000000000000000000010C /* VerUnidadOverviewSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000C /* VerUnidadOverviewSections.swift */; };
+		20000000000000000000010D /* VerUnidadOverviewSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000D /* VerUnidadOverviewSheets.swift */; };
+		20000000000000000000010E /* ClassOverviewPrimarySections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000E /* ClassOverviewPrimarySections.swift */; };
+		20000000000000000000010F /* ClassOverviewResourceSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000F /* ClassOverviewResourceSections.swift */; };
+		200000000000000000000110 /* ClassOverviewSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000010 /* ClassOverviewSheets.swift */; };
 		200000000000000000000109 /* VerUnidadCronogramaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000009 /* VerUnidadCronogramaView.swift */; };
 		20000000000000000000010A /* VerUnidadClasesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000A /* VerUnidadClasesView.swift */; };
 		20000000000000000000010B /* LiveClassModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000B /* LiveClassModeView.swift */; };
@@ -128,7 +144,29 @@
 		400000000000000000000132 /* CalificacionesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400000000000000000000032 /* CalificacionesView.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		50000000000000000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 100000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 100000000000000000000004;
+			remoteInfo = EduPanel;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		500000000000000000000001 /* AttendanceRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttendanceRulesTests.swift; sourceTree = "<group>"; };
+		500000000000000000000005 /* EduPanelTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EduPanelTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		44CC20E63DABD4E076EE0313 /* AttendanceViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttendanceViewModel.swift; sourceTree = "<group>"; };
+		440BCD9FEC0F15DD7AD573AA /* AttendanceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttendanceModels.swift; sourceTree = "<group>"; };
+		447A41A05D7F7305217E2E1C /* AttendanceRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttendanceRules.swift; sourceTree = "<group>"; };
+		44634E99F2EF099458A03DB7 /* AttendanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttendanceView.swift; sourceTree = "<group>"; };
+		4451125C6489E91E948EB34F /* AttendanceSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttendanceSheets.swift; sourceTree = "<group>"; };
+		44A4C477C5F372DA1DC149B6 /* AttendanceComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttendanceComponents.swift; sourceTree = "<group>"; };
+		442F1CF522B9E88216A366A2 /* AttendanceConnectivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttendanceConnectivity.swift; sourceTree = "<group>"; };
+		44C0014C5BFE2111BA9F8836 /* AttendanceRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttendanceRepository.swift; sourceTree = "<group>"; };
+		44A770000000000000000001 /* AttendanceQRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttendanceQRService.swift; sourceTree = "<group>"; };
+		44A770000000000000000002 /* AttendanceQRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttendanceQRScannerView.swift; sourceTree = "<group>"; };
 		44D300000000000000000001 /* ItemBankModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemBankModels.swift; sourceTree = "<group>"; };
 		44D300000000000000000002 /* ItemBankRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemBankRepository.swift; sourceTree = "<group>"; };
 		44D300000000000000000003 /* EvaluacionesAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvaluacionesAIService.swift; sourceTree = "<group>"; };
@@ -208,6 +246,11 @@
 		200000000000000000000006 /* PlanificacionesDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanificacionesDetailView.swift; sourceTree = "<group>"; };
 		200000000000000000000007 /* VerUnidadDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerUnidadDashboardView.swift; sourceTree = "<group>"; };
 		200000000000000000000008 /* VerUnidadBaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerUnidadBaseView.swift; sourceTree = "<group>"; };
+		20000000000000000000000C /* VerUnidadOverviewSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerUnidadOverviewSections.swift; sourceTree = "<group>"; };
+		20000000000000000000000D /* VerUnidadOverviewSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerUnidadOverviewSheets.swift; sourceTree = "<group>"; };
+		20000000000000000000000E /* ClassOverviewPrimarySections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClassOverviewPrimarySections.swift; sourceTree = "<group>"; };
+		20000000000000000000000F /* ClassOverviewResourceSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClassOverviewResourceSections.swift; sourceTree = "<group>"; };
+		200000000000000000000010 /* ClassOverviewSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClassOverviewSheets.swift; sourceTree = "<group>"; };
 		200000000000000000000009 /* VerUnidadCronogramaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerUnidadCronogramaView.swift; sourceTree = "<group>"; };
 		20000000000000000000000A /* VerUnidadClasesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerUnidadClasesView.swift; sourceTree = "<group>"; };
 		20000000000000000000000B /* LiveClassModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveClassModeView.swift; sourceTree = "<group>"; };
@@ -252,6 +295,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		500000000000000000000008 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		100000000000000000000008 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -271,6 +321,7 @@
 			isa = PBXGroup;
 			children = (
 				100000000000000000000010 /* EduPanel */,
+				500000000000000000000010 /* EduPanelTests */,
 				100000000000000000000018 /* Config */,
 				100000000000000000000019 /* scripts */,
 				100000000000000000000003 /* Products */,
@@ -281,6 +332,7 @@
 			isa = PBXGroup;
 			children = (
 				100000000000000000000005 /* EduPanel.app */,
+				500000000000000000000005 /* EduPanelTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -299,6 +351,14 @@
 			path = EduPanel;
 			sourceTree = "<group>";
 		};
+		500000000000000000000010 /* EduPanelTests */ = {
+			isa = PBXGroup;
+			children = (
+				500000000000000000000001 /* AttendanceRulesTests.swift */,
+			);
+			path = EduPanelTests;
+			sourceTree = "<group>";
+		};
 		100000000000000000000011 /* App */ = {
 			isa = PBXGroup;
 			children = (
@@ -311,6 +371,8 @@
 		100000000000000000000012 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				440BCD9FEC0F15DD7AD573AA /* AttendanceModels.swift */,
+				447A41A05D7F7305217E2E1C /* AttendanceRules.swift */,
 				44D300000000000000000001 /* ItemBankModels.swift */,
 				44840D1763FBEAE18595B07A /* PruebaAplicacionEditorModels.swift */,
 				44F17BBF7EF4B6FA0AFE68B1 /* PruebasEditorModels.swift */,
@@ -329,6 +391,9 @@
 		100000000000000000000013 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				442F1CF522B9E88216A366A2 /* AttendanceConnectivity.swift */,
+				44C0014C5BFE2111BA9F8836 /* AttendanceRepository.swift */,
+				44A770000000000000000001 /* AttendanceQRService.swift */,
 				44D300000000000000000002 /* ItemBankRepository.swift */,
 				44D300000000000000000003 /* EvaluacionesAIService.swift */,
 				44D300000000000000000004 /* EvaluacionesWordService.swift */,
@@ -352,6 +417,7 @@
 		100000000000000000000014 /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				44CC20E63DABD4E076EE0313 /* AttendanceViewModel.swift */,
 				442E7208A3536B93C795E9FC /* CronogramaViewModel.swift */,
 				400000000000000000000003 /* EvaluacionesViewModel.swift */,
 				200000000000000000000003 /* PlanificacionesViewModel.swift */,
@@ -365,6 +431,7 @@
 		100000000000000000000015 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				44CE85408F034A3A90893F4B /* Attendance */,
 				44A1C7000000000000000003 /* Actividades */,
 				400000000000000000000042 /* Calificaciones */,
 				443A6D15AA5486619142AEBB /* Cronograma */,
@@ -438,6 +505,11 @@
 				44312F25765DADECE80EBCCD /* ClassPlanningEditorView.swift */,
 				200000000000000000000007 /* VerUnidadDashboardView.swift */,
 				200000000000000000000008 /* VerUnidadBaseView.swift */,
+				20000000000000000000000C /* VerUnidadOverviewSections.swift */,
+				20000000000000000000000D /* VerUnidadOverviewSheets.swift */,
+				20000000000000000000000E /* ClassOverviewPrimarySections.swift */,
+				20000000000000000000000F /* ClassOverviewResourceSections.swift */,
+				200000000000000000000010 /* ClassOverviewSheets.swift */,
 				200000000000000000000009 /* VerUnidadCronogramaView.swift */,
 				20000000000000000000000A /* VerUnidadClasesView.swift */,
 				20000000000000000000000B /* LiveClassModeView.swift */,
@@ -577,9 +649,40 @@
 			path = Guias;
 			sourceTree = "<group>";
 		};
+		44CE85408F034A3A90893F4B /* Attendance */ = {
+			isa = PBXGroup;
+			children = (
+				44634E99F2EF099458A03DB7 /* AttendanceView.swift */,
+				4451125C6489E91E948EB34F /* AttendanceSheets.swift */,
+				44A4C477C5F372DA1DC149B6 /* AttendanceComponents.swift */,
+				44A770000000000000000002 /* AttendanceQRScannerView.swift */,
+			);
+			path = Attendance;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		500000000000000000000004 /* EduPanelTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 50000000000000000000000A /* Build configuration list for PBXNativeTarget "EduPanelTests" */;
+			buildPhases = (
+				500000000000000000000006 /* Sources */,
+				500000000000000000000007 /* Resources */,
+				500000000000000000000008 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				50000000000000000000000C /* PBXTargetDependency */,
+			);
+			name = EduPanelTests;
+			packageProductDependencies = (
+			);
+			productName = EduPanelTests;
+			productReference = 500000000000000000000005 /* EduPanelTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		100000000000000000000004 /* EduPanel */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 10000000000000000000000A /* Build configuration list for PBXNativeTarget "EduPanel" */;
@@ -617,6 +720,10 @@
 					100000000000000000000004 = {
 						CreatedOnToolsVersion = 15.0;
 					};
+					500000000000000000000004 = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = 100000000000000000000004;
+					};
 				};
 			};
 			buildConfigurationList = 100000000000000000000009 /* Build configuration list for PBXProject "EduPanel" */;
@@ -639,11 +746,19 @@
 			projectRoot = "";
 			targets = (
 				100000000000000000000004 /* EduPanel */,
+				500000000000000000000004 /* EduPanelTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		500000000000000000000007 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		100000000000000000000007 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -656,10 +771,28 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		500000000000000000000006 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				500000000000000000000101 /* AttendanceRulesTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		100000000000000000000006 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				44DAEDEB68159EF8DBB21A2C /* AttendanceViewModel.swift in Sources */,
+				449CC2DFDCDBCC6AF11B11F6 /* AttendanceModels.swift in Sources */,
+				4441635C509E160073486BB2 /* AttendanceRules.swift in Sources */,
+				44DCC40B973929689FE2D3B2 /* AttendanceView.swift in Sources */,
+				44245EE07B783EADBEA88E7D /* AttendanceSheets.swift in Sources */,
+				44FD733C5697A56D15C70031 /* AttendanceComponents.swift in Sources */,
+				44525D0A3C779012DA83DD2C /* AttendanceConnectivity.swift in Sources */,
+				4460E63AA2F7AF2F256F0E8F /* AttendanceRepository.swift in Sources */,
+				44A770000000000000000101 /* AttendanceQRService.swift in Sources */,
+				44A770000000000000000102 /* AttendanceQRScannerView.swift in Sources */,
 				44D300000000000000000101 /* ItemBankModels.swift in Sources */,
 				44D300000000000000000102 /* ItemBankRepository.swift in Sources */,
 				44D300000000000000000103 /* EvaluacionesAIService.swift in Sources */,
@@ -731,6 +864,11 @@
 				200000000000000000000106 /* PlanificacionesDetailView.swift in Sources */,
 				200000000000000000000107 /* VerUnidadDashboardView.swift in Sources */,
 				200000000000000000000108 /* VerUnidadBaseView.swift in Sources */,
+				20000000000000000000010C /* VerUnidadOverviewSections.swift in Sources */,
+				20000000000000000000010D /* VerUnidadOverviewSheets.swift in Sources */,
+				20000000000000000000010E /* ClassOverviewPrimarySections.swift in Sources */,
+				20000000000000000000010F /* ClassOverviewResourceSections.swift in Sources */,
+				200000000000000000000110 /* ClassOverviewSheets.swift in Sources */,
 				200000000000000000000109 /* VerUnidadCronogramaView.swift in Sources */,
 				20000000000000000000010A /* VerUnidadClasesView.swift in Sources */,
 				20000000000000000000010B /* LiveClassModeView.swift in Sources */,
@@ -777,7 +915,45 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		50000000000000000000000C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 100000000000000000000004 /* EduPanel */;
+			targetProxy = 50000000000000000000000B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		50000000000000000000000D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = cl.edupanel.appTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EduPanel.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EduPanel";
+			};
+			name = Debug;
+		};
+		50000000000000000000000E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = cl.edupanel.appTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EduPanel.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/EduPanel";
+			};
+			name = Release;
+		};
 		10000000000000000000000B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -944,6 +1120,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		50000000000000000000000A /* Build configuration list for PBXNativeTarget "EduPanelTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				50000000000000000000000D /* Debug */,
+				50000000000000000000000E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		100000000000000000000009 /* Build configuration list for PBXProject "EduPanel" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

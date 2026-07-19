@@ -4,13 +4,34 @@ struct RootView: View {
     @Environment(AuthSession.self) private var authSession
 
     var body: some View {
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-attendance-preview") {
+            NavigationStack {
+                AttendanceView(
+                    previewModel: AttendanceViewModel.preview(
+                        isSigned: ProcessInfo.processInfo.arguments.contains("-attendance-signed"),
+                        allConfirmed: ProcessInfo.processInfo.arguments.contains("-attendance-confirmed")
+                    ),
+                    startsWithQRScanner: ProcessInfo.processInfo.arguments.contains("-attendance-qr-preview")
+                )
+            }
+        } else {
+            authenticatedContent
+        }
+#else
+        authenticatedContent
+#endif
+    }
+
+    @ViewBuilder
+    private var authenticatedContent: some View {
         Group {
             switch authSession.state {
             case .checking:
                 LaunchLoadingView()
             case .configurationError(let message):
                 ConfigurationErrorView(message: message)
-            case .signedOut, .blocked:
+            case .signedOut, .blocked, .authorizationUnavailable:
                 LoginView()
             case .signedIn(let user):
                 if let repository = authSession.dashboardRepository {
@@ -70,4 +91,3 @@ private struct ConfigurationErrorView: View {
         .background(Color(.systemGroupedBackground))
     }
 }
-

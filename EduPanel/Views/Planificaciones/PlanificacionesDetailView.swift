@@ -11,9 +11,8 @@ struct PlanificacionesDetailView: View {
     @State private var isLoading = false
     @State private var activeSubject = "M\u{00FA}sica"
     @State private var saveStatus = ""
-
-    @State private var newUnitName = ""
-    @State private var newUnitType = "tradicional"
+    @State private var driveConnected = false
+    @State private var presentedSheet: PresentedSheet?
 
     @State private var renamingUnitId: Int? = nil
     @State private var renamingName = ""
@@ -21,9 +20,13 @@ struct PlanificacionesDetailView: View {
     @State private var unitToDelete: UnidadPlan? = nil
     @State private var showingDeleteAlert = false
 
-    @Environment(\.displayMode) private var displayMode
-
     private static let maxUnidades = 12
+
+    private enum PresentedSheet: String, Identifiable {
+        case newUnit
+
+        var id: String { rawValue }
+    }
 
     init(curso: String, asignatura: String? = nil, dashboardRepository: DashboardRepository, planificacionRepository: PlanificacionRepository) {
         self.curso = curso
@@ -54,7 +57,7 @@ struct PlanificacionesDetailView: View {
         .navigationTitle(curso)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
                 if !saveStatus.isEmpty {
                     EPStatusPill(
                         text: saveStatus,
@@ -62,6 +65,21 @@ struct PlanificacionesDetailView: View {
                         tint: saveStatus.contains("Error") ? .red : .green
                     )
                 }
+
+                Button {
+                    presentedSheet = .newUnit
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.body.weight(.black))
+                        .foregroundStyle(EPTheme.primary)
+                        .frame(width: 34, height: 34)
+                        .background(EPTheme.primary.opacity(0.12), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(units.count >= Self.maxUnidades)
+                .opacity(units.count >= Self.maxUnidades ? 0.4 : 1)
+                .accessibilityLabel("Crear nueva unidad")
+                .accessibilityHint("Abre el formulario para agregar una unidad al curso")
             }
         }
         .task {
@@ -69,6 +87,16 @@ struct PlanificacionesDetailView: View {
         }
         .sensoryFeedback(.success, trigger: saveStatus) { _, newValue in
             newValue == "Guardado"
+        }
+        .sheet(item: $presentedSheet) { sheet in
+            switch sheet {
+            case .newUnit:
+                NewUnitSheet { name, type in
+                    addUnit(name: name, type: type)
+                }
+                .presentationDetents([.height(360)])
+                .presentationDragIndicator(.visible)
+            }
         }
         .alert("¿Eliminar unidad?", isPresented: $showingDeleteAlert, presenting: unitToDelete) { unit in
             Button("Sí, borrar", role: .destructive) {
@@ -84,9 +112,7 @@ struct PlanificacionesDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 headerCard
-                creacionInlineCard
                 listaUnidades
-                sidebarReplica
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -123,80 +149,16 @@ struct PlanificacionesDetailView: View {
                 ProgressView(value: Double(coberturaGeneral) / 100.0)
                     .tint(estadoGeneral.tint)
 
-                if !displayMode.isSimple {
-                    HStack(spacing: 8) {
-                        NavigationLink(value: AppRoute.driveConnect) {
-                            actionLabel("Drive", icon: "externaldrive.fill", destacado: true)
-                        }
-                        .buttonStyle(.plain)
-                        ShareLink(item: exportResumenTexto) {
-                            actionLabel("Compartir", icon: "square.and.arrow.up", destacado: true)
-                        }
-                        .buttonStyle(.plain)
-                        Spacer(minLength: 0)
-                    }
+                HStack {
+                    EPStatusPill(
+                        text: driveConnected ? "Drive conectado" : "Drive no conectado",
+                        icon: driveConnected ? "checkmark.circle.fill" : "xmark.circle.fill",
+                        tint: driveConnected ? .green : .red
+                    )
+                    Spacer(minLength: 0)
                 }
             }
         }
-    }
-
-    // MARK: - Creación inline
-
-    private var creacionInlineCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            TextField("Nombre de la nueva unidad…", text: $newUnitName)
-                .textFieldStyle(.plain)
-                .font(.subheadline.weight(.semibold))
-                .padding(12)
-                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .onSubmit {
-                    addUnit()
-                }
-
-            HStack(spacing: 10) {
-                Picker("Tipo", selection: $newUnitType) {
-                    ForEach(TipoUnidad.all, id: \.self) { tipo in
-                        Text("\(TipoUnidad.emoji(tipo)) \(TipoUnidad.label(tipo))").tag(tipo)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                Button {
-                    addUnit()
-                } label: {
-                    Label("Agregar", systemImage: "plus")
-                        .font(.caption.weight(.black))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 11)
-                        .background(EPTheme.primary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .disabled(!puedeAgregar)
-                .opacity(puedeAgregar ? 1 : 0.4)
-            }
-
-            if units.count >= Self.maxUnidades {
-                Text("Máximo \(Self.maxUnidades) unidades por curso.")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.orange)
-            }
-        }
-        .padding(14)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
-                .foregroundStyle(EPTheme.primary.opacity(0.35))
-        )
-    }
-
-    private var puedeAgregar: Bool {
-        !newUnitName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && units.count < Self.maxUnidades
     }
 
     // MARK: - Lista de unidades
@@ -208,7 +170,7 @@ struct PlanificacionesDetailView: View {
                     EPEmptyState(
                         icon: "square.stack.3d.up.slash",
                         title: "No hay unidades en \(curso) todavía",
-                        message: "Empieza agregando una con el formulario de arriba."
+                        message: "Toca el botón + de arriba para crear la primera."
                     )
                 }
             } else {
@@ -341,177 +303,7 @@ struct PlanificacionesDetailView: View {
         pct == 100 ? .green : pct >= 50 ? .orange : pct > 0 ? .red : .gray
     }
 
-    // MARK: - Sidebar
-
-    private var sidebarReplica: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if !displayMode.isSimple {
-                proximasClasesCard
-                resumenCard
-                exportarCard
-            } else {
-                resumenCard
-            }
-        }
-    }
-
-    private var proximasClasesCard: some View {
-        EPWebCard {
-                VStack(alignment: .leading, spacing: 12) {
-                    EPSectionHeader(title: "Próximas clases", subtitle: "Clases con fecha asignada hacia el futuro.", icon: "calendar.badge.clock")
-
-                    if proximasClases.isEmpty {
-                        Text("No hay clases con fecha asignada hacia el futuro.")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(proximasClases) { clase in
-                            HStack(alignment: .top, spacing: 10) {
-                                Text("C\(clase.numero)")
-                                    .font(.caption.weight(.black))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 36, height: 36)
-                                    .background(EPTheme.color(hex: clase.color), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("\(clase.diaSemana) \(clase.fechaCorta)")
-                                        .font(.caption.weight(.black))
-                                        .foregroundStyle(.secondary)
-                                    Text("Clase \(clase.numero) · \(clase.unidadNombre)")
-                                        .font(.footnote.weight(.black))
-                                        .lineLimit(1)
-                                    Text(clase.oas)
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
-                                Spacer(minLength: 0)
-                            }
-                            .padding(10)
-                            .background(Color(.systemGray6).opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        }
-                    }
-                }
-            }
-
-    }
-
-    private var resumenCard: some View {
-        EPWebCard {
-            VStack(alignment: .leading, spacing: 10) {
-                EPSectionHeader(title: "Resumen", subtitle: nil, icon: "chart.pie.fill")
-                summaryLine("Unidades", "\(units.count) / \(Self.maxUnidades)")
-                summaryLine("Horas totales", "\(totalHoras)")
-                summaryLine("Con fechas", "\(units.filter(\.hasDates).count)")
-                summaryLine("Sin fechas", "\(units.filter { !$0.hasDates }.count)")
-                summaryLine("Cobertura", "\(coberturaGeneral)%")
-            }
-        }
-    }
-
-    private var exportarCard: some View {
-        EPWebCard {
-            VStack(alignment: .leading, spacing: 10) {
-                EPSectionHeader(title: "Compartir", subtitle: "Exportacion nativa v1 en texto para enviar o guardar.", icon: "square.and.arrow.up")
-                ShareLink(item: exportResumenTexto) {
-                    actionLabel("Resumen del curso", icon: "doc.text", destacado: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.plain)
-                ShareLink(item: exportTablaTexto) {
-                    actionLabel("Tabla de unidades", icon: "tablecells", destacado: false)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    private func summaryLine(_ title: String, _ value: String) -> some View {
-        HStack {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(value)
-                .font(.footnote.weight(.black))
-        }
-    }
-
     // MARK: - Datos derivados
-
-    private struct ProximaClase: Identifiable {
-        let id: String
-        let numero: Int
-        let unidadNombre: String
-        let color: String
-        let diaSemana: String
-        let fechaCorta: String
-        let oas: String
-        let fecha: Date
-    }
-
-    private var proximasClases: [ProximaClase] {
-        let hoy = Calendar.current.startOfDay(for: Date())
-        let weekdayFormatter = DateFormatter()
-        weekdayFormatter.locale = Locale(identifier: "es_CL")
-        weekdayFormatter.dateFormat = "EEE"
-
-        var lista: [ProximaClase] = []
-        for unit in units {
-            let subjectKey = PlanificacionRepository.cronogramaKey(asignatura: activeSubject, curso: curso, unidadId: String(unit.id))
-            let oldKey = PlanificacionRepository.cronogramaKey(curso: curso, unidadId: String(unit.id))
-            guard let crono = cronogramasByUnit[subjectKey] ?? cronogramasByUnit[oldKey] else { continue }
-
-            for clase in crono.clases {
-                guard let fecha = PlanDateParser.date(from: clase.fecha), fecha >= hoy else { continue }
-                lista.append(ProximaClase(
-                    id: "\(unit.id)-\(clase.numero)",
-                    numero: clase.numero,
-                    unidadNombre: unit.name,
-                    color: unit.color,
-                    diaSemana: weekdayFormatter.string(from: fecha).capitalized.replacingOccurrences(of: ".", with: ""),
-                    fechaCorta: PlanDateParser.short(clase.fecha),
-                    oas: clase.oaIds.isEmpty ? "Sin OA asignados" : clase.oaIds.joined(separator: ", "),
-                    fecha: fecha
-                ))
-            }
-        }
-
-        return Array(lista.sorted { $0.fecha < $1.fecha }.prefix(8))
-    }
-
-    private var exportResumenTexto: String {
-        var lines = [
-            "EduPanel - Planificacion por curso",
-            "Asignatura: \(activeSubject)",
-            "Curso: \(curso)",
-            "Unidades: \(units.count)",
-            "Horas totales: \(totalHoras)",
-            "Cobertura: \(coberturaGeneral)%",
-            ""
-        ]
-
-        for (index, unit) in units.enumerated() {
-            let estado = UnitPlanningState.state(for: unit)
-            lines.append("\(index + 1). \(unit.name)")
-            lines.append("   Estado: \(estado.label)")
-            lines.append("   Tipo: \(TipoUnidad.label(unit.type))")
-            lines.append("   Horas: \(unit.hours)")
-            lines.append("   Fechas: \(unit.start.isEmpty ? "-" : unit.start) - \(unit.end.isEmpty ? "-" : unit.end)")
-        }
-
-        return lines.joined(separator: "\n")
-    }
-
-    private var exportTablaTexto: String {
-        let header = "Unidad\tTipo\tHoras\tInicio\tFin\tEstado"
-        let rows = units.map { unit in
-            let estado = UnitPlanningState.state(for: unit)
-            return "\(unit.name)\t\(TipoUnidad.label(unit.type))\t\(unit.hours)\t\(unit.start.isEmpty ? "-" : unit.start)\t\(unit.end.isEmpty ? "-" : unit.end)\t\(estado.label)"
-        }
-        return ([header] + rows).joined(separator: "\n")
-    }
 
     private var totalHoras: Int {
         units.reduce(0) { $0 + $1.hours }
@@ -539,8 +331,8 @@ struct PlanificacionesDetailView: View {
 
     // MARK: - Acciones
 
-    private func addUnit() {
-        let name = newUnitName.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func addUnit(name rawName: String, type: String) {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, units.count < Self.maxUnidades else { return }
 
         let nextIndex = units.count + 1
@@ -553,10 +345,9 @@ struct PlanificacionesDetailView: View {
             hours: 8,
             start: "",
             end: "",
-            type: newUnitType,
+            type: type,
             unidadCurricularId: "unidad_\(nextIndex)"
         ))
-        newUnitName = ""
 
         Task { await savePlan() }
     }
@@ -607,6 +398,7 @@ struct PlanificacionesDetailView: View {
 
         do {
             let snap = try await dashboardRepository.fetchDashboard()
+            driveConnected = snap.preferences.googleDriveConnected
             let providedSubject = asignatura?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             activeSubject = providedSubject.isEmpty ? subject(from: snap) : providedSubject
 
@@ -652,5 +444,97 @@ struct PlanificacionesDetailView: View {
         formatter.locale = Locale(identifier: "es_CL")
         formatter.dateFormat = "yyyy-MM-dd"
         return (formatter.string(from: first), formatter.string(from: last))
+    }
+}
+
+private struct NewUnitSheet: View {
+    let onAdd: (String, String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var type = "tradicional"
+
+    private var canAdd: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Nueva unidad")
+                        .font(.title3.weight(.black))
+                    Text("Agrégala a tu planificación del curso.")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.footnote.weight(.black))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 36, height: 36)
+                        .background(Color(.systemGray5), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Cerrar")
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Nombre")
+                    .font(.caption.weight(.black))
+                    .foregroundStyle(.secondary)
+                TextField("Nombre de la nueva unidad", text: $name)
+                    .textFieldStyle(.plain)
+                    .font(.body.weight(.semibold))
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 50)
+                    .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .submitLabel(.done)
+                    .onSubmit(addUnit)
+                    .accessibilityIdentifier("new-unit-name")
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Tipo")
+                    .font(.caption.weight(.black))
+                    .foregroundStyle(.secondary)
+                Picker("Tipo de unidad", selection: $type) {
+                    ForEach(TipoUnidad.all, id: \.self) { option in
+                        Text("\(TipoUnidad.emoji(option)) \(TipoUnidad.label(option))").tag(option)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
+                .padding(.horizontal, 12)
+                .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+
+            Button(action: addUnit) {
+                Label("Agregar unidad", systemImage: "plus")
+                    .font(.body.weight(.black))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+                    .background(EPTheme.primary, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(!canAdd)
+            .opacity(canAdd ? 1 : 0.4)
+            .accessibilityIdentifier("add-new-unit")
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 12)
+        .background(Color(.systemGroupedBackground))
+    }
+
+    private func addUnit() {
+        guard canAdd else { return }
+        onAdd(name, type)
+        dismiss()
     }
 }

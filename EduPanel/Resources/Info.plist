@@ -20,6 +20,8 @@
 	<string>APPL</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>EduPanel usa la cámara para escanear las tarjetas QR de asistencia de tus estudiantes.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIApplicationSceneManifest</key>

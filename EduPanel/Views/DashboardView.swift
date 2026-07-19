@@ -28,6 +28,7 @@ struct DashboardView: View {
     @State private var newReminder = ""
     @State private var reminderColor: ReminderColor = .amarillo
     @AppStorage("edupanel_dashboard_reminders") private var remindersData = "[]"
+    @AppStorage(AppTheme.storageKey) private var appThemeRaw = AppTheme.auto.rawValue
 
     let user: AuthenticatedUser
     let onOpenProfile: () -> Void
@@ -125,11 +126,22 @@ struct DashboardView: View {
 
                 Spacer(minLength: 8)
 
-                Image(systemName: greeting.icon)
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(EPTheme.primary)
-                    .frame(width: 46, height: 46)
-                    .background(EPTheme.primaryLight, in: Circle())
+                // Interruptor oculto de apariencia: tocar el ícono del saludo
+                // alterna entre modo claro y oscuro sin controles visibles.
+                Button {
+                    let current = AppTheme(rawValue: appThemeRaw) ?? .auto
+                    appThemeRaw = (current == .oscuro ? AppTheme.claro : .oscuro).rawValue
+                } label: {
+                    Image(systemName: greeting.icon)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(EPTheme.primary)
+                        .frame(width: 46, height: 46)
+                        .background(EPTheme.primaryLight, in: Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .sensoryFeedback(.selection, trigger: appThemeRaw)
+                .accessibilityLabel("Alternar entre modo claro y oscuro")
             }
 
             Text(formattedHeroDate)
@@ -320,8 +332,6 @@ struct DashboardView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    QuickAction(title: "Calificar", icon: "checkmark.clipboard.fill", colors: [.green, .teal], kind: .route(.calificaciones))
-                    QuickAction(title: "Actividades", icon: "lightbulb.fill", colors: [.cyan, .blue], kind: .route(.actividades))
                     QuickAction(title: "Planificar", icon: "square.and.pencil", colors: [.purple, EPTheme.primary], kind: .action(onOpenPlanificaciones))
                     QuickAction(title: "Mi Perfil", icon: "person.crop.circle.fill", colors: [.indigo, .purple], kind: .action(onOpenProfile))
                 }

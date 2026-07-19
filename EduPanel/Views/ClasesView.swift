@@ -45,7 +45,7 @@ struct ClasesView: View {
             .padding(.bottom, 28)
         }
         .background(EPTheme.background)
-        .navigationTitle("Clases")
+        .navigationTitle("Asistencia")
         .task { await cargar() }
         .refreshable { await cargar(forceRefresh: true) }
     }
@@ -98,10 +98,10 @@ struct ClasesView: View {
 
     private func header(_ snapshot: DashboardSnapshot) -> some View {
         EPModuleHeader(
-            eyebrow: "Libro de clases",
-            title: "Agenda y leccionario",
-            subtitle: "Revisa tus bloques por d\u{00ED}a, estudiantes asociados y el acceso directo a las clases planificadas.",
-            icon: "calendar.badge.clock",
+            eyebrow: "Asistencia",
+            title: "Agenda y registro",
+            subtitle: "Elige un bloque para pasar asistencia y revisar la información de tu clase.",
+            icon: "person.3.sequence.fill",
             accent: .primary
         ) {
             HStack(spacing: 8) {
@@ -254,8 +254,24 @@ struct ClasesView: View {
                         EPStatusPill(text: item.unidad?.name ?? "Sin unidad", icon: item.unidad == nil ? "link.badge.plus" : "book.closed.fill", tint: item.unidad == nil ? .orange : .green)
                     }
 
-                    if let unidad = item.unidad, let asignatura = item.asignatura ?? item.bloque.asignatura {
-                        HStack(spacing: 8) {
+                    if let asignatura = item.asignatura ?? item.bloque.asignatura {
+                        NavigationLink(value: AppRoute.attendance(
+                            course: item.bloque.resumen,
+                            subject: asignatura,
+                            dateKey: DateHelpers.dateKey(for: dateForSelectedDay()),
+                            blockID: item.bloque.id
+                        )) {
+                            Label("Pasar asistencia", systemImage: "person.3.sequence.fill")
+                                .font(.system(size: 13, weight: .black))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity, minHeight: 42)
+                                .background(EPTheme.primary, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Abre la lista de este curso y bloque")
+
+                        if let unidad = item.unidad {
+                            HStack(spacing: 8) {
                             NavigationLink(value: AppRoute.verUnidad(
                                 curso: item.bloque.resumen,
                                 asignatura: asignatura,
@@ -281,6 +297,7 @@ struct ClasesView: View {
                                     .foregroundStyle(.secondary)
                             }
                             .buttonStyle(.plain)
+                        }
                         }
                     }
                 }
@@ -390,5 +407,15 @@ struct ClasesView: View {
         case "Viernes": return "Vie"
         default: return dia
         }
+    }
+
+    private func dateForSelectedDay(reference: Date = Date()) -> Date {
+        guard let dayIndex = diasSemana.firstIndex(of: selectedDia) else { return reference }
+        var calendar = Calendar.current
+        calendar.firstWeekday = 2
+        var components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: reference)
+        components.weekday = dayIndex + 2
+        components.hour = 12
+        return calendar.date(from: components) ?? reference
     }
 }

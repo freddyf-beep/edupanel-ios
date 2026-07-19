@@ -9,7 +9,7 @@ enum HTTPMethod: String {
 enum APIClientError: LocalizedError {
     case missingUser
     case invalidURL(String)
-    case requestFailed(status: Int, message: String)
+    case requestFailed(status: Int, code: String?, message: String, retryAfter: Int?)
     case invalidResponse
 
     var errorDescription: String? {
@@ -18,7 +18,7 @@ enum APIClientError: LocalizedError {
             return "No hay una sesión activa."
         case .invalidURL(let path):
             return "Ruta API invalida: \(path)"
-        case .requestFailed(_, let message):
+        case .requestFailed(_, _, let message, _):
             return message
         case .invalidResponse:
             return "Respuesta invalida del servidor."
@@ -74,8 +74,13 @@ struct APIClient {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIClientError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
-            let message = Self.extractErrorMessage(from: data) ?? "Request failed with status \(http.statusCode)."
-            throw APIClientError.requestFailed(status: http.statusCode, message: message)
+            let details = Self.extractError(from: data)
+            throw APIClientError.requestFailed(
+                status: http.statusCode,
+                code: details.code,
+                message: details.message ?? "Request failed with status \(http.statusCode).",
+                retryAfter: Self.retryAfterSeconds(from: http)
+            )
         }
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw APIClientError.invalidResponse
@@ -83,31 +88,50 @@ struct APIClient {
         return object
     }
 
-    private func request<Response: Decodable>(path: String, method: HTTPMethod, body: Data?) async throws -> Response {
+    private func request<Response: Decodable>(
+        path: String,
+        method: HTTPMethod,
+        body: Data?,
+        forcingTokenRefresh: Bool = false
+    ) async throws -> Response {
         guard let user = Auth.auth().currentUser else {
             throw APIClientError.missingUser
         }
 
-        let token = try await user.fetchIDToken()
+        let token = try await user.fetchIDToken(forcingRefresh: forcingTokenRefresh)
         let url = try makeURL(path: path)
-        var request = URLRequest(url: url)
-        request.httpMethod = method.rawValue
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = method.rawValue
+        urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
 
         if let body {
-            request.httpBody = body
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            urlRequest.httpBody = body
+            urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: urlRequest)
         guard let http = response as? HTTPURLResponse else {
             throw APIClientError.invalidResponse
         }
 
+        if http.statusCode == 401, !forcingTokenRefresh {
+            return try await request(
+                path: path,
+                method: method,
+                body: body,
+                forcingTokenRefresh: true
+            )
+        }
+
         guard (200..<300).contains(http.statusCode) else {
-            let message = Self.extractErrorMessage(from: data) ?? "Request failed with status \(http.statusCode)."
-            throw APIClientError.requestFailed(status: http.statusCode, message: message)
+            let details = Self.extractError(from: data)
+            throw APIClientError.requestFailed(
+                status: http.statusCode,
+                code: details.code,
+                message: details.message ?? "Request failed with status \(http.statusCode).",
+                retryAfter: Self.retryAfterSeconds(from: http)
+            )
         }
 
         do {
@@ -133,22 +157,27 @@ struct APIClient {
         return url
     }
 
-    private static func extractErrorMessage(from data: Data) -> String? {
-        guard
-            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let value = object["error"] as? String ?? object["message"] as? String,
-            !value.isEmpty
-        else {
-            return nil
+    private static func extractError(from data: Data) -> (message: String?, code: String?) {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return (nil, nil)
         }
-        return value
+        let rawMessage = object["error"] as? String ?? object["message"] as? String
+        let message = rawMessage?.isEmpty == false ? rawMessage : nil
+        let rawCode = object["code"] as? String
+        let code = rawCode?.isEmpty == false ? rawCode : nil
+        return (message, code)
+    }
+
+    private static func retryAfterSeconds(from response: HTTPURLResponse) -> Int? {
+        guard let value = response.value(forHTTPHeaderField: "Retry-After") else { return nil }
+        return Int(value.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 }
 
 private extension User {
-    func fetchIDToken() async throws -> String {
+    func fetchIDToken(forcingRefresh: Bool = false) async throws -> String {
         try await withCheckedThrowingContinuation { continuation in
-            getIDToken { token, error in
+            getIDTokenForcingRefresh(forcingRefresh) { token, error in
                 if let error {
                     continuation.resume(throwing: error)
                 } else if let token {

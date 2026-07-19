@@ -44,6 +44,14 @@ jobs:
           mkdir -p EduPanel/Resources
           ruby -rbase64 -e 'File.binwrite("EduPanel/Resources/GoogleService-Info.plist", Base64.decode64(ENV.fetch("GOOGLE_SERVICE_INFO_PLIST_BASE64")))'
 
+      - name: Boot an iOS 26 simulator
+        run: |
+          SIMULATOR_UDID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone 17 \(/ {print $2; exit}')"
+          test -n "$SIMULATOR_UDID"
+          echo "SIMULATOR_UDID=$SIMULATOR_UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIMULATOR_UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+
       - name: Build for iOS Simulator
         run: |
           set -o pipefail
@@ -61,16 +69,28 @@ jobs:
             CODE_SIGN_IDENTITY='' \
             2>&1 | tee build/ios26-xcodebuild.log
 
+      - name: Run attendance and QR tests
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination "id=$SIMULATOR_UDID" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            test \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            2>&1 | tee build/ios26-tests.log
+
       - name: Launch smoke test on an available iOS 26 simulator
         run: |
-          SIMULATOR_UDID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone 17 \(/ {print $2; exit}')"
-          test -n "$SIMULATOR_UDID"
-          xcrun simctl boot "$SIMULATOR_UDID" 2>/dev/null || true
-          xcrun simctl bootstatus "$SIMULATOR_UDID" -b
           APP_PATH="$(find "$DERIVED_DATA_PATH/Build/Products" -path '*/EduPanel.app' -type d | head -n 1)"
           test -d "$APP_PATH"
           xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
-          xcrun simctl launch "$SIMULATOR_UDID" cl.edupanel.app
+          xcrun simctl launch "$SIMULATOR_UDID" cl.edupanel.app -attendance-preview -attendance-qr-preview
+          sleep 3
           mkdir -p build/artifacts
           xcrun simctl io "$SIMULATOR_UDID" screenshot build/artifacts/ios26-smoke.png
 
@@ -81,5 +101,6 @@ jobs:
           name: edupanel-ios26-smoke
           path: |
             build/ios26-xcodebuild.log
+            build/ios26-tests.log
             build/artifacts/ios26-smoke.png
           if-no-files-found: warn
