@@ -159,7 +159,9 @@ struct AttendanceContextRepository: AttendanceContextRepositoryProtocol {
             weekday: item.dia,
             startTime: item.horaInicio,
             endTime: item.horaFin,
-            isFree: item.tipo == .libre
+            isFree: item.tipo.isFreeBlock,
+            courseID: item.courseID,
+            subjectID: item.subjectID
         )
     }
 

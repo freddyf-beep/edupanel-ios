@@ -74,8 +74,6 @@ struct CronogramaView: View {
             }
 
             heroCard
-            kpiGrid
-            filtrosSection
 
             EPWebTabBar(tabs: tabs, selected: $selectedVista)
 
@@ -232,159 +230,9 @@ struct CronogramaView: View {
         .shadow(color: .blue.opacity(0.25), radius: 14, y: 7)
     }
 
-    // MARK: - KPIs
 
-    private var kpiGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-            EPKPIBox(title: "Actividades", value: "\(viewModel.actividadesFiltradas.count)", subtitle: "totales", icon: "sparkles", tint: .blue)
-            EPKPIBox(title: "Unidades", value: "\(viewModel.unidadesConActividades)", subtitle: "con actividades", icon: "square.stack.3d.up.fill", tint: .purple)
-            if !displayMode.isSimple {
-                EPKPIBox(title: "Cursos", value: "\(viewModel.cursosDisponibles.count)", subtitle: "en horario", icon: "folder.fill", tint: EPTheme.primary)
-                EPKPIBox(title: "Semana", value: "\(viewModel.semanaActual)", subtitle: CronoDateHelpers.tituloMes(viewModel.currentDate), icon: "calendar", tint: .cyan)
-            }
-        }
-    }
 
-    // MARK: - Filtros
 
-    private var filtrosSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if displayMode.isSimple {
-                Button {
-                    withAnimation(EPTheme.spring) {
-                        filtrosVisibles.toggle()
-                    }
-                } label: {
-                    HStack {
-                        Label("Filtros", systemImage: "slider.horizontal.3")
-                            .font(.footnote.weight(.black))
-                            .foregroundStyle(EPTheme.primary)
-                        Spacer()
-                        if viewModel.hayFiltrosActivos {
-                            Text("\(viewModel.filtroCursos.count + viewModel.filtroUnidades.count) activos")
-                                .font(.caption2.weight(.black))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(EPTheme.primary, in: Capsule())
-                        } else {
-                            Image(systemName: filtrosVisibles ? "chevron.up" : "chevron.down")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(12)
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-                .buttonStyle(.plain)
-
-                if filtrosVisibles {
-                    filtrosCard
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-            } else {
-                filtrosCard
-            }
-        }
-    }
-
-    private var filtrosCard: some View {
-        EPWebCard(padding: 12) {
-            VStack(alignment: .leading, spacing: 12) {
-                if viewModel.cursoSeleccionado == "__todos__" {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("CURSO")
-                            .font(.system(size: 10, weight: .black))
-                            .foregroundStyle(.secondary)
-                        ReplicaFlowLayout(spacing: 8) {
-                            ForEach(viewModel.cursosDisponibles, id: \.self) { curso in
-                                filtroChip(
-                                    titulo: curso,
-                                    colorHex: nil,
-                                    seleccionado: viewModel.filtroCursos.contains(curso)
-                                ) {
-                                    if viewModel.filtroCursos.contains(curso) {
-                                        viewModel.filtroCursos.remove(curso)
-                                    } else {
-                                        viewModel.filtroCursos.insert(curso)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("UNIDAD")
-                        .font(.system(size: 10, weight: .black))
-                        .foregroundStyle(.secondary)
-                    if viewModel.unidades.isEmpty {
-                        Text("No hay unidades planificadas en este curso.")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ReplicaFlowLayout(spacing: 8) {
-                            ForEach(viewModel.unidades) { unidad in
-                                filtroChip(
-                                    titulo: unidad.nombre,
-                                    colorHex: unidad.colorHex,
-                                    seleccionado: viewModel.filtroUnidades.contains(unidad.unidadId)
-                                ) {
-                                    if viewModel.filtroUnidades.contains(unidad.unidadId) {
-                                        viewModel.filtroUnidades.remove(unidad.unidadId)
-                                    } else {
-                                        viewModel.filtroUnidades.insert(unidad.unidadId)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if viewModel.hayFiltrosActivos {
-                    Button {
-                        withAnimation(EPTheme.spring) {
-                            viewModel.filtroCursos.removeAll()
-                            viewModel.filtroUnidades.removeAll()
-                        }
-                    } label: {
-                        Label("Limpiar todo", systemImage: "xmark.circle.fill")
-                            .font(.caption.weight(.black))
-                            .foregroundStyle(EPTheme.primary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-
-    private func filtroChip(titulo: String, colorHex: String?, seleccionado: Bool, accion: @escaping () -> Void) -> some View {
-        Button {
-            withAnimation(EPTheme.spring) {
-                accion()
-            }
-        } label: {
-            HStack(spacing: 5) {
-                if seleccionado {
-                    Image(systemName: "checkmark")
-                        .font(.caption2.weight(.black))
-                }
-                if let colorHex {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(seleccionado ? Color.white : EPTheme.color(hex: colorHex))
-                        .frame(width: 8, height: 8)
-                }
-                Text(titulo)
-                    .font(.caption.weight(.black))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(seleccionado ? .white : EPTheme.primary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(seleccionado ? EPTheme.primary : EPTheme.primary.opacity(0.1), in: Capsule())
-        }
-        .buttonStyle(.plain)
-    }
 }
 
 // MARK: - Editor de actividad

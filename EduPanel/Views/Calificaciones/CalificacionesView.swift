@@ -446,13 +446,17 @@ struct CalificacionesView: View {
             resultado.append(limpio)
         }
         asignaturasDelCurso(selectedCurso).forEach(agregar)
-        (snapshot?.preferences.asignaturasHabilitadas ?? []).forEach(agregar)
+        let catalogSubjects = snapshot?.activeCourses.flatMap(\.subjects).map(\.label) ?? []
+        (catalogSubjects.isEmpty ? (snapshot?.preferences.asignaturasHabilitadas ?? []) : catalogSubjects).forEach(agregar)
         agregar(snapshot?.profile.especialidad ?? "")
         if resultado.isEmpty { agregar("M\u{00FA}sica") }
         return resultado
     }
 
     private func asignaturasDelCurso(_ curso: String) -> [String] {
+        if let subjects = snapshot?.course(id: nil, named: curso)?.subjects.map(\.label), !subjects.isEmpty {
+            return subjects
+        }
         guard !curso.isEmpty, let horario = snapshot?.horario else { return [] }
         var resultado: [String] = []
         var vistos = Set<String>()

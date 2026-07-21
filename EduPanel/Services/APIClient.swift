@@ -4,6 +4,7 @@ import FirebaseAuth
 enum HTTPMethod: String {
     case get = "GET"
     case post = "POST"
+    case delete = "DELETE"
 }
 
 enum APIClientError: LocalizedError {
@@ -59,11 +60,20 @@ struct APIClient {
         return try await request(path: path, method: .post, body: payload)
     }
 
+    func delete<Body: Encodable, Response: Decodable>(_ path: String, body: Body) async throws -> Response {
+        let payload = try JSONEncoder().encode(body)
+        return try await request(path: path, method: .delete, body: payload)
+    }
+
     func postJSONObject(_ path: String, body: [String: Any]) async throws -> [String: Any] {
+        try await postJSONObject(path, body: body, forcingTokenRefresh: false)
+    }
+
+    private func postJSONObject(_ path: String, body: [String: Any], forcingTokenRefresh: Bool) async throws -> [String: Any] {
         guard JSONSerialization.isValidJSONObject(body) else { throw APIClientError.invalidResponse }
         guard let user = Auth.auth().currentUser else { throw APIClientError.missingUser }
 
-        let token = try await user.fetchIDToken()
+        let token = try await user.fetchIDToken(forcingRefresh: forcingTokenRefresh)
         var request = URLRequest(url: try makeURL(path: path))
         request.httpMethod = HTTPMethod.post.rawValue
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -73,6 +83,9 @@ struct APIClient {
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIClientError.invalidResponse }
+        if http.statusCode == 401, !forcingTokenRefresh {
+            return try await postJSONObject(path, body: body, forcingTokenRefresh: true)
+        }
         guard (200..<300).contains(http.statusCode) else {
             let details = Self.extractError(from: data)
             throw APIClientError.requestFailed(

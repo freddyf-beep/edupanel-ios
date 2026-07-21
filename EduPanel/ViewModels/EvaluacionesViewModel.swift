@@ -22,6 +22,8 @@ final class EvaluacionesViewModel {
     var guiasDesdeCache = false
     var selectedCurso: String = ""
     var selectedSubject: String?
+    var selectedCourseID: String?
+    var selectedSubjectID: String?
 
     private let dashboardRepository: DashboardRepository
     private let evaluacionesRepository: EvaluacionesRepository
@@ -61,13 +63,18 @@ final class EvaluacionesViewModel {
     }
 
     private var asignaturasHabilitadas: [String] {
-        (snapshot?.preferences.asignaturasHabilitadas ?? [])
+        let catalog = snapshot?.activeCourses.flatMap(\.subjects).map(\.label) ?? []
+        if !catalog.isEmpty { return Array(Set(catalog)).sorted() }
+        return (snapshot?.preferences.asignaturasHabilitadas ?? [])
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
     }
 
     /// Asignaturas que el docente enseña en un curso, leídas de los bloques del horario.
     func asignaturasDelCurso(_ curso: String) -> [String] {
+        if let configured = snapshot?.course(id: nil, named: curso)?.subjects.map(\.label), !configured.isEmpty {
+            return configured
+        }
         guard !curso.isEmpty, let horario = snapshot?.horario else { return [] }
         var resultado: [String] = []
         var vistos = Set<String>()
@@ -91,17 +98,20 @@ final class EvaluacionesViewModel {
     /// Cambia de curso reseteando la asignatura elegida para que se re-derive del nuevo curso.
     func seleccionarCurso(_ curso: String) async {
         selectedCurso = curso
+        selectedCourseID = snapshot?.course(id: nil, named: curso)?.courseID
         selectedSubject = nil
         await loadContenido()
     }
 
     func seleccionarAsignatura(_ asignatura: String) async {
         selectedSubject = asignatura
+        selectedSubjectID = snapshot?.course(id: selectedCourseID, named: selectedCurso)?.subjects.first { $0.label == asignatura }?.id
         await loadContenido()
     }
 
     func estudiantes(curso: String) -> [EstudiantePerfil] {
-        (snapshot?.studentsByCourse[curso] ?? []).sorted { $0.orden < $1.orden }
+        guard let snapshot else { return [] }
+        return snapshot.students(forCourseID: snapshot.course(id: nil, named: curso)?.courseID, name: curso).sorted { $0.orden < $1.orden }
     }
 
     func load() async {
@@ -116,6 +126,7 @@ final class EvaluacionesViewModel {
             if selectedCurso.isEmpty || !snap.courses.contains(selectedCurso) {
                 selectedCurso = snap.courses.first ?? ""
             }
+            selectedCourseID = snap.course(id: nil, named: selectedCurso)?.courseID
             await loadContenido()
         } catch {
             errorMessage = error.localizedDescription

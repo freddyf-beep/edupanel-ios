@@ -270,6 +270,28 @@ struct AttendanceScheduleBlock: Identifiable, Equatable, Hashable, Sendable {
     let startTime: String
     let endTime: String
     let isFree: Bool
+    let courseID: String?
+    let subjectID: String?
+
+    init(
+        id: String,
+        course: String,
+        weekday: String,
+        startTime: String,
+        endTime: String,
+        isFree: Bool,
+        courseID: String? = nil,
+        subjectID: String? = nil
+    ) {
+        self.id = id
+        self.course = course
+        self.weekday = weekday
+        self.startTime = startTime
+        self.endTime = endTime
+        self.isFree = isFree
+        self.courseID = courseID
+        self.subjectID = subjectID
+    }
 }
 
 struct AttendanceRosterStudent: Identifiable, Equatable, Hashable, Sendable {

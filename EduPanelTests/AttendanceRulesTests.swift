@@ -191,6 +191,20 @@ final class AttendanceRulesTests: XCTestCase {
         )
     }
 
+    func testQRPayloadStructureRejectsInvisibleOrWrappedCharacters() throws {
+        let valid = "epatt:v1:" + String(repeating: "a", count: 64) + ":1:" + String(repeating: "B", count: 43)
+        XCTAssertEqual(try AttendanceQRAPIResolver.validatedPayload(valid), valid)
+        XCTAssertThrowsError(try AttendanceQRAPIResolver.validatedPayload("\n\(valid)"))
+        XCTAssertThrowsError(try AttendanceQRAPIResolver.validatedPayload("\(valid)\u{200B}"))
+    }
+
+    func testAcceptsDeterministicPayloadGeneratedByWebCore() throws {
+        // Generado por createAttendanceQrPayload en attendance-qr-core.test.ts
+        // con identidad ficticia y secreto exclusivo de tests.
+        let webPayload = "epatt:v1:fda96b09c0d7b5f1fcc548bcbf84ada56fbcadf49e40c08f25068421c1b4118c:1:PLVTVv4iTR0AO7P0Cggt_DHeMDVdL5OUJsu1WjfwlJo"
+        XCTAssertEqual(try AttendanceQRAPIResolver.validatedPayload(webPayload), webPayload)
+    }
+
     func testValidQRMarksPendingStudentPresentAndConfirmed() throws {
         let block = try XCTUnwrap(makeNewBlock())
         let result = AttendanceRules.applyQR(

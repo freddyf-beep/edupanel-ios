@@ -37,6 +37,7 @@ final class ProfileViewModel {
     var draftCursoTipos: [String: TipoCurricular] = [:]
     var isLoading = false
     var errorMessage: String?
+    var operationMessage: String?
     var saveProfileStatus: ProfileSaveStatus = .idle
     var saveSchoolStatus: ProfileSaveStatus = .idle
     var savePreferencesStatus: ProfileSaveStatus = .idle
@@ -223,6 +224,30 @@ final class ProfileViewModel {
         scheduleHorarioSave()
     }
 
+    func upsertBloques(_ bloques: [ClaseHorario]) async -> Bool {
+        guard var snap = snapshot else { return false }
+        do {
+            let replacing = Set(bloques.map(\.id))
+            let existing = snap.horario.filter { !replacing.contains($0.id) }
+            try AcademicContract.validateBatch(existing: existing, candidates: bloques, journey: snap.journey)
+            snap.horario = existing + bloques
+            if let activeID = snap.activeSchedulePeriodID,
+               let index = snap.schedulePeriods.firstIndex(where: { $0.periodID == activeID }) {
+                snap.schedulePeriods[index].blocks = snap.horario
+            }
+            snapshot = snap
+            saveHorarioStatus = .saving
+            try await repository.saveHorario(snap.horario)
+            saveHorarioStatus = .saved
+            resetLater(\.saveHorarioStatus)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            saveHorarioStatus = .error
+            return false
+        }
+    }
+
     func removeBloque(id: String) {
         guard var snap = snapshot else { return }
         snap.horario.removeAll { $0.id == id }
@@ -243,6 +268,22 @@ final class ProfileViewModel {
     func renameCurso(_ oldName: String, to newName: String) {
         let clean = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty, clean != oldName, var snap = snapshot else { return }
+
+        if let index = snap.courseCatalog.firstIndex(where: { $0.name == oldName }) {
+            guard snap.courseCatalog[index].kind == .taller else { return }
+            snap.courseCatalog[index].name = clean
+            snap.courseCatalog[index].workshopName = clean
+            let updatedCourse = snap.courseCatalog[index]
+            snap.horario = snap.horario.map { block in
+                block.courseID == updatedCourse.courseID || block.resumen == oldName ? block.copia(resumen: clean) : block
+            }
+            snapshot = snap
+            Task {
+                await saveCourse(updatedCourse)
+                try? await repository.saveHorario(snap.horario)
+            }
+            return
+        }
 
         snap.horario = snap.horario.map { bloque in
             bloque.resumen == oldName ? bloque.copia(resumen: clean) : bloque
@@ -274,8 +315,158 @@ final class ProfileViewModel {
         }
     }
 
+    func saveCourse(_ course: AcademicCourse) async {
+        do {
+            let previous = snapshot?.courseCatalog.first(where: { $0.courseID == course.courseID })
+            try await repository.saveCourse(course, previousDataKey: previous?.dataKey)
+            await refresh()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func curriculumSubjects(for level: String) async -> [CurriculumSubjectOption] {
+        do {
+            return try await repository.getCurriculumSubjectsForLevel(level)
+        } catch {
+            errorMessage = error.localizedDescription
+            return AcademicContract.subjects(for: level)
+        }
+    }
+
+    func archiveCourse(_ courseID: String) async {
+        guard let snap = snapshot, let course = snap.courseCatalog.first(where: { $0.courseID == courseID }) else { return }
+        do {
+            try await repository.archiveCourse(course, currentSchedule: snap.horario)
+            await refresh()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func restoreCourse(_ courseID: String) async {
+        guard let course = snapshot?.courseCatalog.first(where: { $0.courseID == courseID }) else { return }
+        do {
+            let result = try await repository.restoreCourse(course)
+            operationMessage = result.conflicts == 0
+                ? "Curso restaurado con \(result.restored) bloque(s)."
+                : "Curso restaurado. \(result.conflicts) bloque(s) quedaron pendientes por conflictos de horario."
+            await refresh()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func deletionImpactSummary(for course: AcademicCourse) async -> String? {
+        guard course.isDeleteEligible, let snapshot else { return nil }
+        do {
+            let config: AppConfig
+            switch AppConfig.load() {
+            case .success(let value): config = value
+            case .failure(let issue): throw issue
+            }
+            let client = APIClient(config: config)
+            let response = try await client.postJSONObject(
+                "/api/courses/\(course.courseID)/preview-delete",
+                body: ["schoolId": snapshot.schoolID]
+            )
+            guard let impact = response["impact"] as? [String: Any] else {
+                throw APIClientError.invalidResponse
+            }
+            let blocks = impact["scheduleBlocks"] as? Int ?? 0
+            let periods = impact["schedulePeriods"] as? Int ?? 0
+            let rosters = impact["studentRosters"] as? Int ?? 0
+            let documents = impact["totalDocuments"] as? Int ?? 0
+            return "Se eliminarán \(documents) documentos, \(blocks) bloques en \(periods) periodos y \(rosters) listas de estudiantes. No se tocarán sistemas externos."
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func permanentlyDeleteCourse(_ course: AcademicCourse, exactName: String) async -> Bool {
+        guard course.isDeleteEligible, exactName == course.name, let snapshot else { return false }
+        do {
+            let config: AppConfig
+            switch AppConfig.load() {
+            case .success(let value): config = value
+            case .failure(let issue): throw issue
+            }
+            let client = APIClient(config: config)
+            struct Request: Encodable { let schoolId: String; let exactName: String }
+            struct Response: Decodable { let success: Bool }
+            let response: Response = try await client.delete(
+                "/api/courses/\(course.courseID)",
+                body: Request(schoolId: snapshot.schoolID, exactName: exactName)
+            )
+            if response.success { await refresh() }
+            return response.success
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func importLegacyCourses() async {
+        guard let snapshot else { return }
+        do {
+            _ = try await repository.importLegacyCourses(
+                schedule: snapshot.horario,
+                levelMapping: snapshot.nivelMapping,
+                courseKinds: snapshot.cursoTipos
+            )
+            await refresh()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func saveJourney(_ journey: JourneyConfig) async -> Bool {
+        do {
+            try await repository.saveJourney(journey)
+            if var snapshot { snapshot.journey = journey; self.snapshot = snapshot }
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func saveSchedulePeriod(_ period: SchedulePeriod) async -> Bool {
+        guard var snapshot else { return false }
+        do {
+            try AcademicContract.validatePublishedPeriod(period, among: snapshot.schedulePeriods)
+            try await repository.saveSchedule(period, schoolID: snapshot.schoolID, journey: snapshot.journey)
+            if let index = snapshot.schedulePeriods.firstIndex(where: { $0.periodID == period.periodID }) {
+                snapshot.schedulePeriods[index] = period
+            } else {
+                snapshot.schedulePeriods.append(period)
+            }
+            snapshot.activeSchedulePeriodID = AcademicContract.resolvePublishedPeriod(snapshot.schedulePeriods, for: snapshot.date)?.periodID
+            if snapshot.activeSchedulePeriodID == period.periodID { snapshot.horario = period.blocks }
+            self.snapshot = snapshot
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     func recolorCurso(_ curso: String, colorHex: String) {
         guard var snap = snapshot else { return }
+        if let index = snap.courseCatalog.firstIndex(where: { $0.name == curso }) {
+            snap.courseCatalog[index].colorHex = colorHex
+            let updated = snap.courseCatalog[index]
+            snap.horario = snap.horario.map { block in
+                block.courseID == updated.courseID || block.resumen == curso ? block.copia(colorHex: colorHex) : block
+            }
+            snapshot = snap
+            Task {
+                await saveCourse(updated)
+                try? await repository.saveHorario(snap.horario)
+            }
+            return
+        }
         snap.horario = snap.horario.map { bloque in
             bloque.resumen == curso ? bloque.copia(colorHex: colorHex) : bloque
         }
@@ -311,7 +502,9 @@ final class ProfileViewModel {
     // MARK: - Estudiantes
 
     func students(for curso: String) -> [EstudiantePerfil] {
-        (snapshot?.studentsByCourse[curso] ?? []).sorted {
+        guard let snapshot else { return [] }
+        let key = snapshot.course(id: nil, named: curso)?.courseID ?? curso
+        return (snapshot.studentsByCourse[key] ?? snapshot.studentsByCourse[curso] ?? []).sorted {
             if $0.orden != $1.orden { return $0.orden < $1.orden }
             return $0.nombre.localizedCaseInsensitiveCompare($1.nombre) == .orderedAscending
         }
@@ -319,14 +512,17 @@ final class ProfileViewModel {
 
     func updateStudents(curso: String, _ transform: ([EstudiantePerfil]) -> [EstudiantePerfil]) {
         guard var snap = snapshot else { return }
-        let next = transform(snap.studentsByCourse[curso] ?? [])
-        snap.studentsByCourse[curso] = next
-        snap.studentCounts[curso] = next.count
+        let key = snap.course(id: nil, named: curso)?.courseID ?? curso
+        let next = transform(snap.studentsByCourse[key] ?? snap.studentsByCourse[curso] ?? [])
+        snap.studentsByCourse[key] = next
+        snap.studentCounts[key] = next.count
         snapshot = snap
     }
 
     func saveStudents(curso: String) async {
-        guard let list = snapshot?.studentsByCourse[curso] else { return }
+        guard let snapshot else { return }
+        let key = snapshot.course(id: nil, named: curso)?.courseID ?? curso
+        guard let list = snapshot.studentsByCourse[key] ?? snapshot.studentsByCourse[curso] else { return }
         saveStudentsStatus = .saving
         do {
             try await repository.saveStudents(list, for: curso)
@@ -352,33 +548,40 @@ final class ProfileViewModel {
 
 extension ProfileViewModel {
     func courseSummaries(for snapshot: DashboardSnapshot) -> [ProfileCourseSummary] {
-        snapshot.courses.map { course in
-            let blocks = snapshot.academicClasses.filter { $0.resumen == course }
+        let configured: [(String, AcademicCourse?)] = snapshot.courseCatalog.isEmpty
+            ? snapshot.courses.map { ($0, nil) }
+            : snapshot.courseCatalog.map { ($0.name, $0) }
+        return configured.map { course, config in
+            let blocks = snapshot.academicClasses.filter { $0.courseID == config?.courseID || $0.resumen == course }
             let minutes = blocks.reduce(0) { total, item in
                 total + max(0, DateHelpers.minutes(from: item.horaFin) - DateHelpers.minutes(from: item.horaInicio))
             }
-            let students = snapshot.studentsByCourse[course] ?? []
-            let subjects = Array(Set(blocks.compactMap(\.asignatura))).sorted()
-            let type = draftCursoTipos[course] ?? .oficial
+            let students = snapshot.students(forCourseID: config?.courseID, name: course)
+            let subjects = config?.subjects.map(\.label) ?? Array(Set(blocks.compactMap(\.asignatura))).sorted()
+            let type: TipoCurricular = config?.kind == .taller ? .taller : (draftCursoTipos[course] ?? .oficial)
             return ProfileCourseSummary(
+                courseID: config?.courseID ?? course,
+                dataKey: config?.dataKey ?? DashboardRepository.buildCursoId(course),
                 name: course,
                 colorHex: blocks.first?.colorHex ?? "#EC4899",
                 blocks: blocks.count,
                 minutes: minutes,
                 students: students.count,
                 pie: students.filter(\.pie).count,
-                level: draftNivelMapping[course],
+                level: config?.level ?? draftNivelMapping[course],
                 type: type,
                 subjects: subjects,
                 weeklyBlocks: blocks.sorted {
-                    let leftDay = DateHelpers.workdays.firstIndex(of: $0.dia) ?? 0
-                    let rightDay = DateHelpers.workdays.firstIndex(of: $1.dia) ?? 0
+                    let leftDay = DateHelpers.scheduleDays.firstIndex(of: $0.dia) ?? 0
+                    let rightDay = DateHelpers.scheduleDays.firstIndex(of: $1.dia) ?? 0
                     if leftDay != rightDay { return leftDay < rightDay }
                     return $0.horaInicio < $1.horaInicio
                 },
-                studentsList: students.sorted { $0.orden < $1.orden }
+                studentsList: students.sorted { $0.orden < $1.orden },
+                academicKind: config?.kind,
+                status: config?.status ?? .active
             )
-        }
+        }.filter { $0.status == .active }
     }
 }
 
@@ -400,7 +603,11 @@ extension ClaseHorario {
             horaFin: horaFin ?? self.horaFin,
             colorHex: colorHex ?? self.colorHex,
             tipo: tipo ?? self.tipo,
-            asignatura: asignatura ?? self.asignatura
+            asignatura: asignatura ?? self.asignatura,
+            courseID: courseID,
+            subjectID: subjectID,
+            moduleID: moduleID,
+            exceptional: exceptional
         )
     }
 }

@@ -394,7 +394,9 @@ extension Text {
 }
 
 struct ProfileCourseSummary: Identifiable {
-    var id: String { name }
+    var id: String { courseID }
+    let courseID: String
+    let dataKey: String
     let name: String
     let colorHex: String
     let blocks: Int
@@ -406,6 +408,8 @@ struct ProfileCourseSummary: Identifiable {
     let subjects: [String]
     let weeklyBlocks: [ClaseHorario]
     let studentsList: [EstudiantePerfil]
+    let academicKind: AcademicCourseKind?
+    let status: AcademicCourseStatus
 
     var levelText: String {
         if type != .oficial {
@@ -427,8 +431,8 @@ struct ProfileCourseSummary: Identifiable {
         return subjectNames.map { subject in
             let blocks = grouped[subject] ?? []
             let sorted = blocks.sorted {
-                let leftDay = DateHelpers.workdays.firstIndex(of: $0.dia) ?? 0
-                let rightDay = DateHelpers.workdays.firstIndex(of: $1.dia) ?? 0
+                let leftDay = DateHelpers.scheduleDays.firstIndex(of: $0.dia) ?? 0
+                let rightDay = DateHelpers.scheduleDays.firstIndex(of: $1.dia) ?? 0
                 if leftDay != rightDay { return leftDay < rightDay }
                 return $0.horaInicio < $1.horaInicio
             }

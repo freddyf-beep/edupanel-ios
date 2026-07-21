@@ -427,6 +427,9 @@ struct PlanificacionesDetailView: View {
     }
 
     private func subject(from snapshot: DashboardSnapshot) -> String {
+        if let subject = snapshot.course(id: nil, named: curso)?.subjects.first?.label {
+            return subject
+        }
         if let subject = snapshot.preferences.asignaturasHabilitadas
             .map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) })
             .first(where: { !$0.isEmpty }) {

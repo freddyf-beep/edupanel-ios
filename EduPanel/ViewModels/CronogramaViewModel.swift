@@ -87,6 +87,8 @@ final class CronogramaViewModel {
     var saveStatus: ProfileSaveStatus = .idle
 
     var asignatura = "M\u{00FA}sica"
+    var selectedCourseID: String?
+    var selectedSubjectID: String?
     var cursoSeleccionado = "__todos__"
     var filtroCursos: Set<String> = []
     var filtroUnidades: Set<String> = []
@@ -113,7 +115,8 @@ final class CronogramaViewModel {
             let snapshot = try await dashboardRepository.fetchDashboard()
             horario = snapshot.horario
 
-            let subjects = snapshot.preferences.asignaturasHabilitadas
+            let configuredSubjects = snapshot.activeCourses.flatMap(\.subjects).map(\.label)
+            let subjects = (configuredSubjects.isEmpty ? snapshot.preferences.asignaturasHabilitadas : configuredSubjects)
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
             if let primera = subjects.first {
@@ -125,7 +128,7 @@ final class CronogramaViewModel {
                 }
             }
 
-            cursosDisponibles = Array(Set(snapshot.academicClasses.map(\.resumen))).sorted()
+            cursosDisponibles = snapshot.courses
             await cargarActividades()
         } catch {
             errorMessage = error.localizedDescription
@@ -164,6 +167,11 @@ final class CronogramaViewModel {
 
     func seleccionarCurso(_ curso: String) async {
         cursoSeleccionado = curso
+        if curso != "__todos__" {
+            let snapshot = try? await dashboardRepository.fetchDashboard()
+            selectedCourseID = snapshot?.course(id: nil, named: curso)?.courseID
+            selectedSubjectID = snapshot?.course(id: selectedCourseID, named: curso)?.subjects.first { $0.label == asignatura }?.id
+        }
         isLoading = true
         await cargarActividades()
         isLoading = false

@@ -1,4 +1,6 @@
 #include "Shared.xcconfig"
 SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG
 ENABLE_PREVIEWS = YES
-
+// Solo el Simulator comparte localhost con este Mac. En un iPhone, pasa una
+// URL HTTPS accesible mediante EDUPANEL_API_BASE_URL al invocar xcodebuild.
+EDUPANEL_API_BASE_URL = http:/$()/127.0.0.1:3000

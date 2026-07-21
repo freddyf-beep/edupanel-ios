@@ -23,6 +23,14 @@ struct ProfileView: View {
                     if let error = viewModel.errorMessage {
                         ProfileErrorBanner(message: error)
                     }
+                    if let message = viewModel.operationMessage {
+                        Label(message, systemImage: "checkmark.circle.fill")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.green)
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
 
                     profileHero(snapshot)
                     profileTabs
@@ -53,17 +61,17 @@ struct ProfileView: View {
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
-                .frame(height: displayMode.isSimple ? 88 : 132)
+                .frame(height: displayMode.isSimple ? 30 : 44)
 
                 Button {
                     showBannerPicker = true
                 } label: {
                     Image(systemName: "paintpalette.fill")
-                        .font(.headline.weight(.bold))
+                        .font(.caption.weight(.bold))
                         .foregroundStyle(.white)
-                        .frame(width: 42, height: 42)
+                        .frame(width: 28, height: 28)
                         .background(.white.opacity(0.18), in: Circle())
-                        .padding(12)
+                        .padding(8)
                 }
                 .buttonStyle(.plain)
             }
@@ -121,15 +129,60 @@ struct ProfileView: View {
     }
 
     private func kpiGrid(_ snapshot: DashboardSnapshot) -> some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-            ProfileKPI(label: "Cursos", value: "\(snapshot.courses.count)", icon: "folder.fill", color: EPTheme.primary)
-                    ProfileKPI(label: "Bloques clase", value: "\(snapshot.academicClasses.count)", icon: "clock.fill", color: .blue, hint: "\(formatMinutes(snapshot.totalAcademicMinutes)) semanales")
-                    ProfileKPI(label: "Estudiantes", value: "\(snapshot.totalStudents)", icon: "person.2.fill", color: .green)
-                    ProfileKPI(label: "PIE", value: "\(snapshot.totalPIEStudents)", icon: "number", color: .orange, hint: snapshot.totalStudents > 0 ? "\(Int(round(Double(snapshot.totalPIEStudents) / Double(snapshot.totalStudents) * 100)))% del total" : nil)
-                    ProfileKPI(label: "Bloques libres", value: "\(snapshot.nonTeachingBlocks.count)", icon: "cup.and.saucer.fill", color: .purple, hint: "\(formatMinutes(snapshot.totalFreeMinutes)) sem.")
-                    ProfileKPI(label: "Tu perfil", value: "\(snapshot.setupProgress)%", icon: "sparkles", color: snapshot.setupProgress == 100 ? .green : .teal, hint: snapshot.setupProgress == 100 ? "Perfil completo" : "completado")
+        HStack(spacing: 0) {
+            Spacer()
+            kpiStatItem(
+                value: "\(snapshot.courses.count)",
+                label: "Cursos",
+                icon: "folder.fill",
+                color: EPTheme.primary
+            )
+            
+            Spacer()
+            Divider()
+                .frame(height: 24)
+            Spacer()
+            
+            let hoursText = formatMinutes(snapshot.totalAcademicMinutes)
+            kpiStatItem(
+                value: hoursText,
+                label: "Horas Clase",
+                icon: "clock.fill",
+                color: .blue
+            )
+            
+            Spacer()
+            Divider()
+                .frame(height: 24)
+            Spacer()
+            
+            kpiStatItem(
+                value: "\(snapshot.totalStudents)",
+                label: "Alumnos",
+                icon: "person.2.fill",
+                color: .green
+            )
+            Spacer()
+        }
+        .padding(.vertical, 12)
+        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func kpiStatItem(value: String, label: String, icon: String, color: Color) -> some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.footnote)
+                    .foregroundStyle(color)
+                Text(value)
+                    .font(.system(size: 18, weight: .black, design: .rounded))
+            }
+            Text(label)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.secondary)
         }
     }
+
 
     private var profileTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -170,11 +223,9 @@ struct ProfileView: View {
         case .resumen:
             ProfileSummaryTab(viewModel: viewModel, snapshot: snapshot, selectedTab: $selectedTab)
         case .semana:
-            ProfileWeekTab(viewModel: viewModel, snapshot: snapshot, selectedTab: $selectedTab)
+            ProfileWeekTab(viewModel: viewModel, snapshot: snapshot, selectedTab: $selectedTab, teacherName: user.displayName ?? "")
         case .cursos:
             ProfileCoursesTab(viewModel: viewModel, snapshot: snapshot, selectedTab: $selectedTab)
-        case .asignaturas:
-            ProfileSubjectsTab(viewModel: viewModel, snapshot: snapshot)
         case .identidad:
             ProfileIdentityTab(viewModel: viewModel)
         case .conexiones:
