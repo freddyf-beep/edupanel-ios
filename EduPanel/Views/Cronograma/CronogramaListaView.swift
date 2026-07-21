@@ -6,28 +6,45 @@ struct CronogramaListaView: View {
 
     @State private var actividadAEliminar: ActividadCronograma?
 
-    private var ordenadas: [ActividadCronograma] {
-        viewModel.actividadesFiltradas.sorted { lhs, rhs in
-            if lhs.semana != rhs.semana { return lhs.semana < rhs.semana }
+    private var ordenadasPorSemana: [(semana: Int, actividades: [ActividadCronograma])] {
+        let grouped = Dictionary(grouping: viewModel.actividadesFiltradas) { $0.semana }
+        return grouped.map { (semana: $0.key, actividades: $0.value.sorted { lhs, rhs in
             let diaIzq = CronoDateHelpers.diasIndice[lhs.dia] ?? 0
             let diaDer = CronoDateHelpers.diasIndice[rhs.dia] ?? 0
             if diaIzq != diaDer { return diaIzq < diaDer }
             return lhs.hora < rhs.hora
-        }
+        }) }
+        .sorted { $0.semana < $1.semana }
     }
 
     var body: some View {
-        EPWebCard(padding: 12) {
-            if ordenadas.isEmpty {
-                EPEmptyState(
-                    icon: "list.bullet.rectangle",
-                    title: "Sin actividades",
-                    message: "No hay actividades en este filtro. Créalas desde la vista Semana."
-                )
+        VStack(alignment: .leading, spacing: 14) {
+            if ordenadasPorSemana.isEmpty {
+                EPWebCard {
+                    EPEmptyState(
+                        icon: "list.bullet.rectangle",
+                        title: "Sin actividades",
+                        message: "No hay actividades registradas en esta selección. Créalas desde la vista Semana."
+                    )
+                }
             } else {
-                VStack(spacing: 8) {
-                    ForEach(ordenadas) { actividad in
-                        fila(actividad)
+                ForEach(ordenadasPorSemana, id: \.semana) { grupo in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("SEMANA \(grupo.semana)")
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundStyle(.secondary)
+
+                        VStack(spacing: 0) {
+                            ForEach(grupo.actividades) { actividad in
+                                fila(actividad)
+
+                                if actividad.id != grupo.actividades.last?.id {
+                                    Divider()
+                                        .padding(.leading, 26)
+                                }
+                            }
+                        }
+                        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                 }
             }
@@ -53,57 +70,55 @@ struct CronogramaListaView: View {
         let dia = Calendar.current.component(.day, from: fecha)
         let mes = Calendar.current.component(.month, from: fecha)
 
-        return HStack(spacing: 10) {
-            RoundedRectangle(cornerRadius: 2)
+        return HStack(spacing: 12) {
+            Capsule()
                 .fill(EPTheme.color(hex: viewModel.colorUnidad(actividad.unidad)))
-                .frame(width: 4, height: 38)
+                .frame(width: 4, height: 26)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(actividad.nombre)
                         .font(.footnote.weight(.black))
                         .lineLimit(1)
                     if let curso = actividad.cursoOrigen, !curso.isEmpty {
                         Text(curso)
-                            .font(.system(size: 9, weight: .black))
+                            .font(.system(size: 8, weight: .black))
                             .foregroundStyle(EPTheme.primary)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(EPTheme.primary.opacity(0.1), in: Capsule())
+                            .background(EPTheme.primary.opacity(0.08), in: Capsule())
+                            .lineLimit(1)
                     }
                 }
-                Text("Sem \(actividad.semana) · \(actividad.dia) \(dia)/\(mes) · \(actividad.hora) · \(actividad.duracion)\(actividad.unidad.isEmpty ? "" : " · \(viewModel.nombreUnidad(actividad.unidad))")")
-                    .font(.caption.weight(.semibold))
+                Text("\(actividad.dia) \(dia)/\(mes) · \(actividad.hora) (\(actividad.duracion))\(actividad.unidad.isEmpty ? "" : " · \(viewModel.nombreUnidad(actividad.unidad))")")
+                    .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(1)
             }
 
-            Spacer(minLength: 6)
+            Spacer(minLength: 8)
 
-            Button {
-                onEdit(actividad)
+            Menu {
+                Button {
+                    onEdit(actividad)
+                } label: {
+                    Label("Editar actividad", systemImage: "pencil")
+                }
+
+                Button(role: .destructive) {
+                    actividadAEliminar = actividad
+                } label: {
+                    Label("Eliminar", systemImage: "trash")
+                }
             } label: {
-                Image(systemName: "pencil")
-                    .font(.system(size: 10, weight: .black))
+                Image(systemName: "ellipsis")
+                    .font(.subheadline.weight(.bold))
                     .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
-                    .background(Color(.systemGray5), in: Circle())
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-
-            Button {
-                actividadAEliminar = actividad
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 10, weight: .black))
-                    .foregroundStyle(.red)
-                    .frame(width: 28, height: 28)
-                    .background(.red.opacity(0.1), in: Circle())
-            }
-            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
     }
 }

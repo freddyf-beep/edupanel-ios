@@ -4,11 +4,15 @@ struct ProfileWeekTab: View {
     @Bindable var viewModel: ProfileViewModel
     let snapshot: DashboardSnapshot
     @Binding var selectedTab: ProfileTabKey
+    var teacherName: String = ""
 
     @State private var showWizard = false
     @State private var editingBloque: ClaseHorario?
     @State private var editingGrupo: ProfileNonTeachingGroup?
     @State private var bloqueAEliminar: ClaseHorario?
+    @State private var isExporting = false
+    @State private var showJourneyEditor = false
+    @State private var showPeriodEditor = false
 
     @Environment(\.displayMode) private var displayMode
 
@@ -26,15 +30,72 @@ struct ProfileWeekTab: View {
                         .fixedSize()
                 }
 
-                Button {
-                    showWizard = true
-                } label: {
+                HStack(spacing: 10) {
+                    Button { showJourneyEditor = true } label: {
+                        Label("Jornada", systemImage: "clock.badge.checkmark")
+                            .font(.footnote.weight(.black)).frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button { showPeriodEditor = true } label: {
+                        Label("Vigencia", systemImage: "calendar.badge.clock")
+                            .font(.footnote.weight(.black)).frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                Button { showWizard = true } label: {
                     Label("Nuevo bloque", systemImage: "plus")
-                        .font(.footnote.weight(.black))
-                        .frame(maxWidth: .infinity)
+                        .font(.footnote.weight(.black)).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(EPTheme.primary)
+            }
+
+            ProfileSection(title: "Vista calendario", icon: "calendar", hint: "\(snapshot.horario.count) bloques · \(weekHourRange(snapshot).label)") {
+                if snapshot.horario.isEmpty {
+                    ProfileEmptyAction(
+                        icon: "calendar.badge.plus",
+                        title: "Tu semana está vacía",
+                        message: "Agrega tu primer bloque con el asistente para ver la grilla semanal.",
+                        buttonTitle: "Nuevo bloque"
+                    ) {
+                        showWizard = true
+                    }
+                } else {
+                    ProfileWeekCalendar(snapshot: snapshot) { bloque in
+                        editingBloque = bloque
+                    }
+
+                    Menu {
+                        Button {
+                            exportSchedule(landscape: false)
+                        } label: {
+                            Label("Vertical (Carta)", systemImage: "rectangle.portrait")
+                        }
+
+                        Button {
+                            exportSchedule(landscape: true)
+                        } label: {
+                            Label("Horizontal (Apaisado)", systemImage: "rectangle")
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: isExporting ? "checkmark.circle.fill" : "square.and.arrow.up")
+                                .font(.caption.weight(.bold))
+                            Text("Exportar horario")
+                                .font(.footnote.weight(.bold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .background(EPTheme.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                    .disabled(isExporting)
+                }
+            }
+
+            if !displayMode.isSimple {
+                listaDetalladaSection
             }
 
             if !nonTeachingList.isEmpty {
@@ -52,30 +113,15 @@ struct ProfileWeekTab: View {
                     }
                 }
             }
-
-            ProfileSection(title: "Vista calendario", icon: "calendar", hint: "\(snapshot.horario.count) bloques · \(weekHourRange(snapshot).label)") {
-                if snapshot.horario.isEmpty {
-                    ProfileEmptyAction(
-                        icon: "calendar.badge.plus",
-                        title: "Tu semana está vacía",
-                        message: "Agrega tu primer bloque con el asistente para ver la grilla semanal.",
-                        buttonTitle: "Nuevo bloque"
-                    ) {
-                        showWizard = true
-                    }
-                } else {
-                    ProfileWeekCalendar(snapshot: snapshot) { bloque in
-                        editingBloque = bloque
-                    }
-                }
-            }
-
-            if !displayMode.isSimple {
-                listaDetalladaSection
-            }
         }
         .sheet(isPresented: $showWizard) {
             BloqueWizardSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showJourneyEditor) {
+            JourneyEditorSheet(viewModel: viewModel, current: snapshot.journey)
+        }
+        .sheet(isPresented: $showPeriodEditor) {
+            SchedulePeriodEditorSheet(viewModel: viewModel, snapshot: snapshot)
         }
         .sheet(item: $editingBloque) { bloque in
             BloqueEditorSheet(viewModel: viewModel, bloque: bloque)
@@ -99,40 +145,59 @@ struct ProfileWeekTab: View {
         }
     }
 
-    private var listaDetalladaSection: some View {
-            ProfileSection(title: "Lista detallada", icon: "clock.fill", hint: "Edita o elimina bloques uno por uno") {
-                if snapshot.horario.isEmpty {
-                    Text("Sin bloques aún.")
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    VStack(alignment: .leading, spacing: 14) {
-                        ForEach(DateHelpers.workdays, id: \.self) { day in
-                            let items = snapshot.horario
-                                .filter { $0.dia == day }
-                                .sorted { $0.horaInicio < $1.horaInicio }
+    private func exportSchedule(landscape: Bool) {
+        isExporting = true
+        ScheduleExporter.exportAndShare(
+            horario: snapshot.horario,
+            teacherName: teacherName,
+            isLandscape: landscape
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            isExporting = false
+        }
+    }
 
-                            if !items.isEmpty {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text(day.uppercased())
-                                        .font(.system(size: 10, weight: .black))
-                                        .foregroundStyle(.secondary)
-                                    VStack(spacing: 8) {
-                                        ForEach(items) { item in
-                                            ProfileScheduleRow(item: item) {
-                                                editingBloque = item
-                                            } onDelete: {
-                                                bloqueAEliminar = item
-                                            }
+    private var listaDetalladaSection: some View {
+        ProfileSection(title: "Lista detallada", icon: "clock.fill", hint: "Edita o elimina bloques uno por uno") {
+            if snapshot.horario.isEmpty {
+                Text("Sin bloques aún.")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(snapshot.journey?.activeDays.map(\.rawValue) ?? DateHelpers.workdays, id: \.self) { day in
+                        let items = snapshot.horario
+                            .filter { $0.dia == day }
+                            .sorted { $0.horaInicio < $1.horaInicio }
+
+                        if !items.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(day.uppercased())
+                                    .font(.system(size: 10, weight: .black))
+                                    .foregroundStyle(.secondary)
+                                
+                                VStack(spacing: 0) {
+                                    ForEach(items) { item in
+                                        ProfileScheduleRow(item: item) {
+                                            editingBloque = item
+                                        } onDelete: {
+                                            bloqueAEliminar = item
+                                        }
+                                        
+                                        if item.id != items.last?.id {
+                                            Divider()
+                                                .padding(.leading, 28)
                                         }
                                     }
                                 }
+                                .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
                         }
                     }
                 }
             }
+        }
     }
 
     private func weekHourRange(_ snapshot: DashboardSnapshot) -> (minHour: Int, maxHour: Int, label: String) {
@@ -151,8 +216,8 @@ struct ProfileWeekTab: View {
 
         return grouped.compactMap { key, blocks in
             let sorted = blocks.sorted {
-                let leftDay = DateHelpers.workdays.firstIndex(of: $0.dia) ?? 0
-                let rightDay = DateHelpers.workdays.firstIndex(of: $1.dia) ?? 0
+                let leftDay = DateHelpers.scheduleDays.firstIndex(of: $0.dia) ?? 0
+                let rightDay = DateHelpers.scheduleDays.firstIndex(of: $1.dia) ?? 0
                 if leftDay != rightDay { return leftDay < rightDay }
                 return $0.horaInicio < $1.horaInicio
             }
@@ -397,6 +462,24 @@ struct BloqueColisionAviso: View {
 
 // MARK: - Wizard de 4 pasos
 
+private struct ScheduleOccurrenceDraft: Identifiable, Hashable {
+    let id: UUID
+    var day: String
+    var startTime: String
+    var endTime: String
+    var moduleID: String?
+    var exceptional: Bool
+
+    init(day: String, startTime: String = "08:00", endTime: String = "09:30", moduleID: String? = nil, exceptional: Bool = false) {
+        id = UUID()
+        self.day = day
+        self.startTime = startTime
+        self.endTime = endTime
+        self.moduleID = moduleID
+        self.exceptional = exceptional
+    }
+}
+
 struct BloqueWizardSheet: View {
     @Environment(\.dismiss) private var dismiss
     let viewModel: ProfileViewModel
@@ -405,14 +488,20 @@ struct BloqueWizardSheet: View {
 
     @State private var paso = 1
     @State private var tipo: TipoHorario = .clase
-    @State private var dias: Set<String> = []
-    @State private var horaInicio = "08:00"
-    @State private var horaFin = "09:30"
+    @State private var occurrences: [ScheduleOccurrenceDraft] = []
     @State private var resumen = ""
     @State private var asignatura = ""
     @State private var colorHex = "#3B82F6"
 
     private var tipoLibre: Bool { tipo.isFreeBlock }
+    private var selectedDays: Set<String> { Set(occurrences.map(\.day)) }
+    private var availableDays: [String] {
+        let configured = viewModel.snapshot?.journey?.activeDays.map(\.rawValue) ?? []
+        return configured.isEmpty ? DateHelpers.workdays : configured
+    }
+    private var courseOptions: [AcademicCourse] { viewModel.snapshot?.activeCourses ?? [] }
+    private var selectedCourse: AcademicCourse? { courseOptions.first { $0.name == resumen } }
+    private var subjectOptions: [CourseSubjectSelection] { selectedCourse?.subjects ?? [] }
 
     var body: some View {
         NavigationStack {
@@ -548,14 +637,14 @@ struct BloqueWizardSheet: View {
                 .foregroundStyle(.secondary)
 
             VStack(spacing: 8) {
-                ForEach(DateHelpers.workdays, id: \.self) { dia in
-                    let isSelected = dias.contains(dia)
+                ForEach(availableDays, id: \.self) { dia in
+                    let isSelected = selectedDays.contains(dia)
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             if isSelected {
-                                dias.remove(dia)
+                                occurrences.removeAll { $0.day == dia }
                             } else {
-                                dias.insert(dia)
+                                occurrences.append(defaultOccurrence(for: dia))
                             }
                         }
                     } label: {
@@ -582,21 +671,73 @@ struct BloqueWizardSheet: View {
 
     private var pasoHorario: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                BloqueHoraField(titulo: "Inicio", hora: $horaInicio)
-                BloqueHoraField(titulo: "Fin", hora: $horaFin)
-            }
+            ForEach(Array(occurrences.enumerated()), id: \.element.id) { index, occurrence in
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text(occurrence.day)
+                            .font(.headline.weight(.black))
+                        Spacer()
+                        if occurrences.filter({ $0.day == occurrence.day }).count > 1 {
+                            Button(role: .destructive) { occurrences.remove(at: index) } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
 
-            if DateHelpers.minutes(from: horaFin) <= DateHelpers.minutes(from: horaInicio) {
-                Label("La hora de fin debe ser posterior al inicio.", systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.red)
-            }
+                    if let modules = journeyModules(for: occurrence.day), !modules.isEmpty {
+                        Picker("Módulo de jornada", selection: occurrenceBinding(index, \.moduleID)) {
+                            Text("Seleccionar módulo").tag(String?.none)
+                            ForEach(modules.filter { $0.kind == .lectivo }) { module in
+                                Text("\(module.name) · \(module.startTime)–\(module.endTime)").tag(String?.some(module.moduleID))
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .onChange(of: occurrence.moduleID) { _, newValue in
+                            guard let module = modules.first(where: { $0.moduleID == newValue }) else { return }
+                            occurrences[index].startTime = module.startTime
+                            occurrences[index].endTime = module.endTime
+                            occurrences[index].exceptional = false
+                        }
 
-            ForEach(Array(dias).sorted(by: ordenDias), id: \.self) { dia in
-                if let colision = BloqueHelpers.colision(en: viewModel.horarioActual, dia: dia, horaInicio: horaInicio, horaFin: horaFin, excluyendo: nil) {
-                    BloqueColisionAviso(colision: colision)
+                        Toggle("Horario excepcional", isOn: occurrenceBinding(index, \.exceptional))
+                            .font(.footnote.weight(.semibold))
+                    }
+
+                    HStack(spacing: 10) {
+                        BloqueHoraField(titulo: "Inicio", hora: occurrenceBinding(index, \.startTime))
+                        BloqueHoraField(titulo: "Fin", hora: occurrenceBinding(index, \.endTime))
+                    }
+                    .disabled(hasJourneyModules(for: occurrence.day) && !occurrence.exceptional)
+
+                    if !AcademicContract.isValidTimeRange(start: occurrence.startTime, end: occurrence.endTime) {
+                        Label("La hora de fin debe ser posterior al inicio.", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.red)
+                    }
+
+                    if let colision = BloqueHelpers.colision(
+                        en: viewModel.horarioActual,
+                        dia: occurrence.day,
+                        horaInicio: occurrence.startTime,
+                        horaFin: occurrence.endTime,
+                        excluyendo: nil
+                    ) {
+                        BloqueColisionAviso(colision: colision)
+                    }
                 }
+                .padding(12)
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+
+            ForEach(Array(selectedDays).sorted(by: ordenDias), id: \.self) { day in
+                Button {
+                    occurrences.append(defaultOccurrence(for: day))
+                } label: {
+                    Label("Agregar otra hora el \(day.lowercased())", systemImage: "plus.circle.fill")
+                        .font(.footnote.weight(.bold))
+                }
+                .buttonStyle(.bordered)
             }
         }
     }
@@ -606,42 +747,44 @@ struct BloqueWizardSheet: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(tipoLibre ? "Etiqueta" : "Curso")
                     .profileFieldLabel()
-                TextField(tipoLibre ? BloqueHelpers.etiquetaLibre(tipo) : "Ej. 4° A", text: $resumen)
-                    .textFieldStyle(.plain)
-                    .font(.footnote.weight(.semibold))
-                    .padding(12)
-                    .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                    .disabled(presetCurso != nil && !tipoLibre)
+                if tipoLibre {
+                    TextField(BloqueHelpers.etiquetaLibre(tipo), text: $resumen)
+                        .textFieldStyle(.plain)
+                        .font(.footnote.weight(.semibold))
+                        .padding(12)
+                        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                } else if courseOptions.isEmpty {
+                    Label("Crea primero el curso o taller en Mis Cursos.", systemImage: "folder.badge.plus")
+                        .font(.footnote.weight(.bold))
+                        .foregroundStyle(.orange)
+                } else {
+                    Picker("Curso", selection: $resumen) {
+                        Text("Seleccionar curso").tag("")
+                        ForEach(courseOptions) { course in Text(course.name).tag(course.name) }
+                    }
+                    .pickerStyle(.menu)
+                    .onChange(of: resumen) { _, _ in
+                        asignatura = ""
+                        if let selectedCourse { colorHex = selectedCourse.colorHex }
+                    }
+                    .disabled(presetCurso != nil)
+                }
             }
 
             if !tipoLibre {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Asignatura")
                         .profileFieldLabel()
-                    TextField("Ej. Música, Lenguaje…", text: $asignatura)
-                        .textFieldStyle(.plain)
-                        .font(.footnote.weight(.semibold))
-                        .padding(12)
-                        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                    Picker("Asignatura", selection: $asignatura) {
+                        Text("Seleccionar asignatura").tag("")
+                        ForEach(subjectOptions) { subject in Text(subject.label).tag(subject.label) }
+                    }
+                    .pickerStyle(.menu)
                         .disabled(presetAsignatura != nil)
-
-                    let sugerencias = BloqueHelpers.sugerenciasAsignatura(viewModel)
-                    if presetAsignatura == nil, !sugerencias.isEmpty {
-                        ReplicaFlowLayout(spacing: 6) {
-                            ForEach(sugerencias, id: \.self) { sugerencia in
-                                Button {
-                                    asignatura = sugerencia
-                                } label: {
-                                    Text(sugerencia)
-                                        .font(.caption2.weight(.black))
-                                        .foregroundStyle(EPTheme.primary)
-                                        .padding(.horizontal, 9)
-                                        .padding(.vertical, 5)
-                                        .background(EPTheme.primary.opacity(0.1), in: Capsule())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
+                    if subjectOptions.isEmpty {
+                        Text("Activa las asignaturas de este curso en Mis Cursos.")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.orange)
                     }
                 }
             }
@@ -658,8 +801,10 @@ struct BloqueWizardSheet: View {
                 .profileFieldLabel()
             VStack(alignment: .leading, spacing: 4) {
                 Label("\(tipo == .libre ? "Bloque libre" : tipo.label) · \(resumen.isEmpty ? "—" : resumen)", systemImage: BloqueHelpers.icono(tipo))
-                Label(Array(dias).sorted(by: ordenDias).joined(separator: ", "), systemImage: "calendar")
-                Label("\(horaInicio) – \(horaFin)", systemImage: "clock")
+                Label(Array(selectedDays).sorted(by: ordenDias).joined(separator: ", "), systemImage: "calendar")
+                ForEach(occurrences) { occurrence in
+                    Label("\(occurrence.day): \(occurrence.startTime) – \(occurrence.endTime)", systemImage: "clock")
+                }
                 if !tipoLibre, !asignatura.isEmpty {
                     Label(asignatura, systemImage: "book.closed")
                 }
@@ -693,7 +838,7 @@ struct BloqueWizardSheet: View {
                     crearBloques()
                 }
             } label: {
-                Label(paso < 4 ? "Continuar" : "Crear bloque\(dias.count == 1 ? "" : "s")", systemImage: paso < 4 ? "chevron.right" : "plus")
+                Label(paso < 4 ? "Continuar" : "Crear bloque\(occurrences.count == 1 ? "" : "s")", systemImage: paso < 4 ? "chevron.right" : "plus")
                     .font(.footnote.weight(.black))
                     .frame(maxWidth: .infinity)
             }
@@ -709,9 +854,9 @@ struct BloqueWizardSheet: View {
     private var puedeContinuar: Bool {
         switch paso {
         case 2:
-            return !dias.isEmpty
+            return !occurrences.isEmpty
         case 3:
-            return DateHelpers.minutes(from: horaFin) > DateHelpers.minutes(from: horaInicio)
+            return occurrences.allSatisfy(occurrenceIsValid)
         case 4:
             let nombreOk = !resumen.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             let asignaturaOk = tipoLibre || !asignatura.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -724,24 +869,68 @@ struct BloqueWizardSheet: View {
     private func crearBloques() {
         let nombre = resumen.trimmingCharacters(in: .whitespacesAndNewlines)
         let materia = asignatura.trimmingCharacters(in: .whitespacesAndNewlines)
-        for (indice, dia) in Array(dias).sorted(by: ordenDias).enumerated() {
-            let bloque = ClaseHorario(
-                id: BloqueHelpers.nuevoUid(dia: dia, resumen: nombre, indice: indice),
+        let selectedSubject = selectedCourse?.subjects.first { $0.label == materia }
+        let bloques = occurrences.enumerated().map { index, occurrence in
+            ClaseHorario(
+                id: BloqueHelpers.nuevoUid(dia: occurrence.day, resumen: nombre, indice: index),
                 resumen: nombre,
-                dia: dia,
-                horaInicio: horaInicio,
-                horaFin: horaFin,
+                dia: occurrence.day,
+                horaInicio: occurrence.startTime,
+                horaFin: occurrence.endTime,
                 colorHex: colorHex,
                 tipo: tipo,
-                asignatura: tipoLibre ? nil : materia
+                asignatura: tipoLibre ? nil : materia,
+                courseID: tipoLibre ? nil : selectedCourse?.courseID,
+                subjectID: tipoLibre ? nil : selectedSubject?.id,
+                moduleID: occurrence.moduleID,
+                exceptional: occurrence.exceptional
             )
-            viewModel.upsertBloque(bloque)
         }
-        dismiss()
+        Task {
+            if await viewModel.upsertBloques(bloques) { dismiss() }
+        }
     }
 
     private func ordenDias(_ lhs: String, _ rhs: String) -> Bool {
-        (DateHelpers.workdays.firstIndex(of: lhs) ?? 9) < (DateHelpers.workdays.firstIndex(of: rhs) ?? 9)
+        (DateHelpers.scheduleDays.firstIndex(of: lhs) ?? 9) < (DateHelpers.scheduleDays.firstIndex(of: rhs) ?? 9)
+    }
+
+    private func defaultOccurrence(for day: String) -> ScheduleOccurrenceDraft {
+        if let module = journeyModules(for: day)?.first(where: { $0.kind == .lectivo }) {
+            return ScheduleOccurrenceDraft(
+                day: day,
+                startTime: module.startTime,
+                endTime: module.endTime,
+                moduleID: module.moduleID
+            )
+        }
+        return ScheduleOccurrenceDraft(day: day)
+    }
+
+    private func journeyModules(for day: String) -> [JourneyModule]? {
+        guard let typedDay = AcademicScheduleDay(rawValue: day), let journey = viewModel.snapshot?.journey else { return nil }
+        return journey.modulesByDay[typedDay] ?? []
+    }
+
+    private func hasJourneyModules(for day: String) -> Bool {
+        journeyModules(for: day) != nil
+    }
+
+    private func occurrenceIsValid(_ occurrence: ScheduleOccurrenceDraft) -> Bool {
+        guard AcademicContract.isValidTimeRange(start: occurrence.startTime, end: occurrence.endTime) else { return false }
+        guard let modules = journeyModules(for: occurrence.day) else { return true }
+        if occurrence.exceptional { return true }
+        return modules.contains {
+            $0.moduleID == occurrence.moduleID && $0.kind == .lectivo &&
+            $0.startTime == occurrence.startTime && $0.endTime == occurrence.endTime
+        }
+    }
+
+    private func occurrenceBinding<Value>(_ index: Int, _ keyPath: WritableKeyPath<ScheduleOccurrenceDraft, Value>) -> Binding<Value> {
+        Binding(
+            get: { occurrences[index][keyPath: keyPath] },
+            set: { occurrences[index][keyPath: keyPath] = $0 }
+        )
     }
 }
 
@@ -782,7 +971,7 @@ struct BloqueEditorSheet: View {
                             Text("Día")
                                 .profileFieldLabel()
                             Picker("Día", selection: $dia) {
-                                ForEach(DateHelpers.workdays, id: \.self) { Text($0).tag($0) }
+                                ForEach(viewModel.snapshot?.journey?.activeDays.map(\.rawValue) ?? DateHelpers.workdays, id: \.self) { Text($0).tag($0) }
                             }
                             .pickerStyle(.menu)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -872,6 +1061,8 @@ struct BloqueEditorSheet: View {
     }
 
     private func guardar() {
+        let course = viewModel.snapshot?.course(id: bloque.courseID, named: resumen)
+        let subject = course?.subjects.first { $0.label == asignatura }
         let actualizado = ClaseHorario(
             id: bloque.id,
             resumen: resumen.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -880,10 +1071,15 @@ struct BloqueEditorSheet: View {
             horaFin: horaFin,
             colorHex: colorHex,
             tipo: tipo,
-            asignatura: tipoLibre ? nil : asignatura.trimmingCharacters(in: .whitespacesAndNewlines)
+            asignatura: tipoLibre ? nil : asignatura.trimmingCharacters(in: .whitespacesAndNewlines),
+            courseID: tipoLibre ? nil : course?.courseID,
+            subjectID: tipoLibre ? nil : subject?.id,
+            moduleID: bloque.moduleID,
+            exceptional: bloque.exceptional
         )
-        viewModel.upsertBloque(actualizado)
-        dismiss()
+        Task {
+            if await viewModel.upsertBloques([actualizado]) { dismiss() }
+        }
     }
 }
 
@@ -991,75 +1187,437 @@ struct GrupoNoLectivoSheet: View {
     }
 }
 
+// MARK: - Jornada y vigencia
+
+private struct JourneyEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let viewModel: ProfileViewModel
+    @State private var draft: JourneyConfig
+    @State private var errorMessage: String?
+    @State private var isSaving = false
+    @State private var pendingAffectedBlocks = 0
+    @State private var confirmedAffectedBlocks = false
+
+    private let regions = [
+        "Arica y Parinacota", "Tarapacá", "Antofagasta", "Atacama", "Coquimbo", "Valparaíso",
+        "Metropolitana de Santiago", "O’Higgins", "Maule", "Ñuble", "Biobío", "La Araucanía",
+        "Los Ríos", "Los Lagos", "Aysén", "Magallanes y de la Antártica Chilena"
+    ]
+
+    init(viewModel: ProfileViewModel, current: JourneyConfig?) {
+        self.viewModel = viewModel
+        let year = Calendar(identifier: .gregorian).component(.year, from: Date())
+        _draft = State(initialValue: current ?? JourneyConfig(
+            version: 2,
+            region: "Metropolitana de Santiago",
+            year: year,
+            activeDays: Array(AcademicScheduleDay.allCases.prefix(5)),
+            modulesByDay: [:]
+        ))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Contexto") {
+                    Picker("Región", selection: $draft.region) {
+                        Text("Seleccionar").tag("")
+                        if !draft.region.isEmpty && !regions.contains(draft.region) {
+                            Text(draft.region).tag(draft.region)
+                        }
+                        ForEach(regions, id: \.self) { Text($0).tag($0) }
+                    }
+                    Stepper("Año \(draft.year)", value: $draft.year, in: 2020...2100)
+                }
+
+                Section("Días activos") {
+                    ForEach(AcademicScheduleDay.allCases) { day in
+                        Toggle(day.rawValue, isOn: Binding(
+                            get: { draft.activeDays.contains(day) },
+                            set: { enabled in
+                                if enabled { draft.activeDays.append(day); sortDays() }
+                                else { draft.activeDays.removeAll { $0 == day } }
+                            }
+                        ))
+                    }
+                }
+
+                ForEach(draft.activeDays) { day in
+                    Section(day.rawValue) {
+                        let modules = draft.modulesByDay[day] ?? []
+                        ForEach(Array(modules.enumerated()), id: \.element.id) { index, _ in
+                            JourneyModuleEditorRow(
+                                module: moduleBinding(day: day, index: index),
+                                onDelete: { draft.modulesByDay[day]?.remove(at: index) }
+                            )
+                        }
+                        Button {
+                            let count = (draft.modulesByDay[day] ?? []).count
+                            draft.modulesByDay[day, default: []].append(JourneyModule(
+                                moduleID: UUID().uuidString.lowercased(),
+                                name: "Módulo \(count + 1)",
+                                startTime: count == 0 ? "08:00" : "09:45",
+                                endTime: count == 0 ? "09:30" : "11:15",
+                                kind: .lectivo
+                            ))
+                        } label: {
+                            Label("Agregar módulo", systemImage: "plus")
+                        }
+                        if draft.activeDays.count > 1 {
+                            Menu {
+                                ForEach(draft.activeDays.filter { $0 != day }) { sourceDay in
+                                    Button(sourceDay.rawValue) {
+                                        draft.modulesByDay[day] = (draft.modulesByDay[sourceDay] ?? []).map {
+                                            JourneyModule(
+                                                moduleID: UUID().uuidString.lowercased(),
+                                                name: $0.name,
+                                                startTime: $0.startTime,
+                                                endTime: $0.endTime,
+                                                kind: $0.kind
+                                            )
+                                        }
+                                    }
+                                }
+                            } label: {
+                                Label("Copiar módulos desde…", systemImage: "doc.on.doc")
+                            }
+                        }
+                    }
+                }
+
+                if let errorMessage {
+                    Section { Label(errorMessage, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red) }
+                }
+            }
+            .navigationTitle("Jornada escolar")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Guardar") { save() }.fontWeight(.bold).disabled(isSaving || draft.activeDays.isEmpty)
+                }
+            }
+        }
+        .alert("Bloques afectados", isPresented: Binding(
+            get: { pendingAffectedBlocks > 0 && !confirmedAffectedBlocks },
+            set: { if !$0 { pendingAffectedBlocks = 0 } }
+        )) {
+            Button("Revisar", role: .cancel) { pendingAffectedBlocks = 0 }
+            Button("Guardar de todos modos") {
+                confirmedAffectedBlocks = true
+                save()
+            }
+        } message: {
+            Text("\(pendingAffectedBlocks) bloque(s) dejarán de coincidir con su módulo. Sus horas no cambiarán y podrás revisarlos después.")
+        }
+    }
+
+    private func moduleBinding(day: AcademicScheduleDay, index: Int) -> Binding<JourneyModule> {
+        Binding(
+            get: { draft.modulesByDay[day]![index] },
+            set: { draft.modulesByDay[day]![index] = $0 }
+        )
+    }
+
+    private func sortDays() {
+        draft.activeDays.sort {
+            (AcademicScheduleDay.allCases.firstIndex(of: $0) ?? 0) < (AcademicScheduleDay.allCases.firstIndex(of: $1) ?? 0)
+        }
+    }
+
+    private func save() {
+        for day in draft.activeDays {
+            let modules = draft.modulesByDay[day] ?? []
+            guard modules.allSatisfy({ AcademicContract.isValidTimeRange(start: $0.startTime, end: $0.endTime) }) else {
+                errorMessage = "Revisa las horas de \(day.rawValue)."
+                return
+            }
+            let sorted = modules.sorted { $0.startTime < $1.startTime }
+            for pair in zip(sorted, sorted.dropFirst()) where pair.0.endTime > pair.1.startTime {
+                errorMessage = "Hay módulos superpuestos en \(day.rawValue)."
+                return
+            }
+        }
+        let affected = affectedBlockCount()
+        if affected > 0 && !confirmedAffectedBlocks {
+            pendingAffectedBlocks = affected
+            return
+        }
+        isSaving = true
+        Task {
+            if await viewModel.saveJourney(draft) { dismiss() }
+            else { errorMessage = viewModel.errorMessage }
+            isSaving = false
+        }
+    }
+
+    private func affectedBlockCount() -> Int {
+        (viewModel.snapshot?.horario ?? []).filter { block in
+            guard let day = AcademicScheduleDay(rawValue: block.dia), let moduleID = block.moduleID else { return false }
+            guard draft.activeDays.contains(day) else { return true }
+            return !(draft.modulesByDay[day] ?? []).contains {
+                $0.moduleID == moduleID && $0.kind == .lectivo &&
+                $0.startTime == block.horaInicio && $0.endTime == block.horaFin
+            }
+        }.count
+    }
+}
+
+private struct JourneyModuleEditorRow: View {
+    @Binding var module: JourneyModule
+    let onDelete: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                TextField("Nombre", text: $module.name)
+                Spacer()
+                Button(role: .destructive, action: onDelete) { Image(systemName: "trash") }
+            }
+            Picker("Tipo", selection: $module.kind) {
+                Text("Lectivo").tag(JourneyModuleKind.lectivo)
+                Text("Recreo").tag(JourneyModuleKind.recreo)
+                Text("Almuerzo").tag(JourneyModuleKind.almuerzo)
+                Text("No lectivo").tag(JourneyModuleKind.noLectivo)
+            }
+            .pickerStyle(.menu)
+            HStack {
+                BloqueHoraField(titulo: "Inicio", hora: $module.startTime)
+                BloqueHoraField(titulo: "Fin", hora: $module.endTime)
+            }
+        }
+    }
+}
+
+private struct SchedulePeriodEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let viewModel: ProfileViewModel
+    let snapshot: DashboardSnapshot
+    @State private var periodID: String
+    @State private var name: String
+    @State private var startDate: Date
+    @State private var endDate: Date
+    @State private var status: SchedulePeriodStatus
+    @State private var blocks: [ClaseHorario]
+    @State private var errorMessage: String?
+
+    init(viewModel: ProfileViewModel, snapshot: DashboardSnapshot) {
+        self.viewModel = viewModel
+        self.snapshot = snapshot
+        let current = snapshot.activeSchedulePeriodID.flatMap { id in snapshot.schedulePeriods.first { $0.periodID == id } }
+        let formatter = Self.dateFormatter
+        _periodID = State(initialValue: current?.periodID ?? UUID().uuidString.lowercased())
+        _name = State(initialValue: current?.name ?? "Horario vigente")
+        _startDate = State(initialValue: current.flatMap { formatter.date(from: $0.startDateKey) } ?? Date())
+        _endDate = State(initialValue: current.flatMap { formatter.date(from: $0.endDateKey) } ?? Calendar.current.date(byAdding: .month, value: 6, to: Date())!)
+        _status = State(initialValue: current?.status ?? .published)
+        _blocks = State(initialValue: current?.blocks ?? snapshot.horario)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if !snapshot.schedulePeriods.isEmpty {
+                    Section("Periodos existentes") {
+                        ForEach(snapshot.schedulePeriods) { period in
+                            Button { select(period) } label: {
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text(period.name).foregroundStyle(.primary)
+                                        Text("\(period.startDateKey) a \(period.endDateKey)").font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    if period.periodID == periodID { Image(systemName: "checkmark.circle.fill") }
+                                }
+                            }
+                        }
+                        Button("Crear otro periodo", systemImage: "plus") { createNew() }
+                    }
+                }
+                Section("Vigencia") {
+                    TextField("Nombre", text: $name)
+                    DatePicker("Desde", selection: $startDate, displayedComponents: .date)
+                    DatePicker("Hasta", selection: $endDate, displayedComponents: .date)
+                    Picker("Estado", selection: $status) {
+                        Text("Borrador").tag(SchedulePeriodStatus.draft)
+                        Text("Publicado").tag(SchedulePeriodStatus.published)
+                        Text("Archivado").tag(SchedulePeriodStatus.archived)
+                    }
+                }
+                Section {
+                    LabeledContent("Bloques", value: "\(blocks.count)")
+                    Text("Las fechas civiles se resuelven en America/Santiago. Solo puede existir un periodo publicado para cada fecha.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if let errorMessage { Section { Text(errorMessage).foregroundStyle(.red) } }
+            }
+            .navigationTitle("Vigencia del horario")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Guardar") { save() }.fontWeight(.bold) }
+            }
+        }
+    }
+
+    private func select(_ period: SchedulePeriod) {
+        periodID = period.periodID
+        name = period.name
+        startDate = Self.dateFormatter.date(from: period.startDateKey) ?? Date()
+        endDate = Self.dateFormatter.date(from: period.endDateKey) ?? Date()
+        status = period.status
+        blocks = period.blocks
+    }
+
+    private func createNew() {
+        periodID = UUID().uuidString.lowercased()
+        name = "Nuevo horario"
+        startDate = Date()
+        endDate = Calendar.current.date(byAdding: .month, value: 6, to: Date()) ?? Date()
+        status = .draft
+        blocks = snapshot.horario
+    }
+
+    private func save() {
+        guard startDate <= endDate else { errorMessage = "La fecha de término debe ser posterior al inicio."; return }
+        let period = SchedulePeriod(
+            periodID: periodID,
+            name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Horario" : name,
+            startDateKey: AcademicContract.dateKey(for: startDate),
+            endDateKey: AcademicContract.dateKey(for: endDate),
+            status: status,
+            timeZone: AcademicContract.timeZoneIdentifier,
+            blocks: blocks
+        )
+        Task {
+            if await viewModel.saveSchedulePeriod(period) { dismiss() }
+            else { errorMessage = viewModel.errorMessage }
+        }
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: AcademicContract.timeZoneIdentifier)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+}
+
 // MARK: - Calendario semanal
 
 struct ProfileWeekCalendar: View {
     let snapshot: DashboardSnapshot
     var onSelect: (ClaseHorario) -> Void = { _ in }
 
-    private let dayWidth: CGFloat = 128
-    private let hourColumnWidth: CGFloat = 52
+    @State private var selectedDayName: String = DateHelpers.weekdayName(for: Date()) ?? "Lunes"
+
+    private let hourColumnWidth: CGFloat = 46
     private let pixelsPerMinute: CGFloat = 0.92
+    private var calendarDays: [String] {
+        let configured = snapshot.journey?.activeDays.map(\.rawValue) ?? []
+        return configured.isEmpty ? DateHelpers.workdays : configured
+    }
+
+    private var range: (minHour: Int, maxHour: Int) {
+        hourRange
+    }
+
+    private var totalMinutes: Int {
+        max(60, (range.maxHour - range.minHour) * 60)
+    }
+
+    private var calendarHeight: CGFloat {
+        CGFloat(totalMinutes) * pixelsPerMinute
+    }
 
     var body: some View {
-        let range = hourRange
-        let totalMinutes = max(60, (range.maxHour - range.minHour) * 60)
-        let calendarHeight = CGFloat(totalMinutes) * pixelsPerMinute
+        VStack(spacing: 12) {
+            daySelector
 
-        ScrollView(.horizontal, showsIndicators: true) {
-            HStack(alignment: .top, spacing: 6) {
-                VStack(spacing: 6) {
-                    Text("")
-                        .frame(height: 28)
-                    ZStack(alignment: .topLeading) {
-                        ForEach(range.minHour...range.maxHour, id: \.self) { hour in
-                            Text("\(hour):00")
-                                .font(.system(size: 10, weight: .black))
-                                .foregroundStyle(.secondary)
-                                .offset(y: CGFloat((hour - range.minHour) * 60) * pixelsPerMinute - 2)
-                        }
-                    }
-                    .frame(width: hourColumnWidth, height: calendarHeight, alignment: .topLeading)
-                }
-
-                ForEach(DateHelpers.workdays, id: \.self) { day in
-                    VStack(spacing: 6) {
-                        Text(day)
-                            .font(.system(size: 10, weight: .black))
-                            .foregroundStyle(.primary)
-                            .textCase(.uppercase)
-                            .frame(width: dayWidth, height: 28)
-                            .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-                        ZStack(alignment: .topLeading) {
-                            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .fill(Color(.systemGroupedBackground))
-
-                            ForEach(0...(range.maxHour - range.minHour), id: \.self) { index in
-                                Rectangle()
-                                    .fill(Color(.separator).opacity(0.35))
-                                    .frame(height: 1)
-                                    .offset(y: CGFloat(index * 60) * pixelsPerMinute)
-                            }
-
-                            ForEach(blocks(for: day)) { item in
-                                Button {
-                                    onSelect(item)
-                                } label: {
-                                    calendarBlock(item, minHour: range.minHour)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .frame(width: dayWidth, height: calendarHeight)
-                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    }
-                }
+            HStack(alignment: .top, spacing: 8) {
+                hourColumn
+                dayColumn
             }
-            .padding(8)
         }
+        .padding(8)
         .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
+
+    private var daySelector: some View {
+        HStack(spacing: 6) {
+            ForEach(calendarDays, id: \.self) { day in
+                Button {
+                    withAnimation(EPTheme.spring) {
+                        selectedDayName = day
+                    }
+                } label: {
+                    VStack(spacing: 4) {
+                        Text(String(day.prefix(3)).uppercased())
+                            .font(.system(size: 11, weight: .black))
+                            .foregroundStyle(selectedDayName == day ? .white : .primary)
+                        
+                        Circle()
+                            .fill(selectedDayName == day ? .white : EPTheme.primary)
+                            .frame(width: 4, height: 4)
+                            .opacity(blocks(for: day).isEmpty ? 0.0 : 1.0)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(
+                        selectedDayName == day ? EPTheme.primary : Color(.tertiarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .onAppear {
+            if !calendarDays.contains(selectedDayName) { selectedDayName = calendarDays.first ?? "Lunes" }
+        }
+    }
+
+    private var hourColumn: some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(Array(range.minHour...range.maxHour), id: \.self) { hour in
+                Text("\(hour):00")
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundStyle(.secondary)
+                    .offset(y: CGFloat((hour - range.minHour) * 60) * pixelsPerMinute - 6)
+            }
+        }
+        .frame(width: hourColumnWidth, height: calendarHeight, alignment: .topLeading)
+    }
+
+    private var dayColumn: some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Color(.systemGroupedBackground))
+
+            // Hour grid lines
+            ForEach(Array(0...(range.maxHour - range.minHour)), id: \.self) { index in
+                Rectangle()
+                    .fill(Color(.separator).opacity(0.35))
+                    .frame(height: 1)
+                    .offset(y: CGFloat(index * 60) * pixelsPerMinute)
+            }
+
+            // Blocks for selected day
+            ForEach(blocks(for: selectedDayName)) { item in
+                Button {
+                    onSelect(item)
+                } label: {
+                    calendarBlock(item, minHour: range.minHour)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: calendarHeight)
+        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+    }
+
 
     private var hourRange: (minHour: Int, maxHour: Int) {
         guard !snapshot.horario.isEmpty else { return (8, 18) }
@@ -1102,12 +1660,14 @@ struct ProfileWeekCalendar: View {
             }
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 6)
+        .padding(.horizontal, 8)
         .padding(.vertical, 5)
-        .frame(width: dayWidth - 8, height: height, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(height: height)
         .background(Color(profileHex: item.colorHex).opacity(item.tipo.isFreeBlock ? 0.88 : 1.0), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         .shadow(color: .black.opacity(0.10), radius: 3, y: 2)
-        .offset(x: 4, y: top)
+        .padding(.horizontal, 6)
+        .offset(y: top)
     }
 }
 
@@ -1118,60 +1678,62 @@ struct ProfileScheduleRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            VStack(spacing: 2) {
-                Text(String(item.horaInicio.prefix(2)))
-                    .font(.headline.weight(.black))
-                Text(String(item.horaInicio.suffix(2)))
-                    .font(.caption2.weight(.bold))
-            }
-            .foregroundStyle(.white)
-            .frame(width: 48, height: 50)
-            .background(Color(profileHex: item.colorHex), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            // Color Capsule
+            Capsule()
+                .fill(Color(profileHex: item.colorHex))
+                .frame(width: 4, height: 26)
 
-            VStack(alignment: .leading, spacing: 5) {
+            // Time range
+            Text(item.timeRange)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .frame(width: 80, alignment: .leading)
+
+            // Class name & Subject
+            VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(item.resumen.isEmpty ? item.tipo.label : item.resumen)
                         .font(.footnote.weight(.black))
                         .lineLimit(1)
+                    
                     if let asignatura = item.asignatura, !asignatura.isEmpty {
                         Text(asignatura)
-                            .font(.system(size: 9, weight: .black))
+                            .font(.system(size: 8, weight: .black))
                             .foregroundStyle(EPTheme.primary)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(EPTheme.primary.opacity(0.1), in: Capsule())
+                            .background(EPTheme.primary.opacity(0.08), in: Capsule())
                             .lineLimit(1)
                     }
                 }
-                HStack(spacing: 6) {
-                    Text(item.timeRange)
+                
+                if !item.resumen.isEmpty {
                     Text(item.tipo.label)
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.secondary)
                 }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
             }
 
-            Spacer()
+            Spacer(minLength: 8)
 
-            Button(action: onEdit) {
-                Image(systemName: "pencil")
-                    .font(.caption.weight(.black))
+            // Context Menu Button
+            Menu {
+                Button(action: onEdit) {
+                    Label("Editar bloque", systemImage: "pencil")
+                }
+                
+                Button(role: .destructive, action: onDelete) {
+                    Label("Eliminar", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.subheadline.weight(.bold))
                     .foregroundStyle(.secondary)
-                    .frame(width: 30, height: 30)
-                    .background(Color(.systemGray5), in: Circle())
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-
-            Button(action: onDelete) {
-                Image(systemName: "trash")
-                    .font(.caption.weight(.black))
-                    .foregroundStyle(.red)
-                    .frame(width: 30, height: 30)
-                    .background(.red.opacity(0.1), in: Circle())
-            }
-            .buttonStyle(.plain)
         }
-        .padding(12)
-        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
     }
 }

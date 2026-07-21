@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		500000000000000000000101 /* AttendanceRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500000000000000000000001 /* AttendanceRulesTests.swift */; };
+		44ACAD000000000000000201 /* AcademicAndDictationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44ACAD000000000000000002 /* AcademicAndDictationTests.swift */; };
 		44DAEDEB68159EF8DBB21A2C /* AttendanceViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44CC20E63DABD4E076EE0313 /* AttendanceViewModel.swift */; };
 		449CC2DFDCDBCC6AF11B11F6 /* AttendanceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 440BCD9FEC0F15DD7AD573AA /* AttendanceModels.swift */; };
 		4441635C509E160073486BB2 /* AttendanceRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 447A41A05D7F7305217E2E1C /* AttendanceRules.swift */; };
@@ -66,7 +67,9 @@
 		100000000000000000000041 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000021 /* RootView.swift */; };
 		100000000000000000000042 /* AppTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000022 /* AppTab.swift */; };
 		100000000000000000000043 /* DashboardModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000023 /* DashboardModels.swift */; };
+		44ACAD000000000000000101 /* AcademicModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44ACAD000000000000000001 /* AcademicModels.swift */; };
 		100000000000000000000044 /* UserRole.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000024 /* UserRole.swift */; };
+				300000000000000000000110 /* DictadoService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000010 /* DictadoService.swift */; };
 		100000000000000000000045 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000025 /* APIClient.swift */; };
 		100000000000000000000046 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000026 /* AppConfig.swift */; };
 		100000000000000000000047 /* DashboardRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000027 /* DashboardRepository.swift */; };
@@ -113,8 +116,10 @@
 		300000000000000000000107 /* ProfileSubjectsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000007 /* ProfileSubjectsTab.swift */; };
 		300000000000000000000108 /* ProfileIdentityTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000008 /* ProfileIdentityTab.swift */; };
 		300000000000000000000109 /* ProfileConnectionsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000009 /* ProfileConnectionsTab.swift */; };
+				300000000000000000000111 /* DictadoModalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300000000000000000000011 /* DictadoModalView.swift */; };
 		30000000000000000000010A /* ProfileSubviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000A /* ProfileSubviews.swift */; };
 		30000000000000000000010B /* CourseStudentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000B /* CourseStudentsView.swift */; };
+				30000000000000000000010F /* ScheduleExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000F /* ScheduleExportView.swift */; };
 		30000000000000000000010C /* EditCourseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000C /* EditCourseView.swift */; };
 		30000000000000000000010D /* SchoolLogoEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000D /* SchoolLogoEditView.swift */; };
 		30000000000000000000010E /* GoogleConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30000000000000000000000E /* GoogleConnectionView.swift */; };
@@ -213,10 +218,13 @@
 		447CD1CD99017CDBFD2FA481 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		100000000000000000000005 /* EduPanel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EduPanel.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		100000000000000000000020 /* EduPanelApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EduPanelApp.swift; sourceTree = "<group>"; };
+		44ACAD000000000000000002 /* AcademicAndDictationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AcademicAndDictationTests.swift; sourceTree = "<group>"; };
 		100000000000000000000021 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		100000000000000000000022 /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTab.swift; sourceTree = "<group>"; };
 		100000000000000000000023 /* DashboardModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardModels.swift; sourceTree = "<group>"; };
+		44ACAD000000000000000001 /* AcademicModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AcademicModels.swift; sourceTree = "<group>"; };
 		100000000000000000000024 /* UserRole.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserRole.swift; sourceTree = "<group>"; };
+				300000000000000000000010 /* DictadoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictadoService.swift; sourceTree = "<group>"; };
 		100000000000000000000025 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		100000000000000000000026 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		100000000000000000000027 /* DashboardRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardRepository.swift; sourceTree = "<group>"; };
@@ -263,8 +271,10 @@
 		300000000000000000000007 /* ProfileSubjectsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tabs/ProfileSubjectsTab.swift; sourceTree = "<group>"; };
 		300000000000000000000008 /* ProfileIdentityTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tabs/ProfileIdentityTab.swift; sourceTree = "<group>"; };
 		300000000000000000000009 /* ProfileConnectionsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tabs/ProfileConnectionsTab.swift; sourceTree = "<group>"; };
+				300000000000000000000011 /* DictadoModalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictadoModalView.swift; sourceTree = "<group>"; };
 		30000000000000000000000A /* ProfileSubviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/ProfileSubviews.swift; sourceTree = "<group>"; };
 		30000000000000000000000B /* CourseStudentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/CourseStudentsView.swift; sourceTree = "<group>"; };
+				30000000000000000000000F /* ScheduleExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/ScheduleExportView.swift; sourceTree = "<group>"; };
 		30000000000000000000000C /* EditCourseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/EditCourseView.swift; sourceTree = "<group>"; };
 		30000000000000000000000D /* SchoolLogoEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/SchoolLogoEditView.swift; sourceTree = "<group>"; };
 		30000000000000000000000E /* GoogleConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/GoogleConnectionView.swift; sourceTree = "<group>"; };
@@ -355,6 +365,7 @@
 			isa = PBXGroup;
 			children = (
 				500000000000000000000001 /* AttendanceRulesTests.swift */,
+				44ACAD000000000000000002 /* AcademicAndDictationTests.swift */,
 			);
 			path = EduPanelTests;
 			sourceTree = "<group>";
@@ -382,6 +393,7 @@
 				44B100000000000000000001 /* PruebasModels.swift */,
 				200000000000000000000001 /* PlanificacionModels.swift */,
 				100000000000000000000022 /* AppTab.swift */,
+				44ACAD000000000000000001 /* AcademicModels.swift */,
 				100000000000000000000023 /* DashboardModels.swift */,
 				100000000000000000000024 /* UserRole.swift */,
 			);
@@ -406,6 +418,7 @@
 				44A39F058927059BF1558D45 /* DisplayMode.swift */,
 				200000000000000000000002 /* PlanificacionRepository.swift */,
 				100000000000000000000025 /* APIClient.swift */,
+				300000000000000000000010 /* DictadoService.swift */,
 				100000000000000000000026 /* AppConfig.swift */,
 				100000000000000000000027 /* DashboardRepository.swift */,
 				100000000000000000000028 /* FirebaseBootstrap.swift */,
@@ -446,6 +459,7 @@
 				446E5C9DB5BE65C282C326B7 /* ClassDetailView.swift */,
 				10000000000000000000002C /* AppShell.swift */,
 				10000000000000000000002D /* DashboardView.swift */,
+				300000000000000000000011 /* DictadoModalView.swift */,
 				10000000000000000000002E /* LoginView.swift */,
 				10000000000000000000002F /* PlaceholderModuleView.swift */,
 				100000000000000000000080 /* SidebarContainer.swift */,
@@ -531,6 +545,7 @@
 				30000000000000000000000A /* ProfileSubviews.swift */,
 				30000000000000000000000B /* CourseStudentsView.swift */,
 				30000000000000000000000C /* EditCourseView.swift */,
+				30000000000000000000000F /* ScheduleExportView.swift */,
 				30000000000000000000000D /* SchoolLogoEditView.swift */,
 				30000000000000000000000E /* GoogleConnectionView.swift */,
 			);
@@ -776,6 +791,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				500000000000000000000101 /* AttendanceRulesTests.swift in Sources */,
+				44ACAD000000000000000201 /* AcademicAndDictationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -839,8 +855,10 @@
 				100000000000000000000041 /* RootView.swift in Sources */,
 				100000000000000000000042 /* AppTab.swift in Sources */,
 				100000000000000000000043 /* DashboardModels.swift in Sources */,
+				44ACAD000000000000000101 /* AcademicModels.swift in Sources */,
 				100000000000000000000044 /* UserRole.swift in Sources */,
 				100000000000000000000045 /* APIClient.swift in Sources */,
+				300000000000000000000110 /* DictadoService.swift in Sources */,
 				100000000000000000000046 /* AppConfig.swift in Sources */,
 				100000000000000000000047 /* DashboardRepository.swift in Sources */,
 				100000000000000000000048 /* FirebaseBootstrap.swift in Sources */,
@@ -882,8 +900,10 @@
 				300000000000000000000108 /* ProfileIdentityTab.swift in Sources */,
 				300000000000000000000109 /* ProfileConnectionsTab.swift in Sources */,
 				30000000000000000000010A /* ProfileSubviews.swift in Sources */,
+				300000000000000000000111 /* DictadoModalView.swift in Sources */,
 				30000000000000000000010B /* CourseStudentsView.swift in Sources */,
 				30000000000000000000010C /* EditCourseView.swift in Sources */,
+				30000000000000000000010F /* ScheduleExportView.swift in Sources */,
 				30000000000000000000010D /* SchoolLogoEditView.swift in Sources */,
 				30000000000000000000010E /* GoogleConnectionView.swift in Sources */,
 				400000000000000000000130 /* CalificacionesModels.swift in Sources */,

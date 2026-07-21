@@ -64,6 +64,38 @@ struct ClaseHorario: Identifiable, Hashable {
     let colorHex: String
     let tipo: TipoHorario
     let asignatura: String?
+    let courseID: String?
+    let subjectID: String?
+    let moduleID: String?
+    let exceptional: Bool
+
+    init(
+        id: String,
+        resumen: String,
+        dia: String,
+        horaInicio: String,
+        horaFin: String,
+        colorHex: String,
+        tipo: TipoHorario,
+        asignatura: String?,
+        courseID: String? = nil,
+        subjectID: String? = nil,
+        moduleID: String? = nil,
+        exceptional: Bool = false
+    ) {
+        self.id = id
+        self.resumen = resumen
+        self.dia = dia
+        self.horaInicio = horaInicio
+        self.horaFin = horaFin
+        self.colorHex = colorHex
+        self.tipo = tipo
+        self.asignatura = asignatura
+        self.courseID = courseID
+        self.subjectID = subjectID
+        self.moduleID = moduleID
+        self.exceptional = exceptional
+    }
 
     var isAcademic: Bool {
         !tipo.isFreeBlock && !resumen.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -88,7 +120,11 @@ struct ClaseHorario: Identifiable, Hashable {
             horaFin: horaFin,
             colorHex: dictionary["color"] as? String ?? "#F43F5E",
             tipo: TipoHorario.from(dictionary["tipo"] as? String ?? "clase"),
-            asignatura: dictionary["asignatura"] as? String
+            asignatura: dictionary["asignatura"] as? String,
+            courseID: dictionary["courseId"] as? String,
+            subjectID: dictionary["subjectId"] as? String,
+            moduleID: dictionary["moduleId"] as? String,
+            exceptional: dictionary["exceptional"] as? Bool ?? false
         )
     }
 }
@@ -473,6 +509,11 @@ struct DashboardSnapshot: Equatable {
     var studentsByCourse: [String: [EstudiantePerfil]]
     var nivelMapping: [String: String]
     var cursoTipos: [String: TipoCurricular]
+    var schoolID: String = "principal"
+    var courseCatalog: [AcademicCourse] = []
+    var journey: JourneyConfig?
+    var schedulePeriods: [SchedulePeriod] = []
+    var activeSchedulePeriodID: String?
 
     var todayName: String? {
         DateHelpers.weekdayName(for: date)
@@ -511,7 +552,44 @@ struct DashboardSnapshot: Equatable {
     }
 
     var courses: [String] {
-        Array(Set(academicClasses.map(\.resumen))).sorted()
+        if !courseCatalog.isEmpty {
+            return courseCatalog.filter { $0.status == .active }.map(\.name).sorted()
+        }
+        return Array(Set(academicClasses.map(\.resumen))).sorted()
+    }
+
+    var activeCourses: [AcademicCourse] {
+        courseCatalog.filter { $0.status == .active }.sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    var archivedCourses: [AcademicCourse] {
+        courseCatalog.filter { $0.status == .archived }.sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    func course(id: String?, named name: String? = nil) -> AcademicCourse? {
+        if let id, let match = courseCatalog.first(where: { $0.courseID == id }) { return match }
+        guard let name else { return nil }
+        return courseCatalog.first { $0.name == name || $0.dataKey == DashboardRepository.buildCursoId(name) }
+    }
+
+    func students(forCourseID courseID: String?, name: String) -> [EstudiantePerfil] {
+        if let courseID, let students = studentsByCourse[courseID] { return students }
+        return studentsByCourse[name] ?? []
+    }
+
+    func academicSelection(courseName: String, subjectName: String? = nil) -> AcademicSelection? {
+        guard let course = course(id: nil, named: courseName) else { return nil }
+        let subject = subjectName.flatMap { name in course.subjects.first { $0.label == name } }
+        return AcademicSelection(
+            courseID: course.courseID,
+            courseName: course.name,
+            subjectID: subject?.id,
+            subjectName: subject?.label ?? subjectName
+        )
     }
 
     var nonTeachingBlocks: [ClaseHorario] {
@@ -541,9 +619,11 @@ struct DashboardSnapshot: Equatable {
     }
 
     var setupChecklist: [ProfileSetupItem] {
-        let coursesWithoutLevel = courses.filter { course in
-            (cursoTipos[course] ?? .oficial) == .oficial && (nivelMapping[course] ?? "").isEmpty
-        }
+        let coursesWithoutLevel = courseCatalog.isEmpty
+            ? courses.filter { course in
+                (cursoTipos[course] ?? .oficial) == .oficial && (nivelMapping[course] ?? "").isEmpty
+            }
+            : activeCourses.filter { $0.kind == .oficial && ($0.level ?? "").isEmpty }.map(\.name)
 
         return [
             ProfileSetupItem(
@@ -566,7 +646,7 @@ struct DashboardSnapshot: Equatable {
             ),
             ProfileSetupItem(
                 label: "Asocia cada curso a un nivel curricular",
-                target: .asignaturas,
+                target: .cursos,
                 isComplete: !courses.isEmpty && coursesWithoutLevel.isEmpty,
                 hint: coursesWithoutLevel.isEmpty ? nil : "Falta: \(coursesWithoutLevel.joined(separator: ", "))"
             ),
@@ -616,7 +696,6 @@ enum ProfileTabKey: String, CaseIterable, Identifiable, Hashable {
     case resumen
     case semana
     case cursos
-    case asignaturas
     case identidad
     case conexiones
 
@@ -627,7 +706,6 @@ enum ProfileTabKey: String, CaseIterable, Identifiable, Hashable {
         case .resumen: return "Resumen"
         case .semana: return "Mi Semana"
         case .cursos: return "Mis Cursos"
-        case .asignaturas: return "Asignaturas"
         case .identidad: return "Identidad"
         case .conexiones: return "Conexiones"
         }
@@ -638,7 +716,6 @@ enum ProfileTabKey: String, CaseIterable, Identifiable, Hashable {
         case .resumen: return "square.grid.2x2.fill"
         case .semana: return "calendar"
         case .cursos: return "folder.fill"
-        case .asignaturas: return "book.closed.fill"
         case .identidad: return "person.text.rectangle.fill"
         case .conexiones: return "link"
         }
@@ -647,6 +724,7 @@ enum ProfileTabKey: String, CaseIterable, Identifiable, Hashable {
 
 enum DateHelpers {
     static let workdays = ["Lunes", "Martes", "Mi\u{00E9}rcoles", "Jueves", "Viernes"]
+    static let scheduleDays = AcademicScheduleDay.allCases.map(\.rawValue)
 
     static let weekdayMap: [Int: String] = [
         1: "Domingo",
@@ -661,20 +739,14 @@ enum DateHelpers {
     static func weekdayName(for date: Date) -> String? {
         let weekday = Calendar.current.component(.weekday, from: date)
         let name = weekdayMap[weekday]
-        guard let name, ["Lunes", "Martes", "Mi\u{00E9}rcoles", "Jueves", "Viernes"].contains(name) else {
+        guard let name, scheduleDays.contains(name) else {
             return nil
         }
         return name
     }
 
     static func dateKey(for date: Date) -> String {
-        let components = Calendar.current.dateComponents([.year, .month, .day], from: date)
-        return String(
-            format: "%04d-%02d-%02d",
-            components.year ?? 0,
-            components.month ?? 0,
-            components.day ?? 0
-        )
+        AcademicContract.dateKey(for: date)
     }
 
     static func minutes(from time: String) -> Int {

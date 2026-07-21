@@ -154,18 +154,23 @@ final class AttendanceViewModel {
                     weekday: $0.dia,
                     startTime: $0.horaInicio,
                     endTime: $0.horaFin,
-                    isFree: $0.tipo == .libre
+                    isFree: $0.tipo.isFreeBlock,
+                    courseID: $0.courseID,
+                    subjectID: $0.subjectID
                 )
             }
-            let legacyStudents = (snapshot.studentsByCourse[course] ?? [])
+            let selection = snapshot.academicSelection(courseName: course, subjectName: subject)
+            let legacyStudents = snapshot.students(forCourseID: selection?.courseID, name: course)
                 .sorted { $0.orden < $1.orden }
                 .map { AttendanceRosterStudent(id: $0.id, name: $0.nombre) }
-            let schedule = scopedContext.schedule ?? legacySchedule
-            let students = scopedContext.students ?? legacyStudents
+            let schedule = snapshot.schedulePeriods.isEmpty ? (scopedContext.schedule ?? legacySchedule) : legacySchedule
+            let students = snapshot.courseCatalog.isEmpty ? (scopedContext.students ?? legacyStudents) : legacyStudents
 
             blocks = AttendanceRules.reconcileBlocks(
                 saved: saved?.blocks,
                 course: course,
+                courseID: selection?.courseID,
+                subjectID: selection?.subjectID,
                 dateKey: dateKey,
                 schedule: schedule,
                 students: students

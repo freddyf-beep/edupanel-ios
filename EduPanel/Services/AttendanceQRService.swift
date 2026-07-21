@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 protocol AttendanceQRResolving {
     func resolve(
@@ -21,8 +22,13 @@ struct AttendanceQRAPIResolver: AttendanceQRResolving {
         course: String
     ) async throws -> AttendanceQRResolveResponse {
         do {
+            let validatedPayload = try Self.validatedPayload(payload)
+#if DEBUG
+            let digest = SHA256.hash(data: Data(validatedPayload.utf8)).prefix(4).map { String(format: "%02x", $0) }.joined()
+            print("[AttendanceQR] resolving fingerprint=\(digest) length=\(validatedPayload.utf8.count) scope=\(scope.schoolID)/\(scope.yearID)")
+#endif
             let request = AttendanceQRResolveRequest(
-                payload: payload,
+                payload: validatedPayload,
                 schoolId: scope.schoolID,
                 yearId: scope.yearID,
                 course: course
@@ -80,6 +86,18 @@ struct AttendanceQRAPIResolver: AttendanceQRResolving {
         default:
             return .server
         }
+    }
+
+    static func validatedPayload(_ payload: String) throws -> String {
+        guard payload == payload.trimmingCharacters(in: .whitespacesAndNewlines),
+              payload.unicodeScalars.allSatisfy({ !$0.properties.isDefaultIgnorableCodePoint }) else {
+            throw AttendanceQRFailure.invalidQRCode
+        }
+        let pattern = #"^epatt:v1:[a-f0-9]{64}:[1-9][0-9]*:[A-Za-z0-9_-]{43}$"#
+        guard payload.range(of: pattern, options: .regularExpression) != nil else {
+            throw AttendanceQRFailure.invalidQRCode
+        }
+        return payload
     }
 }
 

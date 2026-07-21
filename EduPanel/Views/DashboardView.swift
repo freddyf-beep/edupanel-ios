@@ -27,6 +27,7 @@ struct DashboardView: View {
     @State private var selectedTab: DashboardTabKey = .hoy
     @State private var newReminder = ""
     @State private var reminderColor: ReminderColor = .amarillo
+    @State private var showDictadoModal = false
     @AppStorage("edupanel_dashboard_reminders") private var remindersData = "[]"
     @AppStorage(AppTheme.storageKey) private var appThemeRaw = AppTheme.auto.rawValue
 
@@ -66,6 +67,15 @@ struct DashboardView: View {
         .navigationTitle("Inicio")
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
+        .sheet(isPresented: $showDictadoModal) {
+            DictadoModalView(contextualStrings: dictationContext)
+                .presentationDetents([.medium, .large])
+        }
+    }
+
+    private var dictationContext: [String] {
+        guard let snapshot = viewModel.snapshot else { return [] }
+        return snapshot.activeCourses.flatMap { [$0.name] + $0.subjects.map(\.label) }
     }
 
     private func toolbarIcon(_ systemName: String) -> some View {
@@ -332,6 +342,7 @@ struct DashboardView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
+                    QuickAction(title: "Dictado voz", icon: "mic.fill", colors: [.pink, EPTheme.primary], kind: .action({ showDictadoModal = true }))
                     QuickAction(title: "Planificar", icon: "square.and.pencil", colors: [.purple, EPTheme.primary], kind: .action(onOpenPlanificaciones))
                     QuickAction(title: "Mi Perfil", icon: "person.crop.circle.fill", colors: [.indigo, .purple], kind: .action(onOpenProfile))
                 }

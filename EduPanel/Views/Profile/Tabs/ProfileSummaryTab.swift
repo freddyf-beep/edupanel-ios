@@ -46,31 +46,6 @@ struct ProfileSummaryTab: View {
                 .buttonStyle(.bordered)
                 .tint(EPTheme.primary)
             }
-
-            ProfileSection(title: "Tu progreso", icon: "sparkles", hint: "\(snapshot.setupProgress)%") {
-                VStack(spacing: 10) {
-                    ForEach(snapshot.setupChecklist) { item in
-                        Button {
-                            selectedTab = item.target
-                        } label: {
-                            ProfileChecklistRow(item: item)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-
-            if !displayMode.isSimple {
-                ProfileSection(title: "Atajos rápidos", icon: "bolt.fill", hint: nil) {
-                    VStack(spacing: 8) {
-                        ProfileShortcut(title: "Editar mi semana", icon: "calendar") { selectedTab = .semana }
-                        ProfileShortcut(title: "Configurar mis cursos", icon: "folder.fill") { selectedTab = .cursos }
-                        ProfileShortcut(title: "Asignaturas y niveles", icon: "book.closed.fill") { selectedTab = .asignaturas }
-                        ProfileShortcut(title: "Datos del colegio", icon: "building.2.fill") { selectedTab = .identidad }
-                        ProfileShortcut(title: "Conectar Google Calendar", icon: "link") { selectedTab = .conexiones }
-                    }
-                }
-            }
         }
     }
 }
@@ -131,45 +106,13 @@ struct ProfileCourseRow: View {
     }
 }
 
-struct ProfileChecklistRow: View {
-    let item: ProfileSetupItem
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: item.isComplete ? "checkmark.circle.fill" : "circle")
-                .font(.headline.weight(.bold))
-                .foregroundStyle(item.isComplete ? .green : .secondary)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(item.label)
-                    .font(.footnote.weight(.black))
-                    .strikethrough(item.isComplete)
-                    .foregroundStyle(item.isComplete ? .green : .primary)
-                if let hint = item.hint, !hint.isEmpty {
-                    Text(hint)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Spacer()
-            if !item.isComplete {
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.black))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(12)
-        .background(item.isComplete ? Color.green.opacity(0.1) : Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-}
 
 struct MiniWeekView: View {
     let snapshot: DashboardSnapshot
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            ForEach(DateHelpers.workdays, id: \.self) { day in
+            ForEach(snapshot.journey?.activeDays.map(\.rawValue) ?? DateHelpers.workdays, id: \.self) { day in
                 VStack(spacing: 6) {
                     Text(String(day.prefix(3)).uppercased())
                         .font(.system(size: 9, weight: .black))

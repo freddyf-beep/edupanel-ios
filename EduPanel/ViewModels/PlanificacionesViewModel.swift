@@ -10,6 +10,8 @@ final class PlanificacionesViewModel {
     var isLoading = false
     var errorMessage: String? = nil
     var selectedSubject: String? = nil
+    var selectedCourseID: String?
+    var selectedSubjectID: String?
     
     private let dashboardRepository: DashboardRepository
     private let planificacionRepository: PlanificacionRepository
@@ -32,7 +34,7 @@ final class PlanificacionesViewModel {
 
             do {
                 let profileSubjects = subjects(from: snap)
-                let posiblesCursos = Array(Set(snap.courses + Array(snap.studentsByCourse.keys)))
+                let posiblesCursos = snap.courses
                 let loadedPlanes = try await planificacionRepository.listarTodosPlanesCurso(
                     posiblesCursos: posiblesCursos,
                     posiblesAsignaturas: profileSubjects
@@ -80,6 +82,9 @@ final class PlanificacionesViewModel {
     }
 
     private func subjects(from snapshot: DashboardSnapshot?) -> [String] {
+        if let catalogSubjects = snapshot?.activeCourses.flatMap(\.subjects).map(\.label), !catalogSubjects.isEmpty {
+            return Array(Set(catalogSubjects)).sorted()
+        }
         if let subject = snapshot?.preferences.asignaturasHabilitadas
             .map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) })
             .filter({ !$0.isEmpty }),

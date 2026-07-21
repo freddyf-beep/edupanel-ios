@@ -4,11 +4,40 @@ struct ProfileCoursesTab: View {
     @Bindable var viewModel: ProfileViewModel
     let snapshot: DashboardSnapshot
     @Binding var selectedTab: ProfileTabKey
+    @State private var creatingCourse = false
+    @State private var coursePendingDeletion: AcademicCourse?
 
     var body: some View {
         let courses = viewModel.courseSummaries(for: snapshot)
 
         return VStack(spacing: 18) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Cursos y talleres").font(.headline.weight(.black))
+                    Text("Define aquí su identidad, nivel y asignaturas.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button { creatingCourse = true } label: {
+                    Label("Nuevo", systemImage: "plus").font(.footnote.weight(.black))
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(EPTheme.primary)
+            }
+
+            if snapshot.courseCatalog.isEmpty, !snapshot.courses.isEmpty {
+                Button {
+                    Task { await viewModel.importLegacyCourses() }
+                } label: {
+                    Label("Importar configuración anterior", systemImage: "arrow.triangle.2.circlepath")
+                        .font(.footnote.weight(.bold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                Text("La importación crea el catálogo v2 sin borrar ni reescribir los documentos anteriores.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             if courses.isEmpty {
                 ProfileEmptyAction(
                     icon: "folder.badge.plus",
@@ -33,6 +62,102 @@ struct ProfileCoursesTab: View {
                 ForEach(courses) { course in
                     CursoConfigCard(viewModel: viewModel, course: course)
                 }
+            }
+
+            if !snapshot.archivedCourses.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Archivados").font(.headline.weight(.black))
+                    ForEach(snapshot.archivedCourses) { course in
+                        HStack(spacing: 10) {
+                            Circle().fill(Color(profileHex: course.colorHex)).frame(width: 12, height: 12)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(course.name).font(.footnote.weight(.bold))
+                                Text(course.deleteEligibleAt.map { "Eliminación disponible desde \($0.formatted(date: .abbreviated, time: .omitted))" } ?? "Protegido por 30 días")
+                                    .font(.caption2).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button("Restaurar") { Task { await viewModel.restoreCourse(course.courseID) } }
+                                .font(.caption.weight(.bold))
+                            if course.isDeleteEligible {
+                                Button(role: .destructive) {
+                                    coursePendingDeletion = course
+                                } label: { Image(systemName: "trash") }
+                                .accessibilityLabel("Eliminar permanentemente \(course.name)")
+                            }
+                        }
+                        .padding(12)
+                        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $creatingCourse) { AcademicCourseEditorSheet(viewModel: viewModel) }
+        .sheet(item: $coursePendingDeletion) { course in
+            PermanentCourseDeletionSheet(viewModel: viewModel, course: course)
+        }
+    }
+}
+
+private struct PermanentCourseDeletionSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let viewModel: ProfileViewModel
+    let course: AcademicCourse
+
+    @State private var exactName = ""
+    @State private var impactSummary: String?
+    @State private var isLoading = true
+    @State private var isDeleting = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Impacto") {
+                    if isLoading {
+                        ProgressView("Calculando impacto…")
+                    } else if let impactSummary {
+                        Label(impactSummary, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    } else {
+                        Text("No fue posible verificar el impacto. Revisa la conexión e inténtalo de nuevo.")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("Confirmación obligatoria") {
+                    Text("Esta eliminación no se puede deshacer. Escribe exactamente:")
+                    Text(course.name).font(.headline)
+                    TextField("Nombre exacto del curso", text: $exactName)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+
+                Section {
+                    Button(role: .destructive) {
+                        isDeleting = true
+                        Task {
+                            if await viewModel.permanentlyDeleteCourse(course, exactName: exactName) {
+                                dismiss()
+                            }
+                            isDeleting = false
+                        }
+                    } label: {
+                        if isDeleting {
+                            ProgressView().frame(maxWidth: .infinity)
+                        } else {
+                            Text("Eliminar permanentemente").frame(maxWidth: .infinity)
+                        }
+                    }
+                    .disabled(isLoading || impactSummary == nil || exactName != course.name || isDeleting)
+                }
+            }
+            .navigationTitle("Eliminar curso")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
+            }
+            .task {
+                impactSummary = await viewModel.deletionImpactSummary(for: course)
+                isLoading = false
             }
         }
     }
@@ -61,6 +186,11 @@ private struct CursoConfigCard: View {
     @State private var nuevaAsignatura = ""
     @State private var wizardPreset: WizardPreset?
     @State private var editingBloque: ClaseHorario?
+    @State private var curriculumOptions: [CurriculumSubjectOption] = []
+
+    private var academicCourse: AcademicCourse? {
+        viewModel.snapshot?.courseCatalog.first { $0.courseID == course.courseID }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -90,6 +220,13 @@ private struct CursoConfigCard: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(Color(.separator).opacity(0.1), lineWidth: 1)
         )
+        .task(id: academicCourse?.level) {
+            guard let level = academicCourse?.level else {
+                curriculumOptions = []
+                return
+            }
+            curriculumOptions = await viewModel.curriculumSubjects(for: level)
+        }
         .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
         .sheet(item: $wizardPreset) { preset in
             BloqueWizardSheet(
@@ -102,16 +239,22 @@ private struct CursoConfigCard: View {
             BloqueEditorSheet(viewModel: viewModel, bloque: bloque)
         }
         .confirmationDialog(
-            "¿Eliminar el curso \(course.name) completo?",
+            course.academicKind == nil ? "¿Eliminar el curso \(course.name) completo?" : "¿Archivar \(course.name)?",
             isPresented: $confirmandoEliminar,
             titleVisibility: .visible
         ) {
-            Button("Sí, eliminar curso", role: .destructive) {
-                viewModel.removeCurso(course.name)
+            Button(course.academicKind == nil ? "Sí, eliminar curso" : "Archivar curso", role: .destructive) {
+                if course.academicKind == nil {
+                    viewModel.removeCurso(course.name)
+                } else {
+                    Task { await viewModel.archiveCourse(course.courseID) }
+                }
             }
             Button("Cancelar", role: .cancel) {}
         } message: {
-            Text("Se quitarán sus \(course.blocks) bloques del horario. La lista de estudiantes no se borra de Firestore.")
+            Text(course.academicKind == nil
+                ? "Se quitarán sus \(course.blocks) bloques del horario. La lista de estudiantes no se borra de Firestore."
+                : "Se guardará una copia de sus bloques y quedará protegido contra eliminación durante 30 días.")
         }
     }
 
@@ -159,17 +302,19 @@ private struct CursoConfigCard: View {
                         Text(course.name)
                             .font(.title3.weight(.black))
                             .lineLimit(2)
-                        Button {
-                            nuevoNombre = course.name
-                            renombrando = true
-                        } label: {
-                            Image(systemName: "pencil")
-                                .font(.caption.weight(.black))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 26, height: 26)
-                                .background(Color(.systemGray5), in: Circle())
+                        if course.academicKind != .oficial {
+                            Button {
+                                nuevoNombre = course.name
+                                renombrando = true
+                            } label: {
+                                Image(systemName: "pencil")
+                                    .font(.caption.weight(.black))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 26, height: 26)
+                                    .background(Color(.systemGray5), in: Circle())
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
 
@@ -222,6 +367,15 @@ private struct CursoConfigCard: View {
 
     private var tipoNivelBlock: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let academicCourse {
+                HStack {
+                    Label(academicCourse.kind.label, systemImage: academicCourse.kind == .oficial ? "graduationcap.fill" : "paintbrush.fill")
+                    Spacer()
+                    if let level = academicCourse.level { Text(AcademicContract.displayLevel(level)) }
+                }
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.secondary)
+            } else {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Tipo de curso")
                     .profileFieldLabel()
@@ -264,6 +418,7 @@ private struct CursoConfigCard: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
+            }
         }
         .padding(12)
         .background(Color(.tertiarySystemGroupedBackground).opacity(0.7), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -305,7 +460,11 @@ private struct CursoConfigCard: View {
             let nombre = bloque.asignatura?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return nombre.isEmpty ? "Sin asignatura" : nombre
         }
-        return grouped.map { ($0.key, $0.value) }.sorted { lhs, rhs in
+        var result = grouped.map { ($0.key, $0.value) }
+        for subject in course.subjects where !result.contains(where: { $0.0 == subject }) {
+            result.append((subject, []))
+        }
+        return result.sorted { lhs, rhs in
             if lhs.0 == "Sin asignatura" { return false }
             if rhs.0 == "Sin asignatura" { return true }
             return lhs.0.localizedCaseInsensitiveCompare(rhs.0) == .orderedAscending
@@ -334,6 +493,41 @@ private struct CursoConfigCard: View {
                         .background(EPTheme.primary, in: Capsule())
                 }
                 .buttonStyle(.plain)
+                .disabled(academicCourse != nil)
+                .opacity(academicCourse == nil ? 1 : 0)
+            }
+
+            if let academicCourse, academicCourse.kind == .oficial, let level = academicCourse.level {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Activa las asignaturas que impartes en este curso.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    ReplicaFlowLayout(spacing: 7) {
+                        ForEach(curriculumOptions.isEmpty ? AcademicContract.subjects(for: level) : curriculumOptions) { option in
+                            let enabled = academicCourse.subjects.contains { $0.id == option.id }
+                            Button {
+                                var updated = academicCourse
+                                if enabled { updated.subjects.removeAll { $0.id == option.id } }
+                                else { updated.subjects.append(CourseSubjectSelection(id: option.id, label: option.label, availability: option.availability)) }
+                                Task { await viewModel.saveCourse(updated) }
+                            } label: {
+                                Label(
+                                    option.label,
+                                    systemImage: enabled ? "checkmark.circle.fill" : (option.availability == .unavailable ? "exclamationmark.circle" : "circle")
+                                )
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(enabled ? EPTheme.primary : .secondary)
+                                    .padding(.horizontal, 9).padding(.vertical, 6)
+                                    .background((enabled ? EPTheme.primary : Color.secondary).opacity(0.1), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint(option.availability == .unavailable ? "Seleccionable, pero aún no tiene contenido OA publicado." : "Contenido curricular publicado disponible.")
+                        }
+                    }
+                    if curriculumOptions.contains(where: { $0.availability == .unavailable }) {
+                        Label("El símbolo de advertencia indica que aún no hay contenido OA publicado; la asignatura sigue siendo seleccionable.", systemImage: "exclamationmark.circle")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
             }
 
             if agregandoAsignatura {
@@ -751,7 +945,7 @@ private struct CursoConfigCard: View {
             Button {
                 confirmandoEliminar = true
             } label: {
-                Label("Eliminar curso", systemImage: "trash")
+                Label(course.academicKind == nil ? "Eliminar curso" : "Archivar curso", systemImage: course.academicKind == nil ? "trash" : "archivebox")
                     .font(.caption.weight(.black))
                     .foregroundStyle(.red)
                     .padding(.horizontal, 12)
@@ -773,6 +967,118 @@ private struct CursoConfigCard: View {
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
             .background(tint.opacity(0.12), in: Capsule())
+    }
+}
+
+private struct AcademicCourseEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let viewModel: ProfileViewModel
+    @State private var kind: AcademicCourseKind = .oficial
+    @State private var level = AcademicContract.officialLevels.first ?? "1ro Básico"
+    @State private var section = "A"
+    @State private var workshopName = ""
+    @State private var colorHex = "#EC4899"
+    @State private var selectedSubjects: Set<String> = []
+    @State private var curriculumOptions: [CurriculumSubjectOption] = []
+    @State private var isSaving = false
+
+    private var officialName: String {
+        (try? AcademicContract.officialCourseName(level: level, section: section)) ?? "Curso"
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Tipo") {
+                    Picker("Tipo", selection: $kind) {
+                        ForEach(AcademicCourseKind.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                if kind == .oficial {
+                    Section("Identidad oficial") {
+                        Picker("Nivel", selection: $level) {
+                            ForEach(AcademicContract.officialLevels, id: \.self) { Text(AcademicContract.displayLevel($0)).tag($0) }
+                        }
+                        Picker("Sección", selection: $section) {
+                            ForEach(AcademicContract.sections, id: \.self) { Text($0).tag($0) }
+                        }
+                        LabeledContent("Nombre", value: officialName)
+                    }
+
+                    Section("Asignaturas") {
+                        ForEach(curriculumOptions.isEmpty ? AcademicContract.subjects(for: level) : curriculumOptions) { subject in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Toggle(subject.label, isOn: Binding(
+                                    get: { selectedSubjects.contains(subject.id) },
+                                    set: { enabled in
+                                        if enabled { selectedSubjects.insert(subject.id) }
+                                        else { selectedSubjects.remove(subject.id) }
+                                    }
+                                ))
+                                if subject.availability == .unavailable {
+                                    Text("Seleccionable · contenido OA aún no publicado")
+                                        .font(.caption2).foregroundStyle(.orange)
+                                }
+                            }
+                        }
+                    }
+                    .onChange(of: level) { _, newLevel in
+                        selectedSubjects.removeAll()
+                        Task { curriculumOptions = await viewModel.curriculumSubjects(for: newLevel) }
+                    }
+                } else {
+                    Section("Taller") {
+                        TextField("Nombre del taller", text: $workshopName)
+                        Text("Los talleres no usan nivel ni asignaturas curriculares oficiales.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("Color") { BloqueColorPalette(colorHex: $colorHex) }
+            }
+            .navigationTitle(kind == .oficial ? "Nuevo curso" : "Nuevo taller")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Crear") { create() }
+                        .fontWeight(.bold)
+                        .disabled(isSaving || (kind == .taller && workshopName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+                }
+            }
+        }
+        .task { curriculumOptions = await viewModel.curriculumSubjects(for: level) }
+    }
+
+    private func create() {
+        let courseID = UUID().uuidString.lowercased()
+        let name = kind == .oficial ? officialName : workshopName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let dataKeySource = kind == .oficial ? name : "\(name)_\(courseID)"
+        let options = curriculumOptions.isEmpty ? AcademicContract.subjects(for: level) : curriculumOptions
+        let course = AcademicCourse(
+            courseID: courseID,
+            dataKey: AcademicContract.normalizedKey(dataKeySource),
+            kind: kind,
+            name: name,
+            level: kind == .oficial ? level : nil,
+            section: kind == .oficial ? section : nil,
+            workshopName: kind == .taller ? name : nil,
+            subjects: kind == .oficial ? options.filter { selectedSubjects.contains($0.id) }.map {
+                CourseSubjectSelection(id: $0.id, label: $0.label, availability: $0.availability)
+            } : [],
+            colorHex: colorHex,
+            status: .active,
+            archivedAt: nil,
+            deleteEligibleAt: nil
+        )
+        isSaving = true
+        Task {
+            await viewModel.saveCourse(course)
+            isSaving = false
+            if viewModel.errorMessage == nil { dismiss() }
+        }
     }
 }
 

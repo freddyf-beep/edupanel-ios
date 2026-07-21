@@ -1,4 +1,5 @@
 #include "Shared.xcconfig"
 SWIFT_ACTIVE_COMPILATION_CONDITIONS =
 ENABLE_PREVIEWS = NO
-
+// Valor obligatorio en CI/Archive. Vacío evita distribuir localhost por error.
+EDUPANEL_API_BASE_URL =

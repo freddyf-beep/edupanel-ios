@@ -14,6 +14,8 @@ final class VerUnidadViewModel {
     var activeSubject = "M\u{00FA}sica"
     var curso = ""
     var unidadId = ""
+    var courseID: String?
+    var subjectID: String?
     
     var isLoading = false
     var isReloadingActivities = false
@@ -57,14 +59,17 @@ final class VerUnidadViewModel {
         do {
             let snap = try await dashboardRepository.fetchDashboard()
             self.snapshot = snap
+            self.courseID = snap.course(id: nil, named: curso)?.courseID
             let providedSubject = asignatura?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let subjectCandidates: [String]
             if !providedSubject.isEmpty {
                 subjectCandidates = [providedSubject]
                 self.activeSubject = providedSubject
             } else {
-                var candidates = snap.preferences.asignaturasHabilitadas
-                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                var candidates = snap.course(id: self.courseID, named: curso)?.subjects.map(\.label) ?? []
+                if candidates.isEmpty { candidates = snap.preferences.asignaturasHabilitadas }
+                candidates = candidates
+                    .map { $0.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines) }
                     .filter { !$0.isEmpty }
                 if let allPlans = try? await planificacionRepository.listarTodosPlanesCurso() {
                     candidates.append(contentsOf: allPlans.filter { $0.curso == curso }.map(\.asignatura))
@@ -76,6 +81,7 @@ final class VerUnidadViewModel {
                 subjectCandidates = candidates
                 self.activeSubject = candidates.first ?? "M\u{00FA}sica"
             }
+            self.subjectID = snap.course(id: self.courseID, named: curso)?.subjects.first { $0.label == self.activeSubject }?.id
             
             // 1. Load Pedagogical info
             var loadedVerUnidad: VerUnidadGuardada?
