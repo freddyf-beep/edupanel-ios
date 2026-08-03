@@ -30,6 +30,7 @@ struct DashboardView: View {
     @State private var showDictadoModal = false
     @AppStorage("edupanel_dashboard_reminders") private var remindersData = "[]"
     @AppStorage(AppTheme.storageKey) private var appThemeRaw = AppTheme.auto.rawValue
+    @AppStorage("edupanel_dashboard_date_button") private var showDashboardDateButton = true
 
     let user: AuthenticatedUser
     let onOpenProfile: () -> Void
@@ -60,7 +61,7 @@ struct DashboardView: View {
             }
             .padding(.horizontal, 18)
             .padding(.top, 10)
-            .padding(.bottom, 28)
+            .tabBarPageBottomPadding()
         }
         .reportsTabBarScroll()
         .background(EPTheme.background)
@@ -136,22 +137,24 @@ struct DashboardView: View {
 
                 Spacer(minLength: 8)
 
-                // Interruptor oculto de apariencia: tocar el ícono del saludo
-                // alterna entre modo claro y oscuro sin controles visibles.
-                Button {
-                    let current = AppTheme(rawValue: appThemeRaw) ?? .auto
-                    appThemeRaw = (current == .oscuro ? AppTheme.claro : .oscuro).rawValue
-                } label: {
-                    Image(systemName: greeting.icon)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(EPTheme.primary)
-                        .frame(width: 46, height: 46)
-                        .background(EPTheme.primaryLight, in: Circle())
-                        .contentShape(Circle())
+                // Control opcional de apariencia junto a la fecha.
+                if showDashboardDateButton {
+                    Button {
+                        let current = AppTheme(rawValue: appThemeRaw) ?? .auto
+                        appThemeRaw = (current == .oscuro ? AppTheme.claro : .oscuro).rawValue
+                    } label: {
+                        Image(systemName: greeting.icon)
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(EPTheme.primary)
+                            .frame(width: 46, height: 46)
+                            .background(EPTheme.primaryLight, in: Circle())
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .sensoryFeedback(.selection, trigger: appThemeRaw)
+                    .accessibilityLabel("Cambiar apariencia")
+                    .accessibilityHint("Alterna entre modo claro y oscuro")
                 }
-                .buttonStyle(.plain)
-                .sensoryFeedback(.selection, trigger: appThemeRaw)
-                .accessibilityLabel("Alternar entre modo claro y oscuro")
             }
 
             Text(formattedHeroDate)
@@ -316,7 +319,7 @@ struct DashboardView: View {
                             item: item,
                             isToday: true,
                             isCompleted: snapshot.classState[item.id] == true,
-                            studentCount: snapshot.studentCounts[item.resumen] ?? 0,
+                            studentCount: snapshot.studentCount(forCourseID: item.courseID, name: item.resumen),
                             route: AppRoute.classDetail(id: item.id, title: routeTitle(for: item))
                         ) {
                             Task { await viewModel.toggleCompletion(for: item) }

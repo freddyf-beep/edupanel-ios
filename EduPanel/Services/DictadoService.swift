@@ -20,25 +20,6 @@ enum DictadoState: Equatable {
     }
 }
 
-/// Borrador local de una futura observación docente. En fase 1 no se persiste
-/// ni se envía a servicios de análisis.
-enum ClassFeedbackReviewStatus: String, Equatable, Sendable {
-    case drafting
-    case reviewed
-    case approvedForFutureContext
-}
-
-struct ClassFeedbackDraft: Equatable, Sendable {
-    var schoolID: String?
-    var courseID: String?
-    var subjectID: String?
-    var blockID: String?
-    var classDate: Date?
-    var originalText: String
-    var editedText: String
-    var reviewStatus: ClassFeedbackReviewStatus
-}
-
 struct DictationTranscriptBuffer: Equatable {
     private(set) var confirmed = ""
     private(set) var partial = ""
@@ -224,8 +205,8 @@ final class DictadoService {
 
     var privacyDescription: String {
         usesOnDeviceRecognition
-            ? "La transcripción se procesa en este dispositivo y no se guarda."
-            : "La nota no se guarda ni se envía a EduPanel; iOS puede usar el servicio de dictado de Apple."
+            ? "La transcripción se procesa en este dispositivo."
+            : "iOS puede usar el servicio de dictado de Apple para transcribir."
     }
 
     private let permissions: DictationPermissionProviding

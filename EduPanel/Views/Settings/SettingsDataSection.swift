@@ -4,34 +4,40 @@ struct SettingsDataSection: View {
     let repository: DashboardRepository
 
     @AppStorage("edupanel_last_sync") private var lastSyncTimestamp = 0.0
-    @State private var preferences: PreferenciasUsuario?
     @State private var sincronizando = false
     @State private var mensaje: String?
+    @State private var mensajeEsError = false
 
     var body: some View {
-        ProfileSection(title: "Datos y sincronización", icon: "arrow.triangle.2.circlepath", hint: nil) {
+        ProfileSection(title: "Conexiones y sincronización", icon: "link", hint: nil) {
             VStack(alignment: .leading, spacing: 10) {
-                SettingsRow(
-                    icon: "calendar",
-                    title: "Google Calendar",
-                    subtitle: nil,
-                    tint: .blue
-                ) {
-                    estadoPill(preferences?.googleCalendarConnected ?? false)
+                NavigationLink(value: AppRoute.calendarConnect) {
+                    SettingsRow(
+                        icon: "calendar",
+                        title: "Google Calendar",
+                        subtitle: "Vista previa · conexión próximamente",
+                        tint: .blue
+                    ) {
+                        connectionAccessory
+                    }
                 }
+                .buttonStyle(.plain)
 
-                SettingsRow(
-                    icon: "externaldrive.fill",
-                    title: "Google Drive",
-                    subtitle: nil,
-                    tint: .green
-                ) {
-                    estadoPill(preferences?.googleDriveConnected ?? false)
+                NavigationLink(value: AppRoute.driveConnect) {
+                    SettingsRow(
+                        icon: "externaldrive.fill",
+                        title: "Google Drive",
+                        subtitle: "Vista previa · conexión próximamente",
+                        tint: .green
+                    ) {
+                        connectionAccessory
+                    }
                 }
+                .buttonStyle(.plain)
 
                 SettingsRow(
                     icon: "clock.arrow.circlepath",
-                    title: "Última sincronización",
+                    title: "Última actualización",
                     subtitle: lastSyncLabel,
                     tint: .purple
                 ) {
@@ -48,7 +54,7 @@ struct SettingsDataSection: View {
                         } else {
                             Image(systemName: "arrow.triangle.2.circlepath")
                         }
-                        Text(sincronizando ? "Sincronizando…" : "Sincronizar ahora")
+                        Text(sincronizando ? "Actualizando…" : "Actualizar datos de EduPanel")
                     }
                     .font(.footnote.weight(.black))
                     .frame(maxWidth: .infinity)
@@ -60,13 +66,9 @@ struct SettingsDataSection: View {
                 if let mensaje {
                     Label(mensaje, systemImage: "info.circle.fill")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(mensajeEsError ? .red : .secondary)
                 }
-            }
-        }
-        .task {
-            if let snapshot = try? await repository.fetchDashboard() {
-                preferences = snapshot.preferences
+
             }
         }
     }
@@ -79,26 +81,43 @@ struct SettingsDataSection: View {
         return formatter.string(from: Date(timeIntervalSince1970: lastSyncTimestamp))
     }
 
-    private func estadoPill(_ conectado: Bool) -> some View {
-        Text(conectado ? "Conectado" : "Desconectado")
+    private var estadoPill: some View {
+        Text("Próximamente")
             .font(.system(size: 10, weight: .black))
-            .foregroundStyle(conectado ? .green : .secondary)
+            .foregroundStyle(.secondary)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(conectado ? Color.green.opacity(0.14) : Color(.systemGray5), in: Capsule())
+            .background(Color(.systemGray5), in: Capsule())
+    }
+
+    private var connectionAccessory: some View {
+        HStack(spacing: 7) {
+            estadoPill
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.black))
+                .foregroundStyle(.tertiary)
+        }
     }
 
     private func sincronizar() {
+        guard !sincronizando else { return }
         sincronizando = true
         mensaje = nil
+        mensajeEsError = false
         Task {
-            if let snapshot = try? await repository.fetchDashboard() {
-                preferences = snapshot.preferences
+            defer { sincronizando = false }
+
+            do {
+                _ = try await repository.fetchDashboard(forceRefresh: true)
+                guard !Task.isCancelled else { return }
+                lastSyncTimestamp = Date().timeIntervalSince1970
+                mensaje = "Datos actualizados desde Firestore."
+            } catch is CancellationError {
+                return
+            } catch {
+                mensajeEsError = true
+                mensaje = "No se pudieron actualizar los datos: \(error.localizedDescription)"
             }
-            try? await Task.sleep(for: .seconds(0.8))
-            lastSyncTimestamp = Date().timeIntervalSince1970
-            sincronizando = false
-            mensaje = "Datos actualizados desde Firestore."
         }
     }
 }

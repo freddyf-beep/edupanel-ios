@@ -16,13 +16,6 @@ on:
         required: true
         type: number
         default: 14
-  push:
-    branches:
-      - main
-      - agent/**
-      - feature/planificaciones-unidades
-      - codex/**
-      - preview-planificaciones
 
 jobs:
   unsigned-ipa:

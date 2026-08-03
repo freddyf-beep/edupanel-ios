@@ -41,7 +41,7 @@ struct ProfileView: View {
             }
             .padding(.horizontal, 18)
             .padding(.top, 10)
-            .padding(.bottom, 28)
+            .tabBarPageBottomPadding()
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Perfil")
@@ -228,8 +228,6 @@ struct ProfileView: View {
             ProfileCoursesTab(viewModel: viewModel, snapshot: snapshot, selectedTab: $selectedTab)
         case .identidad:
             ProfileIdentityTab(viewModel: viewModel)
-        case .conexiones:
-            ProfileConnectionsTab(viewModel: viewModel, snapshot: snapshot)
         }
     }
 

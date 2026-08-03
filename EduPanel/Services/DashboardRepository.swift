@@ -2,6 +2,22 @@ import Foundation
 import FirebaseAuth
 import FirebaseFirestore
 
+enum ActiveSchoolScope {
+    private static let prefix = "edupanel.active-school."
+
+    static func schoolID(for uid: String) -> String {
+        UserDefaults.standard.string(forKey: prefix + uid) ?? "principal"
+    }
+
+    static func storedSchoolID(for uid: String) -> String? {
+        UserDefaults.standard.string(forKey: prefix + uid)
+    }
+
+    static func setSchoolID(_ schoolID: String, for uid: String) {
+        UserDefaults.standard.set(schoolID, forKey: prefix + uid)
+    }
+}
+
 enum DashboardRepositoryError: LocalizedError {
     case missingUser
 
@@ -71,8 +87,26 @@ struct DashboardRepository {
         let profileSnapshot = try await profileTask
         let legacySchoolSnapshot = try await legacySchoolTask
         let preferencesSnapshot = try await preferencesTask
-        let preferences = PreferenciasUsuario.from(dictionary: preferencesSnapshot.data())
-        let schoolID = Self.validSchoolID(preferences.colegioActivoId) ?? "principal"
+        var preferences = PreferenciasUsuario.from(dictionary: preferencesSnapshot.data())
+        let requestedSchoolID = Self.validSchoolID(preferences.colegioActivoId)
+        let localSchoolID = Self.validSchoolID(ActiveSchoolScope.storedSchoolID(for: uid))
+        let schoolID = try await resolveActiveSchoolID(
+            userRef: userRef,
+            requestedID: requestedSchoolID,
+            fallbackID: localSchoolID
+        )
+        ActiveSchoolScope.setSchoolID(schoolID, for: uid)
+        if requestedSchoolID != schoolID {
+            try? await setData(
+                [
+                    "colegioActivoId": schoolID,
+                    "updatedAt": FieldValue.serverTimestamp()
+                ],
+                at: userRef.collection("perfil_info").document("preferencias"),
+                merge: true
+            )
+        }
+        preferences.colegioActivoId = schoolID
         let schoolRef = userRef.collection("colegios").document(schoolID)
 
         async let scopedSchoolTask = getDocument(schoolRef)
@@ -102,10 +136,18 @@ struct DashboardRepository {
         let activePeriod = AcademicContract.resolvePublishedPeriod(periods, for: date)
         let scopedLegacyClasses = scopedScheduleSnapshot.data()?["clases"] as? [[String: Any]]
         let globalLegacyClasses = legacyScheduleSnapshot.data()?["clases"] as? [[String: Any]]
-        let legacySchedule = (scopedLegacyClasses ?? globalLegacyClasses ?? []).compactMap(ClaseHorario.from(dictionary:))
+        let legacySchedule = (
+            scopedLegacyClasses ??
+            (schoolID == "principal" ? globalLegacyClasses : nil) ??
+            []
+        ).compactMap(ClaseHorario.from(dictionary:))
         let horario = AcademicContract.resolveSchedule(periods, legacy: legacySchedule, for: date)
-        let levelsData = scopedLevelsSnapshot.exists ? scopedLevelsSnapshot.data() : legacyLevelsSnapshot.data()
-        let stateData = scopedStateSnapshot.exists ? scopedStateSnapshot.data() : legacyStateSnapshot.data()
+        let levelsData = scopedLevelsSnapshot.exists
+            ? scopedLevelsSnapshot.data()
+            : (schoolID == "principal" ? legacyLevelsSnapshot.data() : nil)
+        let stateData = scopedStateSnapshot.exists
+            ? scopedStateSnapshot.data()
+            : (schoolID == "principal" ? legacyStateSnapshot.data() : nil)
         let classState = stateData?["estado"] as? [String: Bool] ?? [:]
         let studentsByCourse = await loadStudentsByCourse(
             catalog: catalog,
@@ -113,7 +155,13 @@ struct DashboardRepository {
             uid: uid,
             schoolID: schoolID
         )
-        let studentCounts = studentsByCourse.mapValues(\.count)
+        var studentCounts = studentsByCourse.mapValues(\.count)
+        for course in catalog {
+            if let count = studentCounts[course.courseID] {
+                studentCounts[course.name] = count
+                studentCounts[course.dataKey] = count
+            }
+        }
         let rawCursoTipos = levelsData?["cursoTipos"] as? [String: String] ?? [:]
         let cursoTipos = rawCursoTipos.mapValues { TipoCurricular.from($0) }
 
@@ -127,6 +175,7 @@ struct DashboardRepository {
             studentCounts: studentCounts,
             studentsByCourse: studentsByCourse,
             nivelMapping: levelsData?["mapping"] as? [String: String] ?? [:],
+            subjectLevelMapping: levelsData?["asignaturaMapping"] as? [String: [String: String]] ?? [:],
             cursoTipos: cursoTipos,
             schoolID: schoolID,
             courseCatalog: catalog,
@@ -309,6 +358,10 @@ struct DashboardRepository {
             at: db.collection("users").document(uid).collection("perfil_info").document("preferencias"),
             merge: true
         )
+        if let schoolID = Self.validSchoolID(preferences.colegioActivoId) {
+            ActiveSchoolScope.setSchoolID(schoolID, for: uid)
+        }
+        await Self.cache.clear()
     }
 
     func saveConnections(googleCalendarConnected: Bool, googleDriveConnected: Bool) async throws {
@@ -322,6 +375,7 @@ struct DashboardRepository {
             "googleDriveConnected": googleDriveConnected,
             "updatedAt": FieldValue.serverTimestamp()
         ], at: ref, merge: true)
+        await Self.cache.clear()
     }
 
     func saveStudents(_ students: [EstudiantePerfil], for course: String) async throws {
@@ -560,7 +614,59 @@ struct DashboardRepository {
             throw DashboardRepositoryError.missingUser
         }
 
-        let scheduleRef = db.collection("users").document(uid).collection("configuracion").document("horario")
+        let cleanOldName = oldName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanNewName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanOldName.isEmpty, !cleanNewName.isEmpty else { return }
+
+        let userRef = db.collection("users").document(uid)
+        let schoolID = try await activeSchoolID(uid: uid)
+        let schoolRef = userRef.collection("colegios").document(schoolID)
+        let catalog = try await getDocuments(schoolRef.collection("cursos")).documents.compactMap {
+            AcademicCourse.from(id: $0.documentID, dictionary: $0.data())
+        }
+
+        // Los cursos v2 viven bajo el colegio activo. Actualizar solamente el
+        // documento legado dejaba la tarjeta del curso y sus estudiantes con
+        // un nombre distinto al del horario.
+        if var course = catalog.first(where: {
+            AcademicContract.normalizedKey($0.name) == AcademicContract.normalizedKey(cleanOldName)
+        }) {
+            let originalName = course.name
+            if course.kind == .oficial {
+                guard AcademicContract.normalizedKey(cleanNewName) == AcademicContract.normalizedKey(originalName) else {
+                    throw AcademicContractError.invalidOfficialCourse
+                }
+                // La identidad de un curso oficial es nivel + sección; solo
+                // se permite corregir el color desde este editor.
+                course.name = originalName
+            } else {
+                course.name = cleanNewName
+                course.workshopName = cleanNewName
+            }
+            course.colorHex = newColorHex
+            try await saveCourse(course, previousDataKey: course.dataKey)
+            try await renameCourseInSchedule(
+                schoolRef: schoolRef,
+                courseID: course.courseID,
+                oldName: originalName,
+                newName: course.name,
+                colorHex: newColorHex
+            )
+            try await renameCourseMappings(
+                userRef: userRef,
+                schoolRef: schoolRef,
+                schoolID: schoolID,
+                oldName: originalName,
+                newName: course.name
+            )
+            await Self.cache.clear()
+            return
+        }
+
+        // Compatibilidad acotada para cuentas todavía no migradas. Nunca se
+        // escribe el horario global de un colegio secundario.
+        guard schoolID == "principal" else { return }
+        let scheduleRef = userRef.collection("configuracion").document("horario")
         let snapshot = try await getDocument(scheduleRef)
         guard let data = snapshot.data(),
               let rawClasses = data["clases"] as? [[String: Any]] else {
@@ -583,14 +689,14 @@ struct DashboardRepository {
         let oldCursoId = Self.buildCursoId(oldName)
         let newCursoId = Self.buildCursoId(newName)
         if oldCursoId != newCursoId {
-            let studentsCollection = db.collection("users").document(uid).collection("estudiantes")
+            let studentsCollection = userRef.collection("estudiantes")
             let oldDoc = try await getDocument(studentsCollection.document(oldCursoId))
             if oldDoc.exists, let oldData = oldDoc.data() {
                 try await setData(oldData, at: studentsCollection.document(newCursoId), merge: false)
                 try await studentsCollection.document(oldCursoId).delete()
             }
 
-            let levelsRef = db.collection("users").document(uid).collection("configuracion").document("nivel_mapping")
+            let levelsRef = userRef.collection("configuracion").document("nivel_mapping")
             let levelsDoc = try await getDocument(levelsRef)
             if levelsDoc.exists, var levelsData = levelsDoc.data() {
                 if var mapping = levelsData["mapping"] as? [String: String] {
@@ -612,6 +718,126 @@ struct DashboardRepository {
         }
     }
 
+    private func renameCourseInSchedule(
+        schoolRef: DocumentReference,
+        courseID: String,
+        oldName: String,
+        newName: String,
+        colorHex: String
+    ) async throws {
+        let matches: ([String: Any]) -> Bool = { value in
+            if let storedCourseID = value["courseId"] as? String, storedCourseID == courseID {
+                return true
+            }
+            let storedName = value["resumen"] as? String ?? ""
+            return AcademicContract.normalizedKey(storedName) == AcademicContract.normalizedKey(oldName)
+        }
+
+        let scheduleRef = schoolRef.collection("configuracion").document("horario")
+        let scheduleSnapshot = try await getDocument(scheduleRef)
+        if let rawBlocks = scheduleSnapshot.data()?["clases"] as? [[String: Any]] {
+            var changed = false
+            let updatedBlocks = rawBlocks.map { value -> [String: Any] in
+                guard matches(value) else { return value }
+                changed = true
+                var next = value
+                next["resumen"] = newName
+                next["color"] = colorHex
+                next["courseId"] = courseID
+                return next
+            }
+            if changed {
+                try await setData(
+                    ["clases": updatedBlocks, "updatedAt": FieldValue.serverTimestamp()],
+                    at: scheduleRef,
+                    merge: true
+                )
+            }
+        }
+
+        let periods = try await getDocuments(schoolRef.collection("horarios"))
+        for period in periods.documents {
+            guard let rawBlocks = period.data()["bloques"] as? [[String: Any]] else { continue }
+            var changed = false
+            let updatedBlocks = rawBlocks.map { value -> [String: Any] in
+                guard matches(value) else { return value }
+                changed = true
+                var next = value
+                next["resumen"] = newName
+                next["color"] = colorHex
+                next["courseId"] = courseID
+                return next
+            }
+            if changed {
+                try await setData(
+                    ["bloques": updatedBlocks, "updatedAt": FieldValue.serverTimestamp()],
+                    at: period.reference,
+                    merge: true
+                )
+            }
+        }
+    }
+
+    private func renameCourseMappings(
+        userRef: DocumentReference,
+        schoolRef: DocumentReference,
+        schoolID: String,
+        oldName: String,
+        newName: String
+    ) async throws {
+        guard AcademicContract.normalizedKey(oldName) != AcademicContract.normalizedKey(newName) else { return }
+
+        var references = [schoolRef.collection("configuracion").document("nivel_mapping")]
+        if schoolID == "principal" {
+            references.append(userRef.collection("configuracion").document("nivel_mapping"))
+        }
+
+        for reference in references {
+            let snapshot = try await getDocument(reference)
+            guard snapshot.exists, var data = snapshot.data() else { continue }
+            var changed = false
+
+            if let mapping = data["mapping"] as? [String: String] {
+                var next = mapping
+                for key in mapping.keys where AcademicContract.normalizedKey(key) == AcademicContract.normalizedKey(oldName) {
+                    if next[newName] == nil { next[newName] = mapping[key] }
+                    next.removeValue(forKey: key)
+                    changed = true
+                }
+                data["mapping"] = next
+            }
+
+            if let courseTypes = data["cursoTipos"] as? [String: String] {
+                var next = courseTypes
+                for key in courseTypes.keys where AcademicContract.normalizedKey(key) == AcademicContract.normalizedKey(oldName) {
+                    if next[newName] == nil { next[newName] = courseTypes[key] }
+                    next.removeValue(forKey: key)
+                    changed = true
+                }
+                data["cursoTipos"] = next
+            }
+
+            if let subjectMapping = data["asignaturaMapping"] as? [String: [String: String]] {
+                var next = subjectMapping
+                for key in subjectMapping.keys where AcademicContract.normalizedKey(key) == AcademicContract.normalizedKey(oldName) {
+                    let oldSubjects = next.removeValue(forKey: key) ?? [:]
+                    var targetSubjects = next[newName] ?? [:]
+                    for (subject, level) in oldSubjects where targetSubjects[subject] == nil {
+                        targetSubjects[subject] = level
+                    }
+                    next[newName] = targetSubjects
+                    changed = true
+                }
+                data["asignaturaMapping"] = next
+            }
+
+            if changed {
+                data["updatedAt"] = FieldValue.serverTimestamp()
+                try await setData(data, at: reference, merge: false)
+            }
+        }
+    }
+
     func saveLevelMapping(_ mapping: [String: String], cursoTipos: [String: TipoCurricular]) async throws {
         guard let uid = Auth.auth().currentUser?.uid else {
             throw DashboardRepositoryError.missingUser
@@ -621,15 +847,79 @@ struct DashboardRepository {
             .filter { $0.value != .oficial }
             .mapValues(\.rawValue)
 
+        let schoolID = try await activeSchoolID(uid: uid)
+        let scopedRef = db.collection("users").document(uid)
+            .collection("colegios").document(schoolID)
+            .collection("configuracion").document("nivel_mapping")
         try await setData(
             [
                 "mapping": mapping,
                 "cursoTipos": rawTypes,
                 "updatedAt": FieldValue.serverTimestamp()
             ],
-            at: db.collection("users").document(uid).collection("configuracion").document("nivel_mapping"),
-            merge: false
+            at: scopedRef,
+            merge: true
         )
+        if schoolID == "principal" {
+            try await setData(
+                [
+                    "mapping": mapping,
+                    "cursoTipos": rawTypes,
+                    "updatedAt": FieldValue.serverTimestamp()
+                ],
+                at: db.collection("users").document(uid).collection("configuracion").document("nivel_mapping"),
+                merge: true
+            )
+        }
+        await Self.cache.clear()
+    }
+
+    func saveSubjectLevelMapping(course: String, subject: String, level: String) async throws {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            throw DashboardRepositoryError.missingUser
+        }
+        let cleanCourse = course.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanSubject = subject.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanLevel = level.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanCourse.isEmpty, !cleanSubject.isEmpty else { return }
+
+        let schoolID = try await activeSchoolID(uid: uid)
+        let scopedRef = db.collection("users").document(uid)
+            .collection("colegios").document(schoolID)
+            .collection("configuracion").document("nivel_mapping")
+        let scopedSnapshot = try await getDocument(scopedRef)
+        var subjectMapping = scopedSnapshot.data()?["asignaturaMapping"] as? [String: [String: String]] ?? [:]
+        var courseMapping = subjectMapping[cleanCourse] ?? [:]
+        if cleanLevel.isEmpty {
+            courseMapping.removeValue(forKey: cleanSubject)
+        } else {
+            courseMapping[cleanSubject] = cleanLevel
+        }
+        if courseMapping.isEmpty {
+            subjectMapping.removeValue(forKey: cleanCourse)
+        } else {
+            subjectMapping[cleanCourse] = courseMapping
+        }
+        var payload: [String: Any] = [
+            "asignaturaMapping": subjectMapping,
+            "updatedAt": FieldValue.serverTimestamp()
+        ]
+        if schoolID == "principal" {
+            let legacySnapshot = try await getDocument(
+                db.collection("users").document(uid)
+                    .collection("configuracion").document("nivel_mapping")
+            )
+            if scopedSnapshot.data()?["mapping"] == nil,
+               let mapping = legacySnapshot.data()?["mapping"] {
+                payload["mapping"] = mapping
+            }
+            if scopedSnapshot.data()?["cursoTipos"] == nil,
+               let courseTypes = legacySnapshot.data()?["cursoTipos"] {
+                payload["cursoTipos"] = courseTypes
+            }
+        }
+        try await setData(payload, at: scopedRef, merge: true)
+        await Self.cache.clear()
     }
 
     private func loadStudentsByCourse(
@@ -638,10 +928,25 @@ struct DashboardRepository {
         uid: String,
         schoolID: String
     ) async -> [String: [EstudiantePerfil]] {
-        guard !catalog.isEmpty else { return await loadStudentsByCourse(for: legacySchedule, uid: uid) }
+        guard !catalog.isEmpty else {
+            return await loadStudentsByCourse(
+                for: legacySchedule,
+                uid: uid,
+                schoolID: schoolID
+            )
+        }
         let userRef = db.collection("users").document(uid)
         let scoped = userRef.collection("colegios").document(schoolID).collection("estudiantes")
         let legacy = userRef.collection("estudiantes")
+        let catalogKeys = Set(catalog.flatMap {
+            [$0.dataKey, $0.courseID, Self.buildCursoId($0.name)]
+        })
+        let scheduleOnlyCourses = Array(Set(
+            legacySchedule
+                .filter(\.isAcademic)
+                .map(\.resumen)
+                .filter { !catalogKeys.contains(Self.buildCursoId($0)) }
+        ))
 
         return await withTaskGroup(of: (String, [EstudiantePerfil]).self) { group in
             for course in catalog {
@@ -671,26 +976,57 @@ struct DashboardRepository {
                     return (course.courseID, [])
                 }
             }
+            for courseName in scheduleOnlyCourses {
+                group.addTask {
+                    let candidates = Array(Set([
+                        Self.buildCursoId(courseName),
+                        Self.buildLegacyCursoId(courseName)
+                    ])).filter { !$0.isEmpty }
+                    for key in candidates {
+                        if let snapshot = try? await getDocument(scoped.document(key)),
+                           snapshot.exists,
+                           let students = Self.students(from: snapshot.data()) {
+                            return (courseName, students)
+                        }
+                    }
+                    if schoolID == "principal" {
+                        for key in candidates {
+                            if let snapshot = try? await getDocument(legacy.document(key)),
+                               snapshot.exists,
+                               let students = Self.students(from: snapshot.data()) {
+                                return (courseName, students)
+                            }
+                        }
+                    }
+                    return (courseName, [])
+                }
+            }
             var result: [String: [EstudiantePerfil]] = [:]
             for await (key, students) in group { result[key] = students }
             return result
         }
     }
 
-    private func loadStudentsByCourse(for horario: [ClaseHorario], uid: String) async -> [String: [EstudiantePerfil]] {
+    private func loadStudentsByCourse(
+        for horario: [ClaseHorario],
+        uid: String,
+        schoolID: String
+    ) async -> [String: [EstudiantePerfil]] {
         let cursos = Array(Set(horario.filter(\.isAcademic).map(\.resumen))).sorted()
-        let studentsRef = db
-            .collection("users")
-            .document(uid)
-            .collection("estudiantes")
+        let user = db.collection("users").document(uid)
+        let scopedStudents = user.collection("colegios").document(schoolID).collection("estudiantes")
+        let legacyStudents = user.collection("estudiantes")
 
         // Cargar todos los cursos en paralelo: un viaje a Firestore por curso,
         // pero simultáneos en vez de en serie.
         return await withTaskGroup(of: (String, [EstudiantePerfil]).self) { group in
             for curso in cursos {
                 group.addTask {
-                    if let data = try? await getStudentDocument(for: curso, in: studentsRef).data(),
-                       let alumnos = data["alumnos"] as? [[String: Any]] {
+                    var data = try? await getStudentDocument(for: curso, in: scopedStudents).data()
+                    if data == nil, schoolID == "principal" {
+                        data = try? await getStudentDocument(for: curso, in: legacyStudents).data()
+                    }
+                    if let alumnos = data?["alumnos"] as? [[String: Any]] {
                         let estudiantes = alumnos
                             .enumerated()
                             .compactMap { index, value in EstudiantePerfil.from(dictionary: value, index: index) }
@@ -780,11 +1116,48 @@ struct DashboardRepository {
         return clean
     }
 
+    private func resolveActiveSchoolID(
+        userRef: DocumentReference,
+        requestedID: String?,
+        fallbackID: String? = nil
+    ) async throws -> String {
+        if requestedID == "principal" {
+            return "principal"
+        }
+
+        if let requestedID {
+            let requested = try await getDocument(userRef.collection("colegios").document(requestedID))
+            if requested.exists {
+                return requestedID
+            }
+        }
+
+        if fallbackID == "principal" {
+            return "principal"
+        }
+        if let fallbackID, fallbackID != requestedID {
+            let fallback = try await getDocument(userRef.collection("colegios").document(fallbackID))
+            if fallback.exists {
+                return fallbackID
+            }
+        }
+
+        let available = try await getDocuments(userRef.collection("colegios").limit(to: 1))
+        return available.documents.first?.documentID ?? "principal"
+    }
+
     private func activeSchoolID(uid: String) async throws -> String {
         let snapshot = try await getDocument(
             db.collection("users").document(uid).collection("perfil_info").document("preferencias")
         )
-        return Self.validSchoolID(snapshot.data()?["colegioActivoId"] as? String) ?? "principal"
+        let requested = Self.validSchoolID(snapshot.data()?["colegioActivoId"] as? String)
+        let resolved = try await resolveActiveSchoolID(
+            userRef: db.collection("users").document(uid),
+            requestedID: requested,
+            fallbackID: Self.validSchoolID(ActiveSchoolScope.storedSchoolID(for: uid))
+        )
+        ActiveSchoolScope.setSchoolID(resolved, for: uid)
+        return resolved
     }
 
     private func getDocument(_ ref: DocumentReference) async throws -> DocumentSnapshot {

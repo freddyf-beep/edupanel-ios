@@ -2,11 +2,6 @@ name: iOS 26 smoke test
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - agent/**
-      - codex/**
 
 jobs:
   build-and-smoke-test:
@@ -69,7 +64,7 @@ jobs:
             CODE_SIGN_IDENTITY='' \
             2>&1 | tee build/ios26-xcodebuild.log
 
-      - name: Run attendance and QR tests
+      - name: Run complete test suite
         run: |
           set -o pipefail
           xcodebuild \

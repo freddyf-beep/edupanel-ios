@@ -88,7 +88,7 @@ private struct AttendanceDataScannerView: UIViewControllerRepresentable {
     static func dismantleUIViewController(_ scanner: DataScannerViewController, coordinator: Coordinator) {
         scanner.stopScanning()
         scanner.delegate = nil
-        coordinator.scanner = nil
+        coordinator.invalidate()
     }
 
     @MainActor
@@ -98,6 +98,8 @@ private struct AttendanceDataScannerView: UIViewControllerRepresentable {
         private let onUnavailable: (AttendanceQRScannerAvailability) -> Void
         private var paused = true
         private var deliveredCurrentReading = false
+        private var startRetryTask: Task<Void, Never>?
+        private var startAttempts = 0
 
         init(
             onPayload: @escaping (String) -> Void,
@@ -107,11 +109,21 @@ private struct AttendanceDataScannerView: UIViewControllerRepresentable {
             self.onUnavailable = onUnavailable
         }
 
+        func invalidate() {
+            startRetryTask?.cancel()
+            startRetryTask = nil
+            paused = true
+            scanner = nil
+        }
+
         func update(paused newValue: Bool) {
             guard let scanner else { return }
             if newValue {
+                startRetryTask?.cancel()
+                startRetryTask = nil
                 scanner.stopScanning()
                 paused = true
+                startAttempts = 0
                 return
             }
 
@@ -120,10 +132,23 @@ private struct AttendanceDataScannerView: UIViewControllerRepresentable {
             }
             paused = false
             guard !scanner.isScanning else { return }
+            guard startRetryTask == nil else { return }
             do {
                 try scanner.startScanning()
+                startAttempts = 0
             } catch {
-                onUnavailable(.unavailable)
+                guard startAttempts == 0 else {
+                    onUnavailable(.unavailable)
+                    return
+                }
+                startAttempts += 1
+                startRetryTask?.cancel()
+                startRetryTask = Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .milliseconds(250))
+                    guard let self, !Task.isCancelled, !self.paused else { return }
+                    self.startRetryTask = nil
+                    self.update(paused: false)
+                }
             }
         }
 
@@ -132,13 +157,29 @@ private struct AttendanceDataScannerView: UIViewControllerRepresentable {
             didAdd addedItems: [RecognizedItem],
             allItems: [RecognizedItem]
         ) {
+            deliverFirstQR(from: addedItems, scanner: dataScanner)
+        }
+
+        func dataScanner(
+            _ dataScanner: DataScannerViewController,
+            didUpdate updatedItems: [RecognizedItem],
+            allItems: [RecognizedItem]
+        ) {
+            deliverFirstQR(from: updatedItems, scanner: dataScanner)
+        }
+
+        private func deliverFirstQR(
+            from items: [RecognizedItem],
+            scanner: DataScannerViewController
+        ) {
             guard !paused, !deliveredCurrentReading else { return }
-            for item in addedItems {
+            for item in items {
                 guard case .barcode(let barcode) = item,
-                      let payload = barcode.payloadStringValue,
+                      let payload = barcode.payloadStringValue?
+                        .trimmingCharacters(in: .whitespacesAndNewlines),
                       !payload.isEmpty else { continue }
                 deliveredCurrentReading = true
-                dataScanner.stopScanning()
+                scanner.stopScanning()
                 onPayload(payload)
                 return
             }
@@ -176,6 +217,8 @@ final class AttendanceQRCoordinator {
     private let scannerProvider: any AttendanceQRScannerProviding
     private var pendingResponse: AttendanceQRResolveResponse?
     private var resumeTask: Task<Void, Never>?
+    private var validationTask: Task<Void, Never>?
+    private var validationGeneration = 0
 
     init(
         attendanceModel: AttendanceViewModel,
@@ -218,6 +261,21 @@ final class AttendanceQRCoordinator {
     }
 
     func process(payload: String) async {
+        validationTask?.cancel()
+        validationGeneration += 1
+        let generation = validationGeneration
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.performProcess(payload: payload, generation: generation)
+        }
+        validationTask = task
+        await task.value
+        if generation == validationGeneration {
+            validationTask = nil
+        }
+    }
+
+    private func performProcess(payload: String, generation: Int) async {
         guard shouldScan else { return }
         guard let scope = attendanceModel.qrScope else {
             fail(.server)
@@ -234,13 +292,15 @@ final class AttendanceQRCoordinator {
                 scope: scope,
                 course: attendanceModel.course
             )
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, generation == validationGeneration else { return }
             apply(response, allowingConfirmedException: false)
         } catch is CancellationError {
             return
         } catch let failure as AttendanceQRFailure {
+            guard generation == validationGeneration else { return }
             fail(failure)
         } catch {
+            guard generation == validationGeneration else { return }
             fail(.server)
         }
     }
@@ -267,6 +327,9 @@ final class AttendanceQRCoordinator {
     }
 
     func cancel() {
+        validationGeneration += 1
+        validationTask?.cancel()
+        validationTask = nil
         resumeTask?.cancel()
         resumeTask = nil
         pendingResponse = nil
@@ -361,6 +424,7 @@ struct AttendanceQRScannerScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.scenePhase) private var scenePhase
 
     private let scannerProvider: any AttendanceQRScannerProviding
     private let onQuickMode: () -> Void
@@ -408,6 +472,10 @@ struct AttendanceQRScannerScreen: View {
             overlay
         }
         .task { await coordinator.prepare() }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await coordinator.prepare() }
+        }
         .onDisappear { coordinator.cancel() }
         .sensoryFeedback(.success, trigger: coordinator.successFeedbackToken)
         .sensoryFeedback(.selection, trigger: coordinator.duplicateFeedbackToken)

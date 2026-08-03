@@ -54,7 +54,6 @@ struct GuiasHubView: View {
             }
 
             metrics
-            PruebasUpcomingCard()
 
             if viewModel.guiasDesdeCache {
                 banner(icon: "icloud.slash.fill", title: "Guías desde caché", message: "Puede faltar algún cambio reciente.", tint: .orange)

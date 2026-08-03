@@ -56,7 +56,7 @@ struct CalificacionesView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
-            .padding(.bottom, 24)
+            .tabBarPageBottomPadding()
         }
         .background(EPTheme.background)
         .navigationTitle("Calificaciones")
@@ -93,7 +93,7 @@ struct CalificacionesView: View {
                         Button {
                             Task { await seleccionarAsignatura(subject) }
                         } label: {
-                            if subject == activeSubject {
+                            if subjectKey(subject) == subjectKey(activeSubject) {
                                 Label(subject, systemImage: "checkmark")
                             } else {
                                 Text(subject)
@@ -441,8 +441,8 @@ struct CalificacionesView: View {
         var vistos = Set<String>()
         func agregar(_ valor: String) {
             let limpio = valor.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !limpio.isEmpty, !vistos.contains(limpio) else { return }
-            vistos.insert(limpio)
+            let clave = subjectKey(limpio)
+            guard !limpio.isEmpty, vistos.insert(clave).inserted else { return }
             resultado.append(limpio)
         }
         asignaturasDelCurso(selectedCurso).forEach(agregar)
@@ -462,11 +462,18 @@ struct CalificacionesView: View {
         var vistos = Set<String>()
         for clase in horario where clase.resumen == curso {
             guard let asignatura = clase.asignatura?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !asignatura.isEmpty, !vistos.contains(asignatura) else { continue }
-            vistos.insert(asignatura)
+                  !asignatura.isEmpty, vistos.insert(subjectKey(asignatura)).inserted else { continue }
             resultado.append(asignatura)
         }
         return resultado
+    }
+
+    private func subjectKey(_ value: String) -> String {
+        value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL"))
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
     }
 
     private var evaluacionesFiltradas: [EvaluacionCalif] {
@@ -571,7 +578,13 @@ struct CalificacionesView: View {
             if !opciones.isEmpty { return opciones }
         }
 
-        guard let nivel = CurriculoNivel.resolver(curso: curso, mapping: snapshot.nivelMapping),
+        guard let nivel = CurriculoNivel.resolver(
+            curso: curso,
+            asignatura: asignatura,
+            catalogLevel: snapshot.course(id: nil, named: curso)?.level,
+            mapping: snapshot.nivelMapping,
+            subjectMapping: snapshot.subjectLevelMapping
+        ),
               let unidades = try? await curriculoRepository.getUnidades(asignatura: asignatura, nivel: nivel) else {
             return []
         }

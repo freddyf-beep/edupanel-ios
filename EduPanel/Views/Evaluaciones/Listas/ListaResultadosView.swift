@@ -26,7 +26,7 @@ struct ListaResultadosView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
-            .padding(.bottom, 24)
+            .tabBarPageBottomPadding()
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Resultados")
@@ -201,7 +201,8 @@ struct ListaResultadosView: View {
             lista = listaCargada
 
             if let snapshot = try? await dashboardRepository.fetchDashboard() {
-                roster = (snapshot.studentsByCourse[listaCargada.curso] ?? []).sorted { $0.orden < $1.orden }
+                roster = snapshot.students(forCourseID: nil, name: listaCargada.curso)
+                    .sorted { $0.orden < $1.orden }
             }
 
             if var evaluacionCargada = try await repository.cargarEvaluacionLista(listaId: listaId) {

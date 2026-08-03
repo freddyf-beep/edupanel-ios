@@ -124,6 +124,7 @@ struct AppShell: View {
     @State private var tabBadges: [AppTab: Int] = [:]
     @State private var isTabBarCompact = false
     @State private var isTabBarHidden = false
+    @State private var routeDrivenTabChange = false
 
     @State private var inicioPath = NavigationPath()
     @State private var planificacionesPath = NavigationPath()
@@ -167,20 +168,27 @@ struct AppShell: View {
                     tabBarControls
                 }
                 .environment(\.tabBarScrollReporter, updateTabBarForScrollPosition)
+                .environment(\.tabBarPageBottomPadding, tabBarPageBottomSpacing)
                 .onChange(of: selectedTab) { _, newTab in
                     isTabBarCompact = false
-                    if case .coursePlanificaciones = selectedRoute, newTab == .planificaciones {
+                    if routeDrivenTabChange {
+                        routeDrivenTabChange = false
                         return
                     }
+                    resetNavigationPath(for: newTab)
                     selectedRoute = .module(newTab)
                 }
                 .onChange(of: selectedRoute) { _, newRoute in
                     switch newRoute {
                     case .coursePlanificaciones(let course, let asignatura):
+                        routeDrivenTabChange = true
                         selectedTab = .planificaciones
                         planificacionesPath = NavigationPath([AppRoute.coursePlanificaciones(curso: course, asignatura: asignatura)])
                     case .module(let tab):
                         selectedTab = tab
+                    case .cronograma:
+                        resetNavigationPath(for: selectedTab)
+                        selectedTab = .cronograma
                     default:
                         break
                     }
@@ -337,6 +345,27 @@ struct AppShell: View {
     private func updateTabBarForScrollPosition(_ isAwayFromTop: Bool) {
         withAnimation(EPTheme.spring) {
             isTabBarCompact = isAwayFromTop
+        }
+    }
+
+    private var tabBarPageBottomSpacing: CGFloat {
+        isTabBarHidden ? 46 : 72
+    }
+
+    private func resetNavigationPath(for tab: AppTab) {
+        switch tab {
+        case .inicio:
+            inicioPath = NavigationPath()
+        case .planificaciones:
+            planificacionesPath = NavigationPath()
+        case .cronograma:
+            cronogramaPath = NavigationPath()
+        case .evaluaciones:
+            evaluacionesPath = NavigationPath()
+        case .clases:
+            clasesPath = NavigationPath()
+        case .perfil:
+            perfilPath = NavigationPath()
         }
     }
 

@@ -563,7 +563,7 @@ extension ProfileViewModel {
                 courseID: config?.courseID ?? course,
                 dataKey: config?.dataKey ?? DashboardRepository.buildCursoId(course),
                 name: course,
-                colorHex: blocks.first?.colorHex ?? "#EC4899",
+                colorHex: blocks.first?.colorHex ?? config?.colorHex ?? "#EC4899",
                 blocks: blocks.count,
                 minutes: minutes,
                 students: students.count,

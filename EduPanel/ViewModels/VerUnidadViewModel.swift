@@ -6,6 +6,12 @@ import FirebaseAuth
 @MainActor
 @Observable
 final class VerUnidadViewModel {
+    private struct RemoteActivityLoad {
+        let number: Int
+        let activity: ActividadClase?
+        let failed: Bool
+    }
+
     var verUnidad: VerUnidadGuardada? = nil
     var cronograma: CronogramaUnidadData? = nil
     var clasesActividades: [Int: ActividadClase] = [:] // key: numeroClase
@@ -14,8 +20,11 @@ final class VerUnidadViewModel {
     var activeSubject = "M\u{00FA}sica"
     var curso = ""
     var unidadId = ""
+    var curriculumUnitID: String?
+    var plannedHours: Int?
     var courseID: String?
     var subjectID: String?
+    var selectedClassNumber = 1
     
     var isLoading = false
     var isReloadingActivities = false
@@ -61,7 +70,7 @@ final class VerUnidadViewModel {
             self.snapshot = snap
             self.courseID = snap.course(id: nil, named: curso)?.courseID
             let providedSubject = asignatura?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let subjectCandidates: [String]
+            var subjectCandidates: [String]
             if !providedSubject.isEmpty {
                 subjectCandidates = [providedSubject]
                 self.activeSubject = providedSubject
@@ -81,21 +90,61 @@ final class VerUnidadViewModel {
                 subjectCandidates = candidates
                 self.activeSubject = candidates.first ?? "M\u{00FA}sica"
             }
+            let requestedIDs = Set(PlanificacionRepository.unidadIdCandidates(raw: unidadId))
+            var linkedPlanUnit: UnidadPlan?
+            for subject in subjectCandidates where linkedPlanUnit == nil {
+                guard let plan = try await planificacionRepository.cargarPlanCurso(
+                    asignatura: subject,
+                    curso: curso
+                ) else { continue }
+                linkedPlanUnit = plan.units.first { unit in
+                    requestedIDs.contains(String(unit.id)) ||
+                    unit.unidadCurricularId.map(requestedIDs.contains) == true
+                }
+                if linkedPlanUnit != nil {
+                    self.activeSubject = subject
+                }
+            }
+            if let linkedPlanUnit {
+                self.unidadId = String(linkedPlanUnit.id)
+                self.curriculumUnitID = linkedPlanUnit.unidadCurricularId
+                self.plannedHours = linkedPlanUnit.hours
+                subjectCandidates = uniqueSubjects([self.activeSubject] + subjectCandidates)
+            } else {
+                self.curriculumUnitID = nil
+                self.plannedHours = nil
+            }
             self.subjectID = snap.course(id: self.courseID, named: curso)?.subjects.first { $0.label == self.activeSubject }?.id
             
             // 1. Load Pedagogical info
             var loadedVerUnidad: VerUnidadGuardada?
-            for subject in subjectCandidates {
-                if let saved = try await planificacionRepository.cargarVerUnidadConFallback(asignatura: subject, curso: curso, unidadId: unidadId) {
-                    self.activeSubject = subject
-                    loadedVerUnidad = saved
-                    break
+            let storageUnitIDs = uniqueUnitIDs([
+                self.unidadId,
+                curriculumUnitID,
+                unidadId
+            ])
+            for subject in subjectCandidates where loadedVerUnidad == nil {
+                for storageUnitID in storageUnitIDs {
+                    if let saved = try await planificacionRepository.cargarVerUnidadConFallback(
+                        asignatura: subject,
+                        curso: curso,
+                        unidadId: storageUnitID
+                    ) {
+                        self.activeSubject = subject
+                        loadedVerUnidad = saved
+                        break
+                    }
                 }
             }
 
             if let saved = loadedVerUnidad {
-                self.verUnidad = saved
-                if !saved.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                var merged = saved
+                if let officialObjectives = await cargarOAsCurriculares() {
+                    merged.oas = CurriculoOA.mergeOAs(base: officialObjectives, saved: saved.oas)
+                }
+                self.verUnidad = merged
+                if linkedPlanUnit == nil,
+                   !saved.unidadId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     self.unidadId = saved.unidadId
                 }
             } else {
@@ -104,7 +153,11 @@ final class VerUnidadViewModel {
             }
             
             // 2. Load Cronograma (Class list and dates)
-            let candidates = PlanificacionRepository.unidadIdCandidates(raw: self.unidadId)
+            let candidates = uniqueUnitIDs([
+                self.unidadId,
+                curriculumUnitID,
+                loadedVerUnidad?.unidadId
+            ])
             var loadedCronograma: CronogramaUnidadData?
             for subject in subjectCandidates where loadedCronograma == nil {
                 if let savedCrono = try await planificacionRepository.cargarCronogramaUnidadConFallback(asignatura: subject, curso: curso, unidadIds: candidates) {
@@ -123,7 +176,7 @@ final class VerUnidadViewModel {
                 // Initialize default 8-class cronograma
                 let total = max(self.verUnidad?.clases ?? 8, 1)
                 let defaultClases = (1...total).map { n in
-                    ClaseCronograma(numero: n, fecha: "", oaIds: n == 1 ? ["OA1"] : n == 4 ? ["OA4"] : [])
+                    ClaseCronograma(numero: n, fecha: "", oaIds: [])
                 }
                 self.cronograma = CronogramaUnidadData(asignatura: activeSubject, curso: curso, unidadId: self.unidadId, totalClases: total, clases: defaultClases)
             }
@@ -172,24 +225,49 @@ final class VerUnidadViewModel {
         pendingActivityClassNumbers.removeAll()
         activitySyncErrorClassNumbers.removeAll()
         activityLoadErrorClassNumbers.removeAll()
-        
+
+        // Las clases son documentos independientes. Cargarlas una por una
+        // hacía que una unidad de ocho sesiones pareciera bloqueada durante
+        // muchos segundos; las lecturas remotas se hacen en paralelo y las
+        // mutaciones del modelo quedan secuenciales en el actor principal.
+        let remoteLoads = await withTaskGroup(of: RemoteActivityLoad.self) { group -> [RemoteActivityLoad] in
+            for number in 1...total {
+                let repository = planificacionRepository
+                let course = curso
+                let unit = unidadId
+                let subject = activeSubject
+                group.addTask {
+                    do {
+                        let activity = try await repository.cargarActividadClaseConFallback(
+                            curso: course,
+                            unidadId: unit,
+                            numeroClase: number,
+                            asignatura: subject
+                        )
+                        return RemoteActivityLoad(number: number, activity: activity, failed: false)
+                    } catch {
+                        return RemoteActivityLoad(number: number, activity: nil, failed: true)
+                    }
+                }
+            }
+
+            var results: [RemoteActivityLoad] = []
+            results.reserveCapacity(total)
+            for await result in group {
+                results.append(result)
+            }
+            return results
+        }
+        let remoteByNumber = Dictionary(uniqueKeysWithValues: remoteLoads.map { ($0.number, $0) })
+
         for n in 1...total {
             var baseActivity = activityTemplate(for: n)
-            var loadFailed = false
+            let remote = remoteByNumber[n]
+            let loadFailed = remote?.failed == true
 
-            do {
-                if let activity = try await planificacionRepository.cargarActividadClaseConFallback(
-                    curso: curso,
-                    unidadId: unidadId,
-                    numeroClase: n,
-                    asignatura: activeSubject
-                ) {
-                    baseActivity = normalizedActivity(activity, classNum: n)
-                    persistedActivityClassNumbers.insert(n)
-                }
-            } catch {
-                loadFailed = true
-                print("Error loading class \(n): \(error)")
+            if let activity = remote?.activity {
+                baseActivity = normalizedActivity(activity, classNum: n)
+                persistedActivityClassNumbers.insert(n)
             }
 
             if let pending = ActivityClassDraftStore.load(id: baseActivity.id) {
@@ -542,15 +620,27 @@ final class VerUnidadViewModel {
         // Find weekday matches from schedule
         do {
             let snap = try await dashboardRepository.fetchDashboard()
-            let academicClasses = snap.horario.filter(\.isAcademic)
+            let courseKey = AcademicContract.normalizedKey(curso)
+            let subjectKey = AcademicContract.normalizedKey(activeSubject)
+            let academicClasses = snap.horario.filter { item in
+                guard item.isAcademic,
+                      AcademicContract.normalizedKey(item.resumen) == courseKey else {
+                    return false
+                }
+                guard let subject = item.asignatura?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !subject.isEmpty else {
+                    return true
+                }
+                return AcademicContract.normalizedKey(subject) == subjectKey
+            }
             let weekdays = Array(Set(academicClasses.map(\.dia)))
             
             if weekdays.isEmpty {
+                saveStatus = "Error al calcular fechas: no hay bloques para este curso"
                 return
             }
             
             // Generate sequence of next weekdays starting from today
-            let calendar = Calendar.current
             var matchingDates: [String] = []
             var checkDate = Date()
             
@@ -567,16 +657,41 @@ final class VerUnidadViewModel {
             let targetWeekdayInts = weekdays.compactMap { day in
                 weekdayMap[day.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL")).lowercased()]
             }
+
+            guard !targetWeekdayInts.isEmpty else {
+                saveStatus = "Error al calcular fechas: revisa los días del horario"
+                return
+            }
             
             let formatter = DateFormatter()
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.locale = Locale(identifier: "es_CL")
+            formatter.timeZone = TimeZone(identifier: AcademicContract.timeZoneIdentifier)
             formatter.dateFormat = "dd/MM/yyyy"
-            
-            while matchingDates.count < cronograma.totalClases {
+
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = TimeZone(identifier: AcademicContract.timeZoneIdentifier) ?? .current
+            let targetCount = min(max(cronograma.totalClases, 0), 60)
+            var inspectedDays = 0
+            let maximumInspectedDays = max(14, targetCount * 14)
+
+            while matchingDates.count < targetCount, inspectedDays < maximumInspectedDays {
+                guard !Task.isCancelled else { return }
                 let wk = calendar.component(.weekday, from: checkDate)
                 if targetWeekdayInts.contains(wk) {
                     matchingDates.append(formatter.string(from: checkDate))
                 }
-                checkDate = calendar.date(byAdding: .day, value: 1, to: checkDate) ?? checkDate
+                guard let nextDate = calendar.date(byAdding: .day, value: 1, to: checkDate) else {
+                    saveStatus = "Error al calcular fechas: calendario no disponible"
+                    return
+                }
+                checkDate = nextDate
+                inspectedDays += 1
+            }
+
+            guard matchingDates.count == targetCount else {
+                saveStatus = "Error al calcular fechas: horario incompleto"
+                return
             }
             
             // Update cronograma classes dates
@@ -595,11 +710,22 @@ final class VerUnidadViewModel {
     }
 
     private func cargarOAsCurriculares() async -> [OAEditado]? {
-        guard let nivel = CurriculoNivel.resolver(curso: curso, mapping: snapshot?.nivelMapping ?? [:]) else {
+        guard let nivel = CurriculoNivel.resolver(
+            curso: curso,
+            asignatura: activeSubject,
+            catalogLevel: snapshot?.course(id: courseID, named: curso)?.level,
+            mapping: snapshot?.nivelMapping ?? [:],
+            subjectMapping: snapshot?.subjectLevelMapping ?? [:]
+        ) else {
             return nil
         }
 
-        for candidato in PlanificacionRepository.unidadIdCandidates(raw: unidadId) {
+        let candidates = uniqueUnitIDs([curriculumUnitID, unidadId])
+            .flatMap(PlanificacionRepository.unidadIdCandidates(raw:))
+            .reduce(into: [String]()) { result, candidate in
+                if !result.contains(candidate) { result.append(candidate) }
+            }
+        for candidato in candidates {
             if let unidad = try? await curriculoRepository.getUnidadCompleta(
                 asignatura: activeSubject,
                 nivel: nivel,
@@ -614,64 +740,105 @@ final class VerUnidadViewModel {
 
     // Curricular Fallback setup for local premium preview
     private func initDefaultUnit() async -> VerUnidadGuardada {
+        let hours = max(plannedHours ?? 16, 1)
+        let classCount = max(1, Int(ceil(Double(hours) / 2.0)))
         if let oasCurriculares = await cargarOAsCurriculares() {
+            let curricularUnit = await cargarUnidadCurricular()
             return VerUnidadGuardada(
                 asignatura: activeSubject,
                 curso: curso,
                 unidadId: unidadId,
-                descripcion: "<p>Explorar las cualidades del sonido en el entorno y crear paisajes sonoros y patrones rítmicos.</p>",
-                contextoDocente: "<p>Se requiere enfoque activo con dinámicas corporales y material lúdico.</p>",
-                objetivoDocente: "<p>Lograr que los estudiantes identifiquen y combinen al menos 3 fuentes sonoras.</p>",
-                horas: 16,
-                clases: 8,
+                descripcion: curricularUnit?.proposito ?? "",
+                contextoDocente: "",
+                objetivoDocente: "",
+                horas: hours,
+                clases: classCount,
                 oas: oasCurriculares,
-                habilidades: [],
-                conocimientos: [],
-                actitudes: [],
+                habilidades: elementosCurriculares(
+                    curricularUnit?.habilidades ?? [],
+                    prefix: "habilidad"
+                ),
+                conocimientos: elementosCurriculares(
+                    curricularUnit?.conocimientos ?? [],
+                    prefix: "conocimiento"
+                ),
+                actitudes: elementosCurriculares(
+                    curricularUnit?.actitudes ?? [],
+                    prefix: "actitud"
+                ),
+                conocimientosPrevios: (curricularUnit?.conocimientosPrevios ?? [])
+                    .joined(separator: "\n"),
                 recursosMaterialesUnidad: [],
                 estrategiasEvaluacion: []
             )
         }
 
-        let defaultOAs: [OAEditado] = []
-
-        let defaultHabilidades = [
-            ElementoCurricular(id: "hab_1", texto: "Escuchar de forma atenta y reflexiva.", seleccionado: true),
-            ElementoCurricular(id: "hab_2", texto: "Crear patrones e improvisaciones rítmicas.", seleccionado: true),
-            ElementoCurricular(id: "hab_3", texto: "Expresar ideas y emociones por medio del sonido.", seleccionado: true)
-        ]
-
-        let defaultConocimientos = [
-            ElementoCurricular(id: "con_1", texto: "Cualidades del sonido (timbre, altura, intensidad, duración).", seleccionado: true),
-            ElementoCurricular(id: "con_2", texto: "Paisaje sonoro y fuentes sonoras.", seleccionado: true),
-            ElementoCurricular(id: "con_3", texto: "Ritmo, pulso, acento y figuras rítmicas básicas.", seleccionado: true)
-        ]
-
-        let defaultActitudes = [
-            ElementoCurricular(id: "act_1", texto: "Demostrar disposición a comunicar sus ideas.", seleccionado: true),
-            ElementoCurricular(id: "act_2", texto: "Valorar el trabajo en equipo y el respeto mutuo.", seleccionado: true)
-        ]
-
         return VerUnidadGuardada(
             asignatura: activeSubject,
             curso: curso,
             unidadId: unidadId,
-            descripcion: "<p>Explorar las cualidades del sonido en el entorno y crear paisajes sonoros y patrones rítmicos.</p>",
-            contextoDocente: "<p>Se requiere enfoque activo con dinámicas corporales y material lúdico.</p>",
-            objetivoDocente: "<p>Lograr que los estudiantes identifiquen y combinen al menos 3 fuentes sonoras.</p>",
-            horas: 16,
-            clases: 8,
-            oas: defaultOAs,
-            habilidades: defaultHabilidades,
-            conocimientos: defaultConocimientos,
-            actitudes: defaultActitudes,
-            conocimientosPrevios: "<p>Sonidos del entorno familiar, figuras musicales simples.</p>",
-            recursosMaterialesUnidad: ["Celular para grabar", "Instrumentos de percusión", "Tarjetas visuales"],
-            estrategiasEvaluacion: [
-                EstrategiaEvaluacionUnidad(id: "eval_1", nombre: "Entrega de boceto sonoro", instrumento: "Rúbrica", ponderacion: 40.0),
-                EstrategiaEvaluacionUnidad(id: "eval_2", nombre: "Participación en coro rítmico", instrumento: "Lista de cotejo", ponderacion: 60.0)
-            ]
+            descripcion: "",
+            contextoDocente: "",
+            objetivoDocente: "",
+            horas: hours,
+            clases: classCount,
+            oas: [],
+            habilidades: [],
+            conocimientos: [],
+            actitudes: [],
+            conocimientosPrevios: "",
+            recursosMaterialesUnidad: [],
+            estrategiasEvaluacion: []
         )
+    }
+
+    private func cargarUnidadCurricular() async -> UnidadCurricular? {
+        guard let nivel = CurriculoNivel.resolver(
+            curso: curso,
+            asignatura: activeSubject,
+            catalogLevel: snapshot?.course(id: courseID, named: curso)?.level,
+            mapping: snapshot?.nivelMapping ?? [:],
+            subjectMapping: snapshot?.subjectLevelMapping ?? [:]
+        ) else { return nil }
+        let candidates = uniqueUnitIDs([curriculumUnitID, unidadId])
+            .flatMap(PlanificacionRepository.unidadIdCandidates(raw:))
+        for candidate in candidates {
+            if let unit = try? await curriculoRepository.getUnidadCompleta(
+                asignatura: activeSubject,
+                nivel: nivel,
+                unidadId: candidate
+            ) {
+                return unit
+            }
+        }
+        return nil
+    }
+
+    private func elementosCurriculares(
+        _ values: [String],
+        prefix: String
+    ) -> [ElementoCurricular] {
+        values.enumerated().compactMap { index, rawValue in
+            let text = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return nil }
+            return ElementoCurricular(
+                id: "\(prefix)_\(index + 1)",
+                texto: text,
+                seleccionado: true
+            )
+        }
+    }
+
+    private func uniqueUnitIDs(_ values: [String?]) -> [String] {
+        var seen = Set<String>()
+        return values.compactMap { value in
+            guard let clean = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !clean.isEmpty,
+                  seen.insert(clean).inserted else {
+                return nil
+            }
+            return clean
+        }
     }
 
     private func uniqueSubjects(_ values: [String]) -> [String] {

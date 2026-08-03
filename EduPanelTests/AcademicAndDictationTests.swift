@@ -21,6 +21,76 @@ final class AcademicContractTests: XCTestCase {
         XCTAssertEqual(AcademicContract.dateKey(for: noonUTC), "2026-07-20")
     }
 
+    func testCronogramaUsesISOWeekYearAcrossNewYearBoundary() throws {
+        let boundary = try XCTUnwrap(ISO8601DateFormatter().date(from: "2024-12-30T12:00:00Z"))
+
+        XCTAssertEqual(CronoDateHelpers.semanaISO(boundary), 1)
+        XCTAssertEqual(CronoDateHelpers.anioISO(boundary), 2025)
+        XCTAssertTrue(
+            Calendar(identifier: .gregorian).isDate(
+                CronoDateHelpers.lunesDeSemana(1, anio: 2025),
+                inSameDayAs: boundary
+            )
+        )
+    }
+
+    func testClassAIDraftIsReviewableAndPreservesFirestoreIdentity() throws {
+        let original = classActivity()
+        let response: [String: Any] = [
+            "objetivo": "Comparar fracciones equivalentes mediante material concreto.",
+            "inicio": "<p>Activación breve.</p>",
+            "desarrollo": "<p>Trabajo colaborativo.</p>",
+            "cierre": "<p>Salida de aprendizaje.</p>",
+            "materiales": ["Tarjetas de fracciones"],
+            "tics": [String](),
+            "adecuacion": "<p>Apoyo visual.</p>"
+        ]
+
+        let generated = try ClassAIService.decode(response)
+        let draft = try ClassAIService.applying(generated, to: original)
+
+        XCTAssertEqual(draft.id, original.id)
+        XCTAssertEqual(draft.unidadId, original.unidadId)
+        XCTAssertEqual(draft.numeroClase, original.numeroClase)
+        XCTAssertEqual(draft.fecha, original.fecha)
+        XCTAssertEqual(draft.oaIds, original.oaIds)
+        XCTAssertEqual(draft.estado, "planificada")
+        XCTAssertFalse(draft.sincronizada)
+        XCTAssertEqual(draft.materiales, ["Tarjetas de fracciones"])
+        XCTAssertEqual(draft.desarrolloFormal?.desarrollo, "<p>Trabajo colaborativo.</p>")
+    }
+
+    func testClassAIRequestUsesIntegratedBackendWithoutClientSecrets() {
+        let body = ClassAIService.requestBody(
+            activity: classActivity(),
+            unit: nil,
+            previousActivity: nil,
+            totalClasses: 8,
+            instructions: "Prioriza trabajo colaborativo"
+        )
+
+        XCTAssertTrue(JSONSerialization.isValidJSONObject(body))
+        XCTAssertEqual(body["modo"] as? String, "crear_inicial")
+        XCTAssertEqual(body["aiModelTier"] as? String, "luna")
+        XCTAssertEqual(body["aiExperience"] as? String, "standard")
+        XCTAssertNil(body["customToken"])
+        XCTAssertNil(body["apiKey"])
+    }
+
+    func testClassAIReportsBackendFormattingFailureWithoutExposingRawGeneration() {
+        let response: [String: Any] = [
+            "error": "json_parse_failed",
+            "message": "No fue posible estructurar la respuesta",
+            "rawText": "contenido interno que no debe mostrarse"
+        ]
+
+        XCTAssertThrowsError(try ClassAIService.decode(response)) { error in
+            let description = error.localizedDescription
+            XCTAssertTrue(description.contains("No fue posible estructurar la respuesta"))
+            XCTAssertFalse(description.contains("contenido interno"))
+        }
+    }
+
     func testScheduleBatchRejectsCollisionAndRequiresJourneyModule() throws {
         let module = JourneyModule(moduleID: "m1", name: "Primero", startTime: "08:00", endTime: "08:45", kind: .lectivo)
         let journey = JourneyConfig(version: 2, region: "CL", year: 2026, activeDays: [.monday], modulesByDay: [.monday: [module]])
@@ -153,6 +223,29 @@ final class AcademicContractTests: XCTestCase {
         let data = try Data(contentsOf: output)
         XCTAssertTrue(data.starts(with: Data("%PDF".utf8)))
         XCTAssertGreaterThan(data.count, 1_000)
+    }
+
+    private func classActivity() -> ActividadClase {
+        ActividadClase(
+            id: "musica_5_basico_a_1_clase1",
+            asignatura: "Música",
+            curso: "5° Básico A",
+            unidadId: "1",
+            numeroClase: 1,
+            fecha: "2026-08-03",
+            oaIds: ["OA1"],
+            objetivo: "",
+            inicio: "",
+            desarrollo: "",
+            cierre: "",
+            adecuacion: "",
+            habilidades: [],
+            actitudes: [],
+            materiales: [],
+            tics: [],
+            estado: "no_planificada",
+            sincronizada: false
+        )
     }
 
     private func period(id: String, start: String, end: String, blocks: [ClaseHorario] = []) -> SchedulePeriod {

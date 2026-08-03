@@ -15,7 +15,7 @@ struct SettingsView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
-            .padding(.bottom, 28)
+            .tabBarPageBottomPadding()
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Configuración")

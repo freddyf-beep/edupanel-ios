@@ -71,21 +71,37 @@ struct AcademicCourse: Identifiable, Hashable {
 
     static func from(id: String, dictionary: [String: Any]) -> Self? {
         let courseID = (dictionary["courseId"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? id
-        let dataKey = (dictionary["dataKey"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let name = (dictionary["nombre"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !courseID.isEmpty, !dataKey.isEmpty, !name.isEmpty else { return nil }
+        let name = ((dictionary["nombre"] as? String) ?? (dictionary["name"] as? String) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !courseID.isEmpty, !name.isEmpty else { return nil }
+        let storedDataKey = (dictionary["dataKey"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let dataKey = storedDataKey.isEmpty ? AcademicContract.normalizedKey(name) : storedDataKey
         let rawSubjects = dictionary["asignaturas"] as? [[String: Any]] ?? []
+        var subjects = rawSubjects.compactMap(CourseSubjectSelection.from(dictionary:))
+        if subjects.isEmpty, let legacySubjects = dictionary["asignaturas"] as? [String] {
+            subjects = legacySubjects.compactMap { rawValue in
+                let label = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !label.isEmpty else { return nil }
+                return CourseSubjectSelection(
+                    id: AcademicContract.normalizedKey(label),
+                    label: label,
+                    availability: nil
+                )
+            }
+        }
+        let rawStatus = dictionary["estado"] as? String ?? ""
         return Self(
             courseID: courseID,
             dataKey: dataKey,
-            kind: AcademicCourseKind(rawValue: dictionary["tipo"] as? String ?? "") ?? .taller,
+            kind: AcademicCourseKind(rawValue: dictionary["tipo"] as? String ?? "") ?? .oficial,
             name: name,
             level: dictionary["nivel"] as? String,
             section: dictionary["seccion"] as? String,
             workshopName: dictionary["nombreTaller"] as? String,
-            subjects: rawSubjects.compactMap(CourseSubjectSelection.from(dictionary:)),
+            subjects: subjects,
             colorHex: dictionary["color"] as? String ?? "#EC4899",
-            status: AcademicCourseStatus(rawValue: dictionary["estado"] as? String ?? "") ?? .active,
+            status: rawStatus == "archived" || rawStatus == "archivado" ? .archived : .active,
             archivedAt: Self.date(dictionary["archivedAt"]),
             deleteEligibleAt: Self.date(dictionary["deleteEligibleAt"])
         )

@@ -508,6 +508,7 @@ struct DashboardSnapshot: Equatable {
     var studentCounts: [String: Int]
     var studentsByCourse: [String: [EstudiantePerfil]]
     var nivelMapping: [String: String]
+    var subjectLevelMapping: [String: [String: String]] = [:]
     var cursoTipos: [String: TipoCurricular]
     var schoolID: String = "principal"
     var courseCatalog: [AcademicCourse] = []
@@ -552,10 +553,15 @@ struct DashboardSnapshot: Equatable {
     }
 
     var courses: [String] {
-        if !courseCatalog.isEmpty {
-            return courseCatalog.filter { $0.status == .active }.map(\.name).sorted()
-        }
-        return Array(Set(academicClasses.map(\.resumen))).sorted()
+        let catalogNames = courseCatalog.filter { $0.status == .active }.map(\.name)
+        let scheduleNames = academicClasses.map(\.resumen)
+        var seen = Set<String>()
+        return (catalogNames + scheduleNames)
+            .filter { name in
+                let key = DashboardRepository.buildCursoId(name)
+                return !key.isEmpty && seen.insert(key).inserted
+            }
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
     var activeCourses: [AcademicCourse] {
@@ -573,12 +579,33 @@ struct DashboardSnapshot: Equatable {
     func course(id: String?, named name: String? = nil) -> AcademicCourse? {
         if let id, let match = courseCatalog.first(where: { $0.courseID == id }) { return match }
         guard let name else { return nil }
-        return courseCatalog.first { $0.name == name || $0.dataKey == DashboardRepository.buildCursoId(name) }
+        let key = DashboardRepository.buildCursoId(name)
+        return courseCatalog.first {
+            $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame ||
+            $0.dataKey == key
+        }
     }
 
     func students(forCourseID courseID: String?, name: String) -> [EstudiantePerfil] {
         if let courseID, let students = studentsByCourse[courseID] { return students }
-        return studentsByCourse[name] ?? []
+        if let students = studentsByCourse[name] { return students }
+        if let course = course(id: courseID, named: name) {
+            return studentsByCourse[course.courseID] ??
+                studentsByCourse[course.dataKey] ??
+                []
+        }
+        return []
+    }
+
+    func studentCount(forCourseID courseID: String? = nil, name: String) -> Int {
+        if let courseID, let count = studentCounts[courseID] { return count }
+        if let count = studentCounts[name] { return count }
+        if let course = course(id: courseID, named: name) {
+            return studentCounts[course.courseID] ??
+                studentCounts[course.dataKey] ??
+                0
+        }
+        return 0
     }
 
     func academicSelection(courseName: String, subjectName: String? = nil) -> AcademicSelection? {
@@ -697,7 +724,6 @@ enum ProfileTabKey: String, CaseIterable, Identifiable, Hashable {
     case semana
     case cursos
     case identidad
-    case conexiones
 
     var id: String { rawValue }
 
@@ -707,7 +733,6 @@ enum ProfileTabKey: String, CaseIterable, Identifiable, Hashable {
         case .semana: return "Mi Semana"
         case .cursos: return "Mis Cursos"
         case .identidad: return "Identidad"
-        case .conexiones: return "Conexiones"
         }
     }
 
@@ -717,7 +742,6 @@ enum ProfileTabKey: String, CaseIterable, Identifiable, Hashable {
         case .semana: return "calendar"
         case .cursos: return "folder.fill"
         case .identidad: return "person.text.rectangle.fill"
-        case .conexiones: return "link"
         }
     }
 }

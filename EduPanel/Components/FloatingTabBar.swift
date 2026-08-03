@@ -110,6 +110,26 @@ extension EnvironmentValues {
     }
 }
 
+private struct TabBarPageBottomPaddingKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 72
+}
+
+extension EnvironmentValues {
+    /// Bottom breathing room that page content keeps above the floating bar.
+    var tabBarPageBottomPadding: CGFloat {
+        get { self[TabBarPageBottomPaddingKey.self] }
+        set { self[TabBarPageBottomPaddingKey.self] = newValue }
+    }
+}
+
+private struct TabBarPageBottomPaddingModifier: ViewModifier {
+    @Environment(\.tabBarPageBottomPadding) private var bottomPadding
+
+    func body(content: Content) -> some View {
+        content.padding(.bottom, bottomPadding)
+    }
+}
+
 private struct TabBarScrollReporterModifier: ViewModifier {
     @Environment(\.tabBarScrollReporter) private var report
 
@@ -130,5 +150,11 @@ private struct TabBarScrollReporterModifier: ViewModifier {
 extension View {
     func reportsTabBarScroll() -> some View {
         modifier(TabBarScrollReporterModifier())
+    }
+
+    /// Reserves the same footer space on every page that remains underneath
+    /// the floating navigation bar, without changing the page background.
+    func tabBarPageBottomPadding() -> some View {
+        modifier(TabBarPageBottomPaddingModifier())
     }
 }

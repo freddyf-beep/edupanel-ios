@@ -134,9 +134,6 @@ struct PruebaResultadosView: View {
             scheduleAutosave()
         }
         .task { await load() }
-        .onDisappear {
-            autosaveTask?.cancel()
-        }
     }
 
     @ViewBuilder

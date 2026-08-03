@@ -24,6 +24,8 @@ struct SettingsAppearanceSection: View {
 struct SettingsTabBarSection: View {
     @AppStorage(TabBarPreferences.storageKey)
     private var visibleTabsRaw = TabBarPreferences.defaultValue
+    @AppStorage("edupanel_dashboard_date_button")
+    private var showDashboardDateButton = true
 
     private var selectedTabs: [AppTab] {
         TabBarPreferences.decode(visibleTabsRaw)
@@ -39,6 +41,42 @@ struct SettingsTabBarSection: View {
                 Text("Elige entre 3 y 5 accesos. Usa las flechas para decidir el orden en que aparecerán.")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
+
+                Button {
+                    withAnimation(EPTheme.spring) {
+                        showDashboardDateButton.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Botón junto a la fecha")
+                                .font(.footnote.weight(.bold))
+                            Text("Muestra el control para cambiar el tema en Inicio.")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        ZStack(alignment: showDashboardDateButton ? .trailing : .leading) {
+                            Capsule()
+                                .fill(showDashboardDateButton ? EPTheme.primary : Color(.systemGray4))
+                                .frame(width: 48, height: 29)
+                            Circle()
+                                .fill(.white)
+                                .frame(width: 25, height: 25)
+                                .shadow(color: .black.opacity(0.12), radius: 1, y: 1)
+                                .padding(2)
+                        }
+                        .accessibilityHidden(true)
+                    }
+                    .padding(11)
+                    .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Botón junto a la fecha")
+                .accessibilityValue(showDashboardDateButton ? "Activado" : "Desactivado")
+                .accessibilityHint("Muestra u oculta el control para cambiar el tema en Inicio")
 
                 VStack(spacing: 8) {
                     ForEach(Array(selectedTabs.enumerated()), id: \.element.id) { index, tab in

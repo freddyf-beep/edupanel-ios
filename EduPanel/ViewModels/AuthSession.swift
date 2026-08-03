@@ -78,6 +78,9 @@ final class AuthSession {
     private(set) var dashboardRepository: DashboardRepository?
 
     private let googleAuth = GoogleAuthService()
+    private var authorizationGeneration = 0
+    private var authorizationTimeoutTask: Task<Void, Never>?
+    private static let authorizationTimeout: Duration = .seconds(15)
 
     init() {
         if let firebaseIssue = FirebaseBootstrap.configureIfPossible() {
@@ -151,6 +154,7 @@ final class AuthSession {
     }
 
     func signOut() async {
+        invalidateAuthorizationAttempt()
         do {
             try googleAuth.signOut()
         } catch {
@@ -175,10 +179,12 @@ final class AuthSession {
             return
         }
 
+        let generation = beginAuthorizationAttempt(for: user)
         state = .checking
 
         do {
             let response: CheckAllowlistResponse = try await client.get("/api/check-allowlist")
+            guard finishAuthorizationAttempt(generation) else { return }
             errorMessage = nil
             if response.allowed {
                 state = .signedIn(user)
@@ -186,12 +192,14 @@ final class AuthSession {
                 state = .blocked(user)
             }
         } catch {
-            await validateAllowlistWithFirestore(for: user)
+            guard isCurrentAuthorizationAttempt(generation) else { return }
+            await validateAllowlistWithFirestore(for: user, generation: generation)
         }
     }
 
-    private func validateAllowlistWithFirestore(for user: AuthenticatedUser) async {
+    private func validateAllowlistWithFirestore(for user: AuthenticatedUser, generation: Int) async {
         guard let firebaseUser = Auth.auth().currentUser, firebaseUser.uid == user.id else {
+            guard finishAuthorizationAttempt(generation) else { return }
             errorMessage = "La sesión cambió. Vuelve a iniciar sesión para verificar tu acceso."
             state = .authorizationUnavailable(user)
             return
@@ -199,12 +207,49 @@ final class AuthSession {
 
         do {
             let allowed = try await FirestoreAllowlistChecker().isAllowed(firebaseUser: firebaseUser)
+            guard finishAuthorizationAttempt(generation) else { return }
             errorMessage = nil
             state = allowed ? .signedIn(user) : .blocked(user)
         } catch {
+            guard finishAuthorizationAttempt(generation) else { return }
             errorMessage = "No pudimos verificar tu acceso en este momento. Revisa tu conexión e inténtalo nuevamente."
             state = .authorizationUnavailable(user)
         }
+    }
+
+    private func beginAuthorizationAttempt(for user: AuthenticatedUser) -> Int {
+        invalidateAuthorizationAttempt()
+        let generation = authorizationGeneration
+        authorizationTimeoutTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: Self.authorizationTimeout)
+            } catch {
+                return
+            }
+            guard let self, self.authorizationGeneration == generation else { return }
+            self.authorizationGeneration += 1
+            self.authorizationTimeoutTask = nil
+            self.errorMessage = "La verificación está tardando demasiado. Revisa tu conexión e inténtalo nuevamente."
+            self.state = .authorizationUnavailable(user)
+        }
+        return generation
+    }
+
+    private func finishAuthorizationAttempt(_ generation: Int) -> Bool {
+        guard isCurrentAuthorizationAttempt(generation) else { return false }
+        authorizationTimeoutTask?.cancel()
+        authorizationTimeoutTask = nil
+        return true
+    }
+
+    private func isCurrentAuthorizationAttempt(_ generation: Int) -> Bool {
+        authorizationGeneration == generation
+    }
+
+    private func invalidateAuthorizationAttempt() {
+        authorizationGeneration += 1
+        authorizationTimeoutTask?.cancel()
+        authorizationTimeoutTask = nil
     }
 
     private var isConfigurationError: Bool {

@@ -149,3 +149,253 @@ enum EvaluacionesAIError: LocalizedError {
         }
     }
 }
+
+// MARK: - Generación de clases
+
+struct ClassAIGeneratedContent: Decodable {
+    let objetivo: String?
+    let inicio: String?
+    let desarrollo: String?
+    let cierre: String?
+    let materiales: [String]?
+    let tics: [String]?
+    let adecuacion: String?
+    let analisisBloom: [AnalisisBloom]?
+    let objetivoMultinivel: ObjetivoMultinivel?
+    let indicadoresEvaluacion: [IndicadorEvaluacion]?
+    let actividadEvaluacion: ActividadEvaluacion?
+}
+
+enum ClassAIError: LocalizedError {
+    case configuration(String)
+    case invalidResponse
+    case malformedGeneration(String?)
+    case unusableResponse
+    case timeout
+    case offline
+
+    var errorDescription: String? {
+        switch self {
+        case .configuration(let message):
+            return message
+        case .invalidResponse:
+            return "La IA respondió con un formato que no pudimos leer. Inténtalo nuevamente."
+        case .malformedGeneration(let message):
+            let detail = message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return detail.isEmpty
+                ? "La IA no pudo ordenar la propuesta. Inténtalo nuevamente o agrega una indicación más concreta."
+                : "La IA no pudo ordenar la propuesta: \(detail)"
+        case .unusableResponse:
+            return "La IA no devolvió una planificación utilizable. Agrega una indicación más concreta y reintenta."
+        case .timeout:
+            return "La propuesta tardó demasiado. Revisa tu conexión e inténtalo nuevamente."
+        case .offline:
+            return "Necesitas conexión a internet para crear una propuesta con IA."
+        }
+    }
+}
+
+struct ClassAIService {
+    func generateDraft(
+        from activity: ActividadClase,
+        unit: VerUnidadGuardada?,
+        previousActivity: ActividadClase?,
+        totalClasses: Int,
+        instructions: String
+    ) async throws -> ActividadClase {
+        let response: [String: Any]
+        do {
+            response = try await client().postJSONObject(
+                "/api/generar-clase",
+                body: Self.requestBody(
+                    activity: activity,
+                    unit: unit,
+                    previousActivity: previousActivity,
+                    totalClasses: totalClasses,
+                    instructions: instructions
+                )
+            )
+        } catch let error as URLError {
+            switch error.code {
+            case .cancelled:
+                throw CancellationError()
+            case .timedOut:
+                throw ClassAIError.timeout
+            case .notConnectedToInternet, .networkConnectionLost, .cannotConnectToHost, .cannotFindHost:
+                throw ClassAIError.offline
+            default:
+                throw error
+            }
+        }
+
+        let generated = try Self.decode(response)
+        return try Self.applying(generated, to: activity)
+    }
+
+    static func requestBody(
+        activity: ActividadClase,
+        unit: VerUnidadGuardada?,
+        previousActivity: ActividadClase?,
+        totalClasses: Int,
+        instructions: String
+    ) -> [String: Any] {
+        let selectedObjectives = (unit?.oas ?? []).filter { objective in
+            activity.oaIds.contains { pedagogicalID($0) == pedagogicalID(objective.id) }
+                || objective.numero.map { number in
+                    activity.oaIds.contains { pedagogicalID($0) == pedagogicalID("OA\(number)") }
+                } == true
+        }
+        let objectivePayload: [[String: Any]] = selectedObjectives.map { objective in
+            var value: [String: Any] = [
+                "descripcion": objective.descripcion,
+                "indicadores": selectedIndicators(for: objective, activity: activity).map { ["texto": $0.texto] }
+            ]
+            if let number = objective.numero { value["numero"] = number }
+            return value
+        }
+
+        let unitSkills = (unit?.habilidades ?? []).filter(\.seleccionado).map(\.texto)
+        let unitAttitudes = (unit?.actitudes ?? []).filter(\.seleccionado).map(\.texto)
+        let skills = activity.habilidades.isEmpty ? unitSkills : activity.habilidades
+        let attitudes = activity.actitudes.isEmpty ? unitAttitudes : activity.actitudes
+        let cleanInstructions = instructions.trimmingCharacters(in: .whitespacesAndNewlines)
+        let teacherContext = RichTextHTML.plainText(from: activity.contextoProfesor ?? "")
+
+        var body: [String: Any] = [
+            "modo": "crear_inicial",
+            "curso": activity.curso,
+            "asignatura": activity.asignatura,
+            "numeroClase": activity.numeroClase,
+            "totalClasesUnidad": max(totalClasses, 1),
+            "nivelCurricular": activity.curso,
+            "duracionMinutos": 90,
+            "contextoProfesor": teacherContext.isEmpty ? cleanInstructions : teacherContext,
+            "instruccionesAdicionales": cleanInstructions,
+            "oas": objectivePayload,
+            "habilidades": skills,
+            "actitudes": attitudes,
+            "objetivoClase": RichTextHTML.plainText(from: activity.objetivo),
+            "claseActual": [
+                "objetivo": activity.objetivo,
+                "inicio": activity.inicio,
+                "desarrollo": activity.desarrollo,
+                "cierre": activity.cierre,
+                "adecuacion": activity.adecuacion,
+                "materiales": activity.materiales,
+                "tics": activity.tics
+            ],
+            "aiModelTier": "luna",
+            "aiExperience": "standard",
+            "allowExternalSearch": false
+        ]
+
+        if let previousActivity {
+            let continuity = [
+                RichTextHTML.plainText(from: previousActivity.objetivo),
+                RichTextHTML.plainText(from: previousActivity.desarrollo)
+            ].filter { !$0.isEmpty }.joined(separator: " · ")
+            if !continuity.isEmpty { body["contextoAnterior"] = continuity }
+        }
+
+        if let unit {
+            var unitPayload: [String: Any] = [
+                "proposito": unit.descripcion,
+                "conocimientos": unit.conocimientos.filter(\.seleccionado).map(\.texto),
+                "habilidades": unitSkills,
+                "actitudes": unitAttitudes,
+                "contexto_docente": unit.contextoDocente,
+                "objetivo_docente": unit.objetivoDocente
+            ]
+            let previousKnowledge = unit.conocimientosPrevios?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !previousKnowledge.isEmpty {
+                unitPayload["conocimientos_previos"] = [previousKnowledge]
+            }
+            body["unidad"] = unitPayload
+        }
+
+        return body
+    }
+
+    static func decode(_ response: [String: Any]) throws -> ClassAIGeneratedContent {
+        if response["error"] as? String == "json_parse_failed" {
+            throw ClassAIError.malformedGeneration(response["message"] as? String)
+        }
+        if response["error"] != nil { throw ClassAIError.invalidResponse }
+        guard JSONSerialization.isValidJSONObject(response),
+              let data = try? JSONSerialization.data(withJSONObject: response),
+              let value = try? JSONDecoder().decode(ClassAIGeneratedContent.self, from: data) else {
+            throw ClassAIError.invalidResponse
+        }
+        return value
+    }
+
+    static func applying(_ generated: ClassAIGeneratedContent, to activity: ActividadClase) throws -> ActividadClase {
+        let objective = clean(generated.objetivo)
+        let start = clean(generated.inicio)
+        let development = clean(generated.desarrollo)
+        let close = clean(generated.cierre)
+        guard !objective.isEmpty, ![start, development, close].allSatisfy(\.isEmpty) else {
+            throw ClassAIError.unusableResponse
+        }
+
+        var result = activity
+        result.objetivo = objective
+        if !start.isEmpty { result.inicio = start }
+        if !development.isEmpty { result.desarrollo = development }
+        if !close.isEmpty { result.cierre = close }
+        if let materials = generated.materiales, !materials.isEmpty { result.materiales = materials }
+        if let technologies = generated.tics, !technologies.isEmpty { result.tics = technologies }
+        let adaptation = clean(generated.adecuacion)
+        if !adaptation.isEmpty { result.adecuacion = adaptation }
+        result.analisisBloom = generated.analisisBloom ?? result.analisisBloom
+        result.objetivoMultinivel = generated.objetivoMultinivel ?? result.objetivoMultinivel
+        result.indicadoresEvaluacion = generated.indicadoresEvaluacion ?? result.indicadoresEvaluacion
+        result.actividadEvaluacion = generated.actividadEvaluacion ?? result.actividadEvaluacion
+        result.desarrolloFormal = DesarrolloFormal(
+            inicio: result.inicio,
+            desarrollo: result.desarrollo,
+            cierre: result.cierre
+        )
+        result.estado = "planificada"
+        result.sincronizada = false
+        return result
+    }
+
+    private func client() throws -> APIClient {
+        let config: AppConfig
+        switch AppConfig.load() {
+        case .success(let value): config = value
+        case .failure(let issue): throw ClassAIError.configuration(issue.message)
+        }
+        let sessionConfiguration = URLSessionConfiguration.ephemeral
+        sessionConfiguration.timeoutIntervalForRequest = 75
+        sessionConfiguration.timeoutIntervalForResource = 120
+        sessionConfiguration.waitsForConnectivity = false
+        return APIClient(config: config, session: URLSession(configuration: sessionConfiguration))
+    }
+
+    private static func selectedIndicators(
+        for objective: OAEditado,
+        activity: ActividadClase
+    ) -> [IndicadorEditado] {
+        guard let selected = activity.indicadoresPorOa?[objective.id] else {
+            return objective.indicadores.filter(\.seleccionado)
+        }
+        let normalized = Set(selected.map(pedagogicalID))
+        return objective.indicadores.filter(\.seleccionado).filter {
+            normalized.contains(pedagogicalID($0.id)) || normalized.contains(pedagogicalID($0.texto))
+        }
+    }
+
+    private static func pedagogicalID(_ value: String) -> String {
+        value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL"))
+            .lowercased()
+            .filter { $0.isLetter || $0.isNumber }
+    }
+
+    private static func clean(_ value: String?) -> String {
+        value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+}

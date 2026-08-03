@@ -26,7 +26,7 @@ struct RubricaResultadosView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
-            .padding(.bottom, 24)
+            .tabBarPageBottomPadding()
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Resultados")
@@ -262,7 +262,8 @@ struct RubricaResultadosView: View {
             rubrica = rubricaCargada
 
             if let snapshot = try? await dashboardRepository.fetchDashboard() {
-                roster = (snapshot.studentsByCourse[rubricaCargada.curso] ?? []).sorted { $0.orden < $1.orden }
+                roster = snapshot.students(forCourseID: nil, name: rubricaCargada.curso)
+                    .sorted { $0.orden < $1.orden }
             }
 
             if var evaluacionCargada = try await repository.cargarEvaluacionRubrica(rubricaId: rubricaId) {

@@ -51,8 +51,9 @@ final class EvaluacionesViewModel {
         var vistos = Set<String>()
         func agregar(_ valor: String) {
             let limpio = valor.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !limpio.isEmpty, !vistos.contains(limpio) else { return }
-            vistos.insert(limpio)
+            let clave = Self.subjectKey(limpio)
+            guard !limpio.isEmpty, !clave.isEmpty, !vistos.contains(clave) else { return }
+            vistos.insert(clave)
             resultado.append(limpio)
         }
         asignaturasDelCurso(selectedCurso).forEach(agregar)
@@ -64,16 +65,30 @@ final class EvaluacionesViewModel {
 
     private var asignaturasHabilitadas: [String] {
         let catalog = snapshot?.activeCourses.flatMap(\.subjects).map(\.label) ?? []
-        if !catalog.isEmpty { return Array(Set(catalog)).sorted() }
-        return (snapshot?.preferences.asignaturasHabilitadas ?? [])
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        let source = catalog.isEmpty ? (snapshot?.preferences.asignaturasHabilitadas ?? []) : catalog
+        var result: [String] = []
+        var seen = Set<String>()
+        for value in source {
+            let clean = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            let key = Self.subjectKey(clean)
+            guard !clean.isEmpty, !key.isEmpty, seen.insert(key).inserted else { continue }
+            result.append(clean)
+        }
+        return result.sorted { Self.subjectKey($0) < Self.subjectKey($1) }
     }
 
     /// Asignaturas que el docente enseña en un curso, leídas de los bloques del horario.
     func asignaturasDelCurso(_ curso: String) -> [String] {
         if let configured = snapshot?.course(id: nil, named: curso)?.subjects.map(\.label), !configured.isEmpty {
-            return configured
+            var result: [String] = []
+            var seen = Set<String>()
+            for value in configured {
+                let clean = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                let key = Self.subjectKey(clean)
+                guard !clean.isEmpty, !key.isEmpty, seen.insert(key).inserted else { continue }
+                result.append(clean)
+            }
+            return result
         }
         guard !curso.isEmpty, let horario = snapshot?.horario else { return [] }
         var resultado: [String] = []
@@ -105,8 +120,18 @@ final class EvaluacionesViewModel {
 
     func seleccionarAsignatura(_ asignatura: String) async {
         selectedSubject = asignatura
-        selectedSubjectID = snapshot?.course(id: selectedCourseID, named: selectedCurso)?.subjects.first { $0.label == asignatura }?.id
+        selectedSubjectID = snapshot?.course(id: selectedCourseID, named: selectedCurso)?.subjects.first {
+            Self.subjectKey($0.label) == Self.subjectKey(asignatura)
+        }?.id
         await loadContenido()
+    }
+
+    private static func subjectKey(_ value: String) -> String {
+        value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL"))
+            .lowercased()
+            .split { !$0.isLetter && !$0.isNumber }
+            .joined()
     }
 
     func estudiantes(curso: String) -> [EstudiantePerfil] {
@@ -160,9 +185,26 @@ final class EvaluacionesViewModel {
 
         let course = selectedCurso
         let scope = evaluacionScope
+        let subject = activeSubject
+        listas = []
+        rubricas = []
+        pruebas = []
+        guias = []
+        listasErrorMessage = nil
+        rubricasErrorMessage = nil
+        pruebasErrorMessage = nil
+        guiasErrorMessage = nil
 
-        async let listasTask = evaluacionesRepository.cargarListasCotejo(asignatura: nil, curso: course)
-        async let rubricasTask = evaluacionesRepository.cargarRubricas(asignatura: nil, curso: course)
+        async let listasTask = evaluacionesRepository.cargarListasCotejo(
+            asignatura: subject,
+            curso: course,
+            scope: scope
+        )
+        async let rubricasTask = evaluacionesRepository.cargarRubricas(
+            asignatura: subject,
+            curso: course,
+            scope: scope
+        )
         async let pruebasTask = evaluacionesRepository.cargarPruebas(curso: course, scope: scope)
         async let guiasTask = evaluacionesRepository.cargarGuias(curso: course, scope: scope)
 
@@ -206,16 +248,25 @@ final class EvaluacionesViewModel {
             guiasError = "No se pudieron cargar las guías de este curso."
         }
 
-        guard generation == contentLoadGeneration, course == selectedCurso else { return }
+        guard generation == contentLoadGeneration,
+              course == selectedCurso,
+              EvaluacionesRepository.normalizarClave(subject) ==
+                EvaluacionesRepository.normalizarClave(activeSubject) else { return }
         if let loadedListas { listas = loadedListas }
         if let loadedRubricas { rubricas = loadedRubricas }
         if let loadedPruebas {
-            pruebas = loadedPruebas.pruebas
+            pruebas = loadedPruebas.pruebas.filter {
+                EvaluacionesRepository.normalizarClave($0.asignatura) ==
+                    EvaluacionesRepository.normalizarClave(subject)
+            }
             pruebasConAdvertencias = loadedPruebas.documentosConAdvertencias
             pruebasDesdeCache = loadedPruebas.isFromCache
         }
         if let loadedGuias {
-            guias = loadedGuias.guias
+            guias = loadedGuias.guias.filter {
+                EvaluacionesRepository.normalizarClave($0.asignatura) ==
+                    EvaluacionesRepository.normalizarClave(subject)
+            }
             guiasConAdvertencias = loadedGuias.warningCount
             guiasDesdeCache = loadedGuias.isFromCache
         }
@@ -227,7 +278,7 @@ final class EvaluacionesViewModel {
 
     func eliminarLista(_ lista: ListaCotejoTemplate) async {
         do {
-            try await evaluacionesRepository.eliminarListaCotejo(id: lista.id)
+            try await evaluacionesRepository.eliminarListaCotejo(id: lista.id, scope: evaluacionScope)
             listas.removeAll { $0.id == lista.id }
         } catch {
             errorMessage = "No se pudo eliminar la lista."
@@ -236,7 +287,7 @@ final class EvaluacionesViewModel {
 
     func eliminarRubrica(_ rubrica: RubricaTemplate) async {
         do {
-            try await evaluacionesRepository.eliminarRubrica(id: rubrica.id)
+            try await evaluacionesRepository.eliminarRubrica(id: rubrica.id, scope: evaluacionScope)
             rubricas.removeAll { $0.id == rubrica.id }
         } catch {
             errorMessage = "No se pudo eliminar la r\u{00FA}brica."
@@ -252,7 +303,7 @@ final class EvaluacionesViewModel {
             copia.nombre = "\(copia.nombre.isEmpty ? "Lista de cotejo" : copia.nombre) (copia)"
         }
         do {
-            try await evaluacionesRepository.guardarListaCotejo(copia)
+            try await evaluacionesRepository.guardarListaCotejo(copia, scope: evaluacionScope)
             if cursoDestino == selectedCurso {
                 await loadContenido()
             }
@@ -270,7 +321,7 @@ final class EvaluacionesViewModel {
             copia.nombre = "\(copia.nombre.isEmpty ? "R\u{00FA}brica" : copia.nombre) (copia)"
         }
         do {
-            try await evaluacionesRepository.guardarRubrica(copia)
+            try await evaluacionesRepository.guardarRubrica(copia, scope: evaluacionScope)
             if cursoDestino == selectedCurso {
                 await loadContenido()
             }

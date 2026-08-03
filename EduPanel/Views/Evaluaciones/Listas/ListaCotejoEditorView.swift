@@ -9,6 +9,8 @@ struct ListaCotejoEditorView: View {
     @State private var lista: ListaCotejoTemplate?
     @State private var cursos: [String] = []
     @State private var nivelMapping: [String: String] = [:]
+    @State private var subjectLevelMapping: [String: [String: String]] = [:]
+    @State private var courseLevels: [String: String] = [:]
     @State private var isLoading = true
     @State private var isSaving = false
     @State private var saveOk = false
@@ -29,7 +31,7 @@ struct ListaCotejoEditorView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
-            .padding(.bottom, 24)
+            .tabBarPageBottomPadding()
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle(listaId == nil ? "Nueva lista" : "Editar lista")
@@ -73,7 +75,19 @@ struct ListaCotejoEditorView: View {
                         .font(.system(size: 10, weight: .black))
                         .tracking(0.8)
                         .foregroundStyle(.secondary)
-                    EvaluacionesCursoPicker(cursos: cursos, seleccionado: bindingLista(\.curso))
+                    EvaluacionesCursoPicker(
+                        cursos: cursos,
+                        seleccionado: Binding(
+                            get: { lista?.curso ?? "" },
+                            set: { value in
+                                guard value != lista?.curso else { return }
+                                lista?.curso = value
+                                lista?.unidadId = nil
+                                lista?.unidadNombre = nil
+                                lista?.oas = []
+                            }
+                        )
+                    )
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -126,6 +140,8 @@ struct ListaCotejoEditorView: View {
                 asignatura: actual.asignatura,
                 curso: actual.curso,
                 nivelMapping: nivelMapping,
+                subjectLevelMapping: subjectLevelMapping,
+                catalogLevel: courseLevels[actual.curso],
                 unidadId: Binding(get: { lista?.unidadId }, set: { lista?.unidadId = $0 }),
                 unidadNombre: Binding(get: { lista?.unidadNombre }, set: { lista?.unidadNombre = $0 }),
                 oas: Binding(get: { lista?.oas }, set: { lista?.oas = $0 })
@@ -408,6 +424,14 @@ struct ListaCotejoEditorView: View {
             let snapshot = try await dashboardRepository.fetchDashboard()
             cursos = snapshot.courses
             nivelMapping = snapshot.nivelMapping
+            subjectLevelMapping = snapshot.subjectLevelMapping
+            courseLevels = Dictionary(
+                snapshot.activeCourses.compactMap { course in
+                    guard let level = course.level, !level.isEmpty else { return nil }
+                    return (course.name, level)
+                },
+                uniquingKeysWith: { current, _ in current }
+            )
 
             if let listaId {
                 guard let existente = try await repository.cargarListaCotejo(id: listaId) else {

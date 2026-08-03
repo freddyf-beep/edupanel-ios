@@ -7,15 +7,19 @@ struct EvaluacionesCurriculoSection: View {
     let asignatura: String
     let curso: String
     let nivelMapping: [String: String]
+    let subjectLevelMapping: [String: [String: String]]
+    let catalogLevel: String?
     let autoResolveExistingUnit: Bool
     @Binding var unidadId: String?
     @Binding var unidadNombre: String?
     @Binding var oas: [OAEditado]?
 
-    @State private var unidades: [UnidadCurricular] = []
+    @State private var unidadesPlanificadas: [UnidadPlan] = []
     @State private var cargandoUnidades = false
     @State private var cargandoOAs = false
     @State private var aviso: String?
+    @State private var loadGeneration = 0
+    @State private var selectionGeneration = 0
 
     private let curriculoRepository = CurriculoRepository()
     private let planificacionRepository = PlanificacionRepository()
@@ -24,6 +28,8 @@ struct EvaluacionesCurriculoSection: View {
         asignatura: String,
         curso: String,
         nivelMapping: [String: String],
+        subjectLevelMapping: [String: [String: String]] = [:],
+        catalogLevel: String? = nil,
         autoResolveExistingUnit: Bool = true,
         unidadId: Binding<String?>,
         unidadNombre: Binding<String?>,
@@ -32,6 +38,8 @@ struct EvaluacionesCurriculoSection: View {
         self.asignatura = asignatura
         self.curso = curso
         self.nivelMapping = nivelMapping
+        self.subjectLevelMapping = subjectLevelMapping
+        self.catalogLevel = catalogLevel
         self.autoResolveExistingUnit = autoResolveExistingUnit
         _unidadId = unidadId
         _unidadNombre = unidadNombre
@@ -39,7 +47,13 @@ struct EvaluacionesCurriculoSection: View {
     }
 
     private var nivel: String? {
-        CurriculoNivel.resolver(curso: curso, mapping: nivelMapping)
+        CurriculoNivel.resolver(
+            curso: curso,
+            asignatura: asignatura,
+            catalogLevel: catalogLevel,
+            mapping: nivelMapping,
+            subjectMapping: subjectLevelMapping
+        )
     }
 
     var body: some View {
@@ -51,22 +65,22 @@ struct EvaluacionesCurriculoSection: View {
                     icon: "books.vertical"
                 )
 
+                unidadPicker
+
                 if nivel == nil {
-                    Text("Configura el nivel curricular de \u{201C}\(curso)\u{201D} en Mi Perfil para cargar las unidades del curr\u{00ED}culum.")
+                    Text("La unidad se puede vincular, pero falta definir el nivel curricular de “\(curso)” para cargar sus OA oficiales.")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    unidadPicker
-
-                    if let aviso {
-                        Text(aviso)
-                            .font(.system(size: 11.5, weight: .medium))
-                            .foregroundStyle(.orange)
-                    }
-
-                    OAEditorView(oas: oasBinding, asignatura: asignatura, cargando: cargandoOAs)
                 }
+
+                if let aviso {
+                    Text(aviso)
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(.orange)
+                }
+
+                OAEditorView(oas: oasBinding, asignatura: asignatura, cargando: cargandoOAs)
             }
         }
         .task(id: cargaKey) {
@@ -78,20 +92,17 @@ struct EvaluacionesCurriculoSection: View {
 
     private var unidadPicker: some View {
         Menu {
-            if !unidades.isEmpty {
-                Button("Sin unidad") {
-                    unidadId = nil
-                    unidadNombre = nil
-                }
+            Button("Sin unidad") {
+                clearUnitSelection()
             }
-            ForEach(unidades) { unidad in
+            ForEach(unidadesPlanificadas) { unidad in
                 Button {
                     Task { await seleccionarUnidad(unidad) }
                 } label: {
-                    if unidad.id == unidadId {
-                        Label("U\(unidad.numeroUnidad) \u{00B7} \(unidad.nombreUnidad)", systemImage: "checkmark")
+                    if unitMatchesSelection(unidad) {
+                        Label(unidad.name, systemImage: "checkmark")
                     } else {
-                        Text("U\(unidad.numeroUnidad) \u{00B7} \(unidad.nombreUnidad)")
+                        Text(unidad.name)
                     }
                 }
             }
@@ -115,13 +126,13 @@ struct EvaluacionesCurriculoSection: View {
             .padding(.vertical, 10)
             .background(EPTheme.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
-        .disabled(cargandoUnidades || unidades.isEmpty)
+        .disabled(cargandoUnidades || unidadesPlanificadas.isEmpty)
     }
 
     private var unidadLabel: String {
         if let unidadNombre, !unidadNombre.isEmpty { return unidadNombre }
-        if unidades.isEmpty && !cargandoUnidades { return "Sin unidades en el curr\u{00ED}culum" }
-        return "Selecciona una unidad"
+        if unidadesPlanificadas.isEmpty && !cargandoUnidades { return "Sin unidades planificadas" }
+        return "Selecciona una unidad del curso"
     }
 
     private var oasBinding: Binding<[OAEditado]> {
@@ -132,47 +143,108 @@ struct EvaluacionesCurriculoSection: View {
     }
 
     private func cargarUnidades() async {
-        guard let nivel else {
-            unidades = []
-            return
-        }
+        loadGeneration += 1
+        let generation = loadGeneration
         cargandoUnidades = true
         aviso = nil
-        defer { cargandoUnidades = false }
+        defer {
+            if generation == loadGeneration {
+                cargandoUnidades = false
+            }
+        }
         do {
-            unidades = try await curriculoRepository.getUnidades(asignatura: asignatura, nivel: nivel)
-            if unidades.isEmpty {
-                aviso = "No hay unidades en el curr\u{00ED}culum para \(asignatura) \u{00B7} \(nivel)."
-            } else if autoResolveExistingUnit, let unidadId, (oas ?? []).isEmpty,
-                      let unidad = unidades.first(where: { $0.id == unidadId }) {
+            let plan = try await planificacionRepository.cargarPlanCurso(
+                asignatura: asignatura,
+                curso: curso
+            )
+            guard generation == loadGeneration, !Task.isCancelled else { return }
+            unidadesPlanificadas = plan?.units ?? []
+            if unidadesPlanificadas.isEmpty {
+                aviso = "Crea una unidad en Planificaciones antes de vincular este instrumento."
+            } else if autoResolveExistingUnit, let unidadId,
+                      let unidad = unidadesPlanificadas.first(where: {
+                          String($0.id) == unidadId || $0.unidadCurricularId == unidadId
+                      }) {
                 await seleccionarUnidad(unidad)
             }
         } catch {
-            aviso = "No se pudo cargar el curr\u{00ED}culum."
+            guard generation == loadGeneration else { return }
+            unidadesPlanificadas = []
+            aviso = "No se pudieron cargar las unidades planificadas del curso."
         }
     }
 
-    private func seleccionarUnidad(_ unidad: UnidadCurricular) async {
-        guard let nivel else { return }
-        unidadId = unidad.id
-        unidadNombre = unidad.nombreUnidad
+    private func seleccionarUnidad(_ unidad: UnidadPlan) async {
+        selectionGeneration += 1
+        let generation = selectionGeneration
+        let previousUnitID = unidadId
+        let localUnitID = String(unidad.id)
+        let isSameUnit = previousUnitID == localUnitID ||
+            previousUnitID == unidad.unidadCurricularId
+        let previousOAs = oas ?? []
+
+        unidadId = localUnitID
+        unidadNombre = unidad.name
+        guard let nivel else {
+            oas = isSameUnit ? previousOAs : previousOAs.filter { $0.esPropio == true }
+            aviso = "Define el nivel curricular del curso para cargar los OA."
+            return
+        }
+        guard let curriculumUnitID = unidad.unidadCurricularId,
+              !curriculumUnitID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            oas = isSameUnit ? previousOAs : previousOAs.filter { $0.esPropio == true }
+            aviso = "Vincula esta unidad con el currículum desde Planificaciones para cargar sus OA."
+            return
+        }
+
         cargandoOAs = true
-        defer { cargandoOAs = false }
+        defer {
+            if generation == selectionGeneration {
+                cargandoOAs = false
+            }
+        }
         do {
-            guard let completa = try await curriculoRepository.getUnidadCompleta(asignatura: asignatura, nivel: nivel, unidadId: unidad.id) else {
+            guard let completa = try await curriculoRepository.getUnidadCompleta(
+                asignatura: asignatura,
+                nivel: nivel,
+                unidadId: curriculumUnitID
+            ) else {
                 aviso = "La unidad no tiene OA en el curr\u{00ED}culum."
                 return
             }
             let base = CurriculoOA.initOAs(unidad: completa, asignatura: asignatura)
-            let verUnidadOAs = (try? await planificacionRepository.cargarVerUnidadConFallback(asignatura: asignatura, curso: curso, unidadId: unidad.id))?.oas ?? []
+            let verUnidadOAs = (try? await planificacionRepository.cargarVerUnidadConFallback(
+                asignatura: asignatura,
+                curso: curso,
+                unidadId: localUnitID
+            ))?.oas ?? []
             var merged = CurriculoOA.mergeOAs(base: base, saved: verUnidadOAs)
-            if let existentes = oas, !existentes.isEmpty {
-                merged = CurriculoOA.mergeOAs(base: merged, saved: existentes)
+            let preserved = isSameUnit
+                ? previousOAs
+                : previousOAs.filter { $0.esPropio == true }
+            if !preserved.isEmpty {
+                merged = CurriculoOA.mergeOAs(base: merged, saved: preserved)
             }
+            guard generation == selectionGeneration,
+                  unidadId == localUnitID,
+                  !Task.isCancelled else { return }
             oas = merged
             aviso = nil
         } catch {
+            guard generation == selectionGeneration else { return }
             aviso = "No se pudieron cargar los OA de la unidad."
         }
+    }
+
+    private func clearUnitSelection() {
+        selectionGeneration += 1
+        unidadId = nil
+        unidadNombre = nil
+        oas = []
+        aviso = nil
+    }
+
+    private func unitMatchesSelection(_ unit: UnidadPlan) -> Bool {
+        unidadId == String(unit.id) || unidadId == unit.unidadCurricularId
     }
 }

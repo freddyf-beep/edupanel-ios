@@ -46,6 +46,7 @@ struct VerUnidadBaseView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
+            .tabBarPageBottomPadding()
         }
         .reportsTabBarScroll()
         .sheet(item: $presentedSheet) { destination in

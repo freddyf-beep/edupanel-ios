@@ -111,7 +111,9 @@ struct AttendanceProgressCard: View {
                         .frame(maxWidth: .infinity, minHeight: 50)
                 }
                 .attendancePrimaryButtonStyle()
+                .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
                 .accessibilityHint("Abre la cámara y valida una tarjeta antes de confirmar presencia")
+                .accessibilityIdentifier("attendance-scan-qr")
 
                 Button(action: onConfirmAll) {
                     Label("Confirmar todos presentes", systemImage: "checkmark.circle.fill")
@@ -390,6 +392,7 @@ private struct AttendancePrimaryButtonModifier: ViewModifier {
                 .buttonStyle(.plain)
                 .foregroundStyle(.white)
                 .padding(.horizontal, 14)
+                .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
                 .glassEffect(
                     .regular.tint(EPTheme.primary).interactive(),
                     in: .rect(cornerRadius: 15)
@@ -399,6 +402,7 @@ private struct AttendancePrimaryButtonModifier: ViewModifier {
                 .buttonStyle(.borderedProminent)
                 .buttonBorderShape(.roundedRectangle(radius: 15))
                 .tint(EPTheme.primary)
+                .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
         }
 #else
         fallback(content)
@@ -410,6 +414,7 @@ private struct AttendancePrimaryButtonModifier: ViewModifier {
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.roundedRectangle(radius: 15))
             .tint(EPTheme.primary)
+            .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
     }
 }
 

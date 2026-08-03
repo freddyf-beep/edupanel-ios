@@ -20,6 +20,8 @@ struct PruebaEditorView: View {
     @State private var draft: PruebaEditorDraft
     @State private var savedDraft: PruebaEditorDraft
     @State private var nivelMapping: [String: String] = [:]
+    @State private var subjectLevelMapping: [String: [String: String]] = [:]
+    @State private var courseLevels: [String: String] = [:]
     @State private var isLoading: Bool
     @State private var isSaving = false
     @State private var errorMessage: String?
@@ -128,6 +130,8 @@ struct PruebaEditorView: View {
                             asignatura: draft.asignatura,
                             curso: draft.curso,
                             nivelMapping: nivelMapping,
+                            subjectLevelMapping: subjectLevelMapping,
+                            catalogLevel: courseLevels[draft.curso],
                             autoResolveExistingUnit: draft.id == nil || draft.oas != nil,
                             unidadId: optionalStringBinding(\.unidadId),
                             unidadNombre: optionalStringBinding(\.unidadNombre),
@@ -335,8 +339,8 @@ struct PruebaEditorView: View {
         editorCard(title: "Configuraci\u{00F3}n general", icon: "doc.text.fill") {
             field("Nombre", placeholder: "Ej: Prueba Unidad 2", text: $draft.nombre)
             HStack(alignment: .top, spacing: 10) {
-                field("Asignatura", placeholder: "Asignatura", text: $draft.asignatura)
-                field("Curso", placeholder: "Curso", text: $draft.curso)
+                field("Asignatura", placeholder: "Asignatura", text: subjectBinding)
+                field("Curso", placeholder: "Curso", text: courseBinding)
             }
             field("Docente", placeholder: "Nombre docente", text: $draft.docenteNombre)
 
@@ -388,6 +392,34 @@ struct PruebaEditorView: View {
                 }
             }
         }
+    }
+
+    private var courseBinding: Binding<String> {
+        Binding(
+            get: { draft.curso },
+            set: { value in
+                guard value != draft.curso else { return }
+                draft.curso = value
+                clearCurriculumSelection()
+            }
+        )
+    }
+
+    private var subjectBinding: Binding<String> {
+        Binding(
+            get: { draft.asignatura },
+            set: { value in
+                guard value != draft.asignatura else { return }
+                draft.asignatura = value
+                clearCurriculumSelection()
+            }
+        )
+    }
+
+    private func clearCurriculumSelection() {
+        draft.unidadId = ""
+        draft.unidadNombre = ""
+        draft.oas = []
     }
 
     private var instructionsCard: some View {
@@ -525,6 +557,14 @@ struct PruebaEditorView: View {
             if let snapshot = try? await dashboardRepository.fetchDashboard() {
                 guard !Task.isCancelled else { return }
                 nivelMapping = snapshot.nivelMapping
+                subjectLevelMapping = snapshot.subjectLevelMapping
+                courseLevels = Dictionary(
+                    snapshot.activeCourses.compactMap { course in
+                        guard let level = course.level, !level.isEmpty else { return nil }
+                        return (course.name, level)
+                    },
+                    uniquingKeysWith: { current, _ in current }
+                )
             }
 
             if let exportSchool = try? await dashboardRepository.fetchExportSchool(scope: scope) {

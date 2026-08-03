@@ -191,6 +191,25 @@ final class AttendanceRulesTests: XCTestCase {
         )
     }
 
+    func testParvulariaDocumentIDsMatchWebContract() {
+        XCTAssertEqual(
+            AttendanceDocumentPath.documentID(
+                subject: "Identidad y Autonomía",
+                course: "Primer Nivel de Transición",
+                dateKey: "2026-08-03"
+            ),
+            "libro_parvularia_identidad_y_autonomia_nt1_2026-08-03"
+        )
+        XCTAssertEqual(
+            AttendanceDocumentPath.documentID(
+                subject: "Pensamiento Matemático",
+                course: "NT2",
+                dateKey: "2026-08-03"
+            ),
+            "libro_parvularia_pensamiento_matematico_nt2_2026-08-03"
+        )
+    }
+
     func testQRPayloadStructureRejectsInvisibleOrWrappedCharacters() throws {
         let valid = "epatt:v1:" + String(repeating: "a", count: 64) + ":1:" + String(repeating: "B", count: 43)
         XCTAssertEqual(try AttendanceQRAPIResolver.validatedPayload(valid), valid)
@@ -203,6 +222,17 @@ final class AttendanceRulesTests: XCTestCase {
         // con identidad ficticia y secreto exclusivo de tests.
         let webPayload = "epatt:v1:fda96b09c0d7b5f1fcc548bcbf84ada56fbcadf49e40c08f25068421c1b4118c:1:PLVTVv4iTR0AO7P0Cggt_DHeMDVdL5OUJsu1WjfwlJo"
         XCTAssertEqual(try AttendanceQRAPIResolver.validatedPayload(webPayload), webPayload)
+    }
+
+    func testMissingQRBackendMapsToConfigurationFailure() {
+        let error = APIClientError.requestFailed(
+            status: 404,
+            code: nil,
+            message: "Not Found",
+            retryAfter: nil
+        )
+
+        XCTAssertEqual(AttendanceQRAPIResolver.map(error), .configuration)
     }
 
     func testValidQRMarksPendingStudentPresentAndConfirmed() throws {

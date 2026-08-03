@@ -79,6 +79,8 @@ struct AttendanceQRAPIResolver: AttendanceQRResolving {
             return .studentNotInRoster
         case (429, "RATE_LIMITED"), (429, _):
             return .rateLimited(seconds: retryAfter)
+        case (404, _):
+            return .configuration
         case (503, "CONFIGURATION_ERROR"):
             return .configuration
         case (503, "RATE_LIMIT_UNAVAILABLE"), (503, _):

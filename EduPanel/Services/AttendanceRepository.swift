@@ -20,8 +20,37 @@ enum AttendanceRepositoryError: LocalizedError {
 }
 
 enum AttendanceDocumentPath {
+    private static let parvulariaSubjects: Set<String> = [
+        "identidad_y_autonomia",
+        "convivencia_y_ciudadania",
+        "corporalidad_y_movimiento",
+        "lenguaje_verbal",
+        "lenguajes_artisticos",
+        "entorno_natural",
+        "comprension_del_entorno_sociocultural",
+        "pensamiento_matematico"
+    ]
+
     static func documentID(subject: String, course: String, dateKey: String) -> String {
-        "libro_\(slug("\(subject)_\(course)"))_\(dateKey)"
+        "libro_\(contextID(subject: subject, course: course))_\(dateKey)"
+    }
+
+    /// Replica `buildDocId` del panel para que ambos clientes compartan el
+    /// mismo leccionario, incluidos los núcleos de NT1 y NT2.
+    static func contextID(subject: String, course: String) -> String {
+        let normalizedSubject = slug(subject)
+        let normalizedCourse = slug(course)
+        let isParvularia = parvulariaSubjects.contains(normalizedSubject)
+            || normalizedCourse.contains("nt1")
+            || normalizedCourse.contains("nt2")
+            || normalizedCourse.contains("transicion")
+
+        guard isParvularia else { return slug("\(subject)_\(course)") }
+        let isNT2 = normalizedCourse.contains("2")
+            || normalizedCourse.contains("segundo")
+            || normalizedCourse.contains("nt2")
+            || normalizedCourse.contains("kinder")
+        return "parvularia_\(normalizedSubject)_\(isNT2 ? "nt2" : "nt1")"
     }
 
     static func path(

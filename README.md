@@ -1,6 +1,6 @@
 # EduPanel iOS
 
-App iOS nativa en SwiftUI para replicar gradualmente la experiencia docente de EduPanel.
+App iOS nativa en SwiftUI para llevar los flujos docentes de EduPanel a una experiencia diseñada para iPhone.
 
 ## Estado
 
@@ -17,13 +17,14 @@ Antes de compilar en Xcode:
 1. Crea una app iOS en Firebase con bundle id `cl.edupanel.app`.
 2. Descarga `GoogleService-Info.plist`.
 3. Agrega ese archivo a `EduPanel/Resources/` con target membership `EduPanel`.
-4. Para desarrollo local, `Config/Shared.xcconfig` apunta al backend en
+4. Para desarrollo local en Simulator, `Config/Debug.xcconfig` apunta al backend en
    `http://127.0.0.1:3000` y contiene el `REVERSED_CLIENT_ID` de esta app de
-   Firebase. Inicia el proyecto web vecino con `npm run dev` antes de probar
+   Firebase mediante `Shared.xcconfig`. Inicia el proyecto web vecino con `npm run dev` antes de probar
    funciones que llamen a la API.
 
-Los builds de CI/TestFlight sobrescriben `EDUPANEL_API_BASE_URL` con la URL de
-produccion, por lo que la configuracion local no afecta la distribucion.
+`Config/Release.xcconfig` deja `EDUPANEL_API_BASE_URL` vacío a propósito. Los
+builds de CI/TestFlight deben sobrescribirla con una URL HTTPS de producción;
+así nunca se distribuye `localhost` por accidente.
 
 `GoogleService-Info.plist` queda ignorado por git para evitar subir credenciales de cliente.
 
@@ -45,6 +46,12 @@ Para distribucion a otros telefonos, usa TestFlight o un flujo cloud que genere 
 ## GitHub Actions + TestFlight
 
 El workflow `.github/workflows/testflight.yml` permite compilar en macOS, firmar, exportar `.ipa` y subir a TestFlight desde GitHub Actions.
+
+Los workflows son manuales para evitar builds remotos inesperados:
+
+- `iOS 26 smoke test`: compila, ejecuta los tests y lanza un preview en Simulator con Xcode 26.
+- `Build IPA for verification (unsigned)`: genera una IPA de dispositivo sin firma.
+- `Build iOS and Upload to TestFlight`: requiere firma y aprovisionamiento válidos.
 
 Importante: esta carpeta `edupanel_IOS` debe estar subida a un repositorio de GitHub para que el workflow aparezca en la pestaña Actions. Puede ser un repo separado del proyecto web.
 

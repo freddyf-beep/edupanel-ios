@@ -36,7 +36,7 @@ struct CronogramaView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
-            .padding(.bottom, 28)
+            .tabBarPageBottomPadding()
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Cronograma")
@@ -139,6 +139,35 @@ struct CronogramaView: View {
             }
 
             HStack(spacing: 8) {
+                if viewModel.asignaturasDisponibles.count > 1 {
+                    Menu {
+                        ForEach(viewModel.asignaturasDisponibles, id: \.self) { subject in
+                            Button {
+                                Task { await viewModel.seleccionarAsignatura(subject) }
+                            } label: {
+                                Label(
+                                    subject,
+                                    systemImage: viewModel.asignatura == subject ? "checkmark" : "book.closed"
+                                )
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "book.fill")
+                            Text(viewModel.asignatura)
+                                .lineLimit(1)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 9, weight: .black))
+                        }
+                        .font(.system(size: 12, weight: .black))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 8)
+                        .background(.white.opacity(0.18), in: Capsule())
+                    }
+                    .accessibilityLabel("Asignatura del cronograma")
+                }
+
                 Menu {
                     Button {
                         Task { await viewModel.seleccionarCurso("__todos__") }

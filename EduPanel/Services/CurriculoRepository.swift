@@ -15,12 +15,22 @@ struct UnidadCurricular: Codable, Hashable, Identifiable {
     var id: String
     var numeroUnidad: Int
     var nombreUnidad: String
+    var proposito: String?
+    var conocimientos: [String]?
+    var habilidades: [String]?
+    var actitudes: [String]?
+    var conocimientosPrevios: [String]?
     var objetivosAprendizaje: [OACurricular]?
 
     enum CodingKeys: String, CodingKey {
         case id
         case numeroUnidad = "numero_unidad"
         case nombreUnidad = "nombre_unidad"
+        case proposito
+        case conocimientos
+        case habilidades
+        case actitudes
+        case conocimientosPrevios = "conocimientos_previos"
         case objetivosAprendizaje = "objetivos_aprendizaje"
     }
 }
@@ -51,6 +61,19 @@ actor CurriculoRepository {
         }
         unidadesCache[docId] = unidades
         return unidades
+    }
+
+    func getNivelesDisponibles(asignatura: String) async throws -> [String] {
+        let snapshot = try await getDocuments(db.collection("curriculo"))
+        let levels = AcademicContract.officialLevels.filter { level in
+            let expectedID = PlanificacionRepository.buildDocId(asignatura: asignatura, nivel: level)
+            return snapshot.documents.contains { document in
+                guard document.documentID == expectedID else { return false }
+                let data = document.data()
+                return data["ready"] as? Bool != false
+            }
+        }
+        return levels
     }
 
     func getUnidadCompleta(asignatura: String, nivel: String, unidadId: String) async throws -> UnidadCurricular? {
@@ -116,7 +139,7 @@ enum CurriculoOA {
     static func initOAs(unidad: UnidadCurricular, asignatura: String) -> [OAEditado] {
         (unidad.objetivosAprendizaje ?? []).map { oa in
             OAEditado(
-                id: "oa_\(oa.numero)",
+                id: "OA\(oa.numero)",
                 numero: oa.numero,
                 tipo: (oa.tipo ?? "").uppercased() == "OAT" ? "oat" : "oa",
                 descripcion: oa.descripcion,
@@ -132,16 +155,18 @@ enum CurriculoOA {
 
     /// Merge: base oficial ← overrides guardados ← edits propios, preservando huérfanos como propios.
     static func mergeOAs(base: [OAEditado], saved: [OAEditado]) -> [OAEditado] {
-        let baseIds = Set(base.map(\.id))
-        let savedById = Dictionary(saved.map { ($0.id, $0) }) { first, _ in first }
+        let baseIds = Set(base.map(canonicalOAKey))
+        let savedById = Dictionary(saved.map { (canonicalOAKey($0), $0) }) { first, _ in first }
 
         let mergedBase: [OAEditado] = base.map { oa in
-            guard let existing = savedById[oa.id] else { return oa }
+            guard let existing = savedById[canonicalOAKey(oa)] else { return oa }
             var next = oa
             next.descripcion = existing.descripcion.isEmpty ? oa.descripcion : existing.descripcion
             next.seleccionado = existing.seleccionado
             let oficialesActualizados = oa.indicadores.map { ind in
-                existing.indicadores.first { $0.id == ind.id } ?? ind
+                existing.indicadores.first {
+                    canonicalPedagogicalKey($0.id) == canonicalPedagogicalKey(ind.id)
+                } ?? ind
             }
             let propios = existing.indicadores.filter { $0.esPropio == true }
             next.indicadores = oficialesActualizados + propios
@@ -149,7 +174,7 @@ enum CurriculoOA {
         }
 
         let huerfanos: [OAEditado] = saved
-            .filter { !baseIds.contains($0.id) }
+            .filter { !baseIds.contains(canonicalOAKey($0)) }
             .map { oa in
                 var next = oa
                 next.esPropio = true
@@ -158,10 +183,25 @@ enum CurriculoOA {
 
         var vistos = Set<String>()
         return (mergedBase + huerfanos).filter { oa in
-            guard !vistos.contains(oa.id) else { return false }
-            vistos.insert(oa.id)
+            let key = canonicalOAKey(oa)
+            guard !vistos.contains(key) else { return false }
+            vistos.insert(key)
             return true
         }
+    }
+
+    private static func canonicalOAKey(_ oa: OAEditado) -> String {
+        if let number = oa.numero {
+            return "oa\(number)"
+        }
+        return canonicalPedagogicalKey(oa.id)
+    }
+
+    private static func canonicalPedagogicalKey(_ value: String) -> String {
+        value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL"))
+            .lowercased()
+            .replacingOccurrences(of: "[^a-z0-9]", with: "", options: .regularExpression)
     }
 
     static func nuevoOAPropio(numero: Int?, tipo: String, descripcion: String, asignatura: String) -> OAEditado {
@@ -185,24 +225,83 @@ enum CurriculoOA {
 // MARK: - Resolución de nivel curricular (curso → nivel)
 
 enum CurriculoNivel {
-    /// Resuelve el nivel curricular de un curso desde el nivelMapping, con fallback difuso por prefijo y por grado.
-    static func resolver(curso: String, mapping: [String: String]) -> String? {
+    static func resolver(
+        curso: String,
+        asignatura: String? = nil,
+        catalogLevel: String? = nil,
+        mapping: [String: String],
+        subjectMapping: [String: [String: String]] = [:]
+    ) -> String? {
         let limpio = curso.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !limpio.isEmpty else { return nil }
 
+        if let asignatura = asignatura?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !asignatura.isEmpty {
+            let courseKeys = subjectMapping.keys.filter { key in
+                subjectMapping[key]?.contains(where: {
+                    $0.key.localizedCaseInsensitiveCompare(asignatura) == .orderedSame &&
+                    !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                }) == true
+            }
+            if let key = resolveCourseKey(limpio, keys: courseKeys),
+               let subjects = subjectMapping[key],
+               let level = subjects.first(where: {
+                   $0.key.localizedCaseInsensitiveCompare(asignatura) == .orderedSame
+               })?.value.trimmingCharacters(in: .whitespacesAndNewlines),
+               !level.isEmpty {
+                return level
+            }
+        }
+
+        if let catalogLevel = catalogLevel?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !catalogLevel.isEmpty {
+            return catalogLevel
+        }
+
         if let directo = mapping[limpio], !directo.isEmpty { return directo }
 
-        if let key = mapping.keys.first(where: { limpio.hasPrefix($0) || $0.hasPrefix(limpio) }),
+        if let key = resolveCourseKey(limpio, keys: Array(mapping.keys)),
            let nivel = mapping[key], !nivel.isEmpty {
             return nivel
         }
 
-        if let gradoCurso = grado(de: limpio),
-           let key = mapping.keys.first(where: { grado(de: $0) == gradoCurso }),
-           let nivel = mapping[key], !nivel.isEmpty {
-            return nivel
+        return inferirDesdeNombreCurso(limpio)
+    }
+
+    private static func resolveCourseKey(_ course: String, keys: [String]) -> String? {
+        if let exact = keys.first(where: {
+            $0.localizedCaseInsensitiveCompare(course) == .orderedSame
+        }) {
+            return exact
+        }
+        if let prefix = keys.first(where: {
+            course.localizedCaseInsensitiveContains($0) ||
+            $0.localizedCaseInsensitiveContains(course)
+        }) {
+            return prefix
+        }
+        if let courseGrade = grado(de: course) {
+            return keys.first { grado(de: $0) == courseGrade }
+        }
+        return nil
+    }
+
+    private static func inferirDesdeNombreCurso(_ course: String) -> String? {
+        let folded = course.folding(
+            options: [.diacriticInsensitive, .caseInsensitive],
+            locale: Locale(identifier: "es_CL")
+        ).lowercased()
+        guard let gradeText = folded.firstMatch(of: /\d+/).map({ String($0.output) }),
+              let grade = Int(gradeText) else {
+            return nil
         }
 
+        if folded.contains("medio"), (1...4).contains(grade) {
+            return ["1ro", "2do", "3ro", "4to"][grade - 1] + " Medio"
+        }
+        if (1...8).contains(grade) {
+            return ["1ro", "2do", "3ro", "4to", "5to", "6to", "7mo", "8vo"][grade - 1] + " Básico"
+        }
         return nil
     }
 

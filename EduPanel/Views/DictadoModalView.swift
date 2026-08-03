@@ -6,9 +6,21 @@ struct DictadoModalView: View {
     @Environment(\.openURL) private var openURL
     @State private var dictadoService: DictadoService
     @State private var copiedNotice = false
+    @State private var didLoadInitialText = false
+    @State private var isSaving = false
+    @State private var saveErrorMessage: String?
 
-    init(contextualStrings: [String] = []) {
+    private let initialText: String
+    private let saveAction: ((String) async throws -> Void)?
+
+    init(
+        contextualStrings: [String] = [],
+        initialText: String = "",
+        saveAction: ((String) async throws -> Void)? = nil
+    ) {
         _dictadoService = State(initialValue: DictadoService(contextualStrings: contextualStrings))
+        self.initialText = initialText
+        self.saveAction = saveAction
     }
 
     var body: some View {
@@ -57,7 +69,12 @@ struct DictadoModalView: View {
 
                 // Status & Waveform Animation
                 VStack(spacing: 12) {
-                    if case .error(let message) = dictadoService.state {
+                    if let saveErrorMessage {
+                        Label(saveErrorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.orange)
+                            .multilineTextAlignment(.center)
+                    } else if case .error(let message) = dictadoService.state {
                         VStack(spacing: 6) {
                             Label(message, systemImage: "exclamationmark.triangle.fill")
                                 .font(.caption.weight(.bold))
@@ -124,6 +141,13 @@ struct DictadoModalView: View {
                         .multilineTextAlignment(.center)
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    Text(saveAction == nil
+                         ? "Nada se guardará automáticamente."
+                         : "El registro solo se guardará cuando pulses Guardar.")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                 }
 
                 // Action Bar (Copiar, Limpiar, Cerrar)
@@ -164,14 +188,48 @@ struct DictadoModalView: View {
             .background(Color(.systemGroupedBackground))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Listo") {
-                        dictadoService.stopDictado()
-                        dismiss()
+                    Button(saveAction == nil ? "Listo" : (isSaving ? "Guardando…" : "Guardar")) {
+                        finish()
                     }
                     .font(.body.weight(.bold))
+                    .disabled(
+                        isSaving ||
+                        (saveAction != nil
+                            && dictadoService.transcribedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            && initialText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    )
                 }
             }
         }
+        .task {
+            guard !didLoadInitialText else { return }
+            didLoadInitialText = true
+            if !initialText.isEmpty {
+                dictadoService.updateText(initialText)
+            }
+        }
         .onDisappear { dictadoService.stopDictado() }
+    }
+
+    private func finish() {
+        dictadoService.stopDictado()
+        guard let saveAction else {
+            dismiss()
+            return
+        }
+
+        let text = dictadoService.transcribedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty || !initialText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        isSaving = true
+        saveErrorMessage = nil
+        Task {
+            do {
+                try await saveAction(text)
+                dismiss()
+            } catch {
+                saveErrorMessage = error.localizedDescription
+                isSaving = false
+            }
+        }
     }
 }

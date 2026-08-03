@@ -15,6 +15,12 @@ struct ClassPlanningEditorView: View {
     @State private var isShowingDiscardConfirmation = false
     @State private var allowsFormattingSimplification = false
     @State private var contextWasEdited = false
+    @State private var isShowingAIGenerator = false
+    @State private var isGeneratingAI = false
+    @State private var aiInstructions = ""
+    @State private var aiErrorMessage: String?
+    @State private var aiAppliedNotice = false
+    @State private var generationTask: Task<Void, Never>?
 
     private var hasChanges: Bool {
         draft != originalActivity
@@ -72,6 +78,7 @@ struct ClassPlanningEditorView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     ClassEditorSummaryCard(activity: $draft, classNumber: classNumber)
+                    aiDraftCard
                     if requiresFormattingConsent {
                         ClassFormattingWarning(allowsSimplification: $allowsFormattingSimplification)
                     }
@@ -95,7 +102,7 @@ struct ClassPlanningEditorView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
-                .padding(.bottom, 28)
+                .tabBarPageBottomPadding()
             }
             .background(EPTheme.background)
             .navigationTitle("Planificar clase \(classNumber)")
@@ -103,7 +110,13 @@ struct ClassPlanningEditorView: View {
             .scrollDismissesKeyboard(.interactively)
             .toolbar { editorToolbar }
         }
-        .interactiveDismissDisabled(hasChanges || isSaving)
+        .interactiveDismissDisabled(hasChanges || isSaving || isGeneratingAI)
+        .sheet(isPresented: $isShowingAIGenerator) {
+            aiGeneratorSheet
+        }
+        .onDisappear {
+            generationTask?.cancel()
+        }
         .confirmationDialog(
             "Descartar cambios",
             isPresented: $isShowingDiscardConfirmation,
@@ -119,6 +132,120 @@ struct ClassPlanningEditorView: View {
         } message: {
             Text(errorMessage ?? "Intenta nuevamente.")
         }
+    }
+
+    private var aiDraftCard: some View {
+        EPWebCard {
+            VStack(alignment: .leading, spacing: 12) {
+                EPSectionHeader(
+                    title: "Crear borrador con IA",
+                    subtitle: "EduPanel usa el contexto curricular de esta unidad y deja la propuesta lista para que la revises.",
+                    icon: "sparkles"
+                )
+
+                if aiAppliedNotice {
+                    Label(
+                        "Propuesta aplicada al borrador. Revísala antes de pulsar Guardar.",
+                        systemImage: "checkmark.circle.fill"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.green)
+                }
+
+                Button {
+                    aiErrorMessage = nil
+                    isShowingAIGenerator = true
+                } label: {
+                    Label(
+                        hasChanges ? "Proponer otra versión" : "Crear propuesta con IA",
+                        systemImage: "wand.and.stars"
+                    )
+                    .font(.footnote.weight(.black))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(EPTheme.primary)
+                .disabled(isSaving || isGeneratingAI || viewModel.isSaving)
+
+                Text("La IA no guarda ni publica cambios automáticamente.")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var aiGeneratorSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                EPModuleHeader(
+                    eyebrow: "Borrador revisable",
+                    title: "¿Qué necesitas para esta clase?",
+                    subtitle: "Puedes dejar la indicación vacía y EduPanel usará los OA, habilidades y contexto de la unidad.",
+                    icon: "sparkles",
+                    accent: .primary
+                )
+
+                ZStack(alignment: .topLeading) {
+                    TextEditor(text: $aiInstructions)
+                        .font(.body)
+                        .scrollContentBackground(.hidden)
+                        .padding(10)
+                        .frame(minHeight: 150)
+                        .background(
+                            Color(.tertiarySystemGroupedBackground),
+                            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        )
+                        .accessibilityLabel("Indicaciones para crear la clase con IA")
+
+                    if aiInstructions.isEmpty {
+                        Text("Ejemplo: prioriza trabajo colaborativo y una salida breve al cierre.")
+                            .font(.body)
+                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 18)
+                            .allowsHitTesting(false)
+                    }
+                }
+
+                if let aiErrorMessage {
+                    Label(aiErrorMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Label(
+                    "La propuesta reemplazará solo este borrador. Podrás editarla, descartarla o guardarla después.",
+                    systemImage: "hand.raised.fill"
+                )
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+
+                Spacer(minLength: 0)
+            }
+            .padding(18)
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Crear con IA")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancelar", action: cancelAIGeneration)
+                        .disabled(false)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: startAIGeneration) {
+                        if isGeneratingAI {
+                            ProgressView()
+                        } else {
+                            Text("Crear")
+                                .fontWeight(.bold)
+                        }
+                    }
+                    .disabled(isGeneratingAI)
+                }
+            }
+        }
+        .interactiveDismissDisabled(isGeneratingAI)
     }
 
     @ToolbarContentBuilder
@@ -140,6 +267,7 @@ struct ClassPlanningEditorView: View {
             }
             .disabled(
                 isSaving
+                || isGeneratingAI
                 || viewModel.isSaving
                 || !hasChanges
                 || (requiresFormattingConsent && !allowsFormattingSimplification)
@@ -207,6 +335,54 @@ struct ClassPlanningEditorView: View {
         } else {
             dismiss()
         }
+    }
+
+    private func startAIGeneration() {
+        guard generationTask == nil, !isGeneratingAI else { return }
+        isGeneratingAI = true
+        aiErrorMessage = nil
+
+        let source = draft
+        let unit = viewModel.verUnidad
+        let previous = classNumber > 1 ? viewModel.clasesActividades[classNumber - 1] : nil
+        let totalClasses = max(
+            viewModel.cronograma?.totalClases ?? 0,
+            viewModel.cronograma?.clases.map(\.numero).max() ?? 0,
+            1
+        )
+        let instructions = aiInstructions
+
+        generationTask = Task { @MainActor in
+            defer {
+                isGeneratingAI = false
+                generationTask = nil
+            }
+            do {
+                let generated = try await ClassAIService().generateDraft(
+                    from: source,
+                    unit: unit,
+                    previousActivity: previous,
+                    totalClasses: totalClasses,
+                    instructions: instructions
+                )
+                guard !Task.isCancelled else { return }
+                draft = generated
+                aiAppliedNotice = true
+                isShowingAIGenerator = false
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+                aiErrorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func cancelAIGeneration() {
+        generationTask?.cancel()
+        generationTask = nil
+        isGeneratingAI = false
+        isShowingAIGenerator = false
     }
 
     private func save() {

@@ -24,6 +24,10 @@ enum CronoDateHelpers {
         isoCalendar.component(.weekOfYear, from: date)
     }
 
+    static func anioISO(_ date: Date) -> Int {
+        isoCalendar.component(.yearForWeekOfYear, from: date)
+    }
+
     static func lunes(de date: Date) -> Date {
         let calendar = isoCalendar
         let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
@@ -80,6 +84,7 @@ enum CronoDateHelpers {
 final class CronogramaViewModel {
     var horario: [ClaseHorario] = []
     var cursosDisponibles: [String] = []
+    var asignaturasDisponibles: [String] = []
     var actividades: [ActividadCronograma] = []
     var unidades: [CronoUnidadInfo] = []
     var isLoading = false
@@ -99,6 +104,8 @@ final class CronogramaViewModel {
     private let cronogramaRepository: CronogramaRepository
 
     @ObservationIgnored private var saveTask: Task<Void, Never>?
+    @ObservationIgnored private var loadedActivityCourses: Set<String> = []
+    @ObservationIgnored private var activityLoadToken = UUID()
 
     init(dashboardRepository: DashboardRepository, planificacionRepository: PlanificacionRepository) {
         self.dashboardRepository = dashboardRepository
@@ -107,6 +114,9 @@ final class CronogramaViewModel {
     }
 
     func load() async {
+        if saveStatus == .saving {
+            await guardarAhora()
+        }
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
@@ -116,10 +126,15 @@ final class CronogramaViewModel {
             horario = snapshot.horario
 
             let configuredSubjects = snapshot.activeCourses.flatMap(\.subjects).map(\.label)
-            let subjects = (configuredSubjects.isEmpty ? snapshot.preferences.asignaturasHabilitadas : configuredSubjects)
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            if let primera = subjects.first {
+            let subjects = Self.dedupeSubjects(
+                configuredSubjects.isEmpty ? snapshot.preferences.asignaturasHabilitadas : configuredSubjects
+            )
+            asignaturasDisponibles = subjects
+            if let current = subjects.first(where: { Self.subjectKey($0) == Self.subjectKey(asignatura) }) {
+                asignatura = current
+            } else if let preferred = subjects.first(where: { Self.subjectKey($0) == Self.subjectKey("Música") }) {
+                asignatura = preferred
+            } else if let primera = subjects.first {
                 asignatura = primera
             } else {
                 let especialidad = snapshot.profile.especialidad.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -136,53 +151,110 @@ final class CronogramaViewModel {
     }
 
     func cargarActividades() async {
-        let cursos = cursoSeleccionado == "__todos__" ? cursosDisponibles : [cursoSeleccionado]
+        let token = UUID()
+        activityLoadToken = token
+        let requestedSubject = asignatura
+        let requestedCourse = cursoSeleccionado
+        let cursos = requestedCourse == "__todos__" ? cursosDisponibles : [requestedCourse]
         var listaActividades: [ActividadCronograma] = []
         var listaUnidades: [CronoUnidadInfo] = []
+        var successfullyLoadedCourses = Set<String>()
+        var failedCourses: [String] = []
 
         for curso in cursos {
-            if let acts = try? await cronogramaRepository.cargarActividades(asignatura: asignatura, curso: curso) {
-                listaActividades += acts.map { actividad in
-                    var copia = actividad
-                    copia.cursoOrigen = copia.cursoOrigen ?? curso
-                    return copia
-                }
-            }
+            let plan = try? await planificacionRepository.cargarPlanCurso(
+                asignatura: requestedSubject,
+                curso: curso
+            )
+            guard !Task.isCancelled, activityLoadToken == token else { return }
+            var aliasesUnidad: [String: String] = [:]
 
-            if let plan = try? await planificacionRepository.cargarPlanCurso(asignatura: asignatura, curso: curso) {
+            if let plan {
+                for (index, unit) in plan.units.enumerated() {
+                    let localID = String(unit.id)
+                    var candidates = PlanificacionRepository.unidadIdCandidates(
+                        unit: unit,
+                        index: index
+                    )
+                    candidates.append(slug(unit.name))
+                    let rawName = unit.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !rawName.isEmpty { candidates.append(rawName) }
+                    for alias in candidates where !alias.isEmpty {
+                        aliasesUnidad[alias] = localID
+                    }
+                }
+
                 listaUnidades += plan.units.enumerated().map { index, unit in
                     CronoUnidadInfo(
-                        unidadId: unidadKey(unit, index: index),
+                        unidadId: unidadKey(unit),
                         nombre: unit.name,
                         colorHex: unit.color,
                         curso: curso
                     )
                 }
             }
+
+            do {
+                let acts = try await cronogramaRepository.cargarActividades(
+                    asignatura: requestedSubject,
+                    curso: curso
+                )
+                guard !Task.isCancelled, activityLoadToken == token else { return }
+                successfullyLoadedCourses.insert(curso)
+                listaActividades += acts.map { actividad in
+                    var copia = actividad
+                    copia.cursoOrigen = copia.cursoOrigen ?? curso
+                    copia.unidad = aliasesUnidad[copia.unidad] ??
+                        aliasesUnidad[slug(copia.unidad)] ??
+                        copia.unidad
+                    return copia
+                }
+            } catch {
+                failedCourses.append(curso)
+            }
         }
 
+        guard !Task.isCancelled, activityLoadToken == token else { return }
         actividades = listaActividades
         unidades = listaUnidades
+        loadedActivityCourses = successfullyLoadedCourses
+        if !failedCourses.isEmpty {
+            errorMessage = "No se pudo cargar el cronograma de: \(failedCourses.joined(separator: ", ")). No se sobrescribirán esos cursos."
+        }
+        isLoading = false
     }
 
     func seleccionarCurso(_ curso: String) async {
+        if saveStatus == .saving {
+            await guardarAhora()
+        }
         cursoSeleccionado = curso
         if curso != "__todos__" {
             let snapshot = try? await dashboardRepository.fetchDashboard()
             selectedCourseID = snapshot?.course(id: nil, named: curso)?.courseID
-            selectedSubjectID = snapshot?.course(id: selectedCourseID, named: curso)?.subjects.first { $0.label == asignatura }?.id
+            selectedSubjectID = snapshot?.course(id: selectedCourseID, named: curso)?.subjects.first {
+                Self.subjectKey($0.label) == Self.subjectKey(asignatura)
+            }?.id
         }
         isLoading = true
         await cargarActividades()
-        isLoading = false
     }
 
-    private func unidadKey(_ unit: UnidadPlan, index: Int) -> String {
-        if let curricularId = unit.unidadCurricularId?.trimmingCharacters(in: .whitespacesAndNewlines), !curricularId.isEmpty {
-            return curricularId
+    func seleccionarAsignatura(_ nuevaAsignatura: String) async {
+        let trimmed = nuevaAsignatura.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, Self.subjectKey(trimmed) != Self.subjectKey(asignatura) else { return }
+        if saveStatus == .saving {
+            await guardarAhora()
         }
-        let nombre = unit.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return nombre.isEmpty ? "unidad_\(index + 1)" : slug(nombre)
+        asignatura = trimmed
+        selectedCourseID = nil
+        selectedSubjectID = nil
+        isLoading = true
+        await cargarActividades()
+    }
+
+    private func unidadKey(_ unit: UnidadPlan) -> String {
+        String(unit.id)
     }
 
     private func slug(_ texto: String) -> String {
@@ -193,6 +265,24 @@ final class CronogramaViewModel {
             return esAlfanumerico ? Character(scalar) : "_"
         }
         return String(mapped)
+    }
+
+    private static func dedupeSubjects(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.compactMap { raw in
+            let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty, seen.insert(subjectKey(value)).inserted else { return nil }
+            return value
+        }
+        .sorted { subjectKey($0).localizedStandardCompare(subjectKey($1)) == .orderedAscending }
+    }
+
+    private static func subjectKey(_ value: String) -> String {
+        value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL"))
+            .lowercased()
+            .split { !$0.isLetter && !$0.isNumber }
+            .joined(separator: "_")
     }
 
     // MARK: - CRUD
@@ -233,15 +323,21 @@ final class CronogramaViewModel {
         do {
             if cursoSeleccionado == "__todos__" {
                 var grupos: [String: [ActividadCronograma]] = [:]
-                cursosDisponibles.forEach { grupos[$0] = [] }
+                loadedActivityCourses.forEach { grupos[$0] = [] }
                 for actividad in actividades {
                     guard let curso = actividad.cursoOrigen ?? cursosDisponibles.first else { continue }
+                    guard loadedActivityCourses.contains(curso) else { continue }
                     grupos[curso, default: []].append(actividad)
                 }
                 for (curso, lista) in grupos {
                     try await cronogramaRepository.guardarActividades(asignatura: asignatura, curso: curso, actividades: lista)
                 }
             } else {
+                guard loadedActivityCourses.contains(cursoSeleccionado) else {
+                    errorMessage = "No se guardó porque el cronograma de este curso no terminó de cargar."
+                    saveStatus = .error
+                    return
+                }
                 try await cronogramaRepository.guardarActividades(asignatura: asignatura, curso: cursoSeleccionado, actividades: actividades)
             }
             saveStatus = .saved
@@ -287,7 +383,7 @@ final class CronogramaViewModel {
     }
 
     var anioActual: Int {
-        Calendar.current.component(.year, from: currentDate)
+        CronoDateHelpers.anioISO(currentDate)
     }
 
     var unidadesConActividades: Int {

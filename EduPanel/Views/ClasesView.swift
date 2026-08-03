@@ -42,10 +42,10 @@ struct ClasesView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
-            .padding(.bottom, 28)
+            .tabBarPageBottomPadding()
         }
         .background(EPTheme.background)
-        .navigationTitle("Asistencia")
+        .navigationTitle("Clases")
         .task { await cargar() }
         .refreshable { await cargar(forceRefresh: true) }
     }
@@ -98,9 +98,9 @@ struct ClasesView: View {
 
     private func header(_ snapshot: DashboardSnapshot) -> some View {
         EPModuleHeader(
-            eyebrow: "Asistencia",
-            title: "Agenda y registro",
-            subtitle: "Elige un bloque para pasar asistencia y revisar la información de tu clase.",
+            eyebrow: "Clases y asistencia",
+            title: "Tu jornada docente",
+            subtitle: "Abre una clase planificada o pasa asistencia desde el bloque correspondiente.",
             icon: "person.3.sequence.fill",
             accent: .primary
         ) {
@@ -250,7 +250,7 @@ struct ClasesView: View {
                     }
 
                     HStack(spacing: 6) {
-                        EPStatusPill(text: "\(snapshot.studentCounts[item.bloque.resumen] ?? 0) estudiantes", icon: "person.2.fill", tint: .blue)
+                        EPStatusPill(text: "\(snapshot.studentCount(forCourseID: item.bloque.courseID, name: item.bloque.resumen)) estudiantes", icon: "person.2.fill", tint: .blue)
                         EPStatusPill(text: item.unidad?.name ?? "Sin unidad", icon: item.unidad == nil ? "link.badge.plus" : "book.closed.fill", tint: item.unidad == nil ? .orange : .green)
                     }
 
@@ -272,32 +272,32 @@ struct ClasesView: View {
 
                         if let unidad = item.unidad {
                             HStack(spacing: 8) {
-                            NavigationLink(value: AppRoute.verUnidad(
-                                curso: item.bloque.resumen,
-                                asignatura: asignatura,
-                                unidadId: String(unidad.id),
-                                unidadNombre: unidad.name,
-                                initialTab: "clases"
-                            )) {
-                                Label("Abrir clases", systemImage: "rectangle.stack.fill")
-                                    .font(.system(size: 12, weight: .black))
-                                    .foregroundStyle(EPTheme.primary)
-                            }
-                            .buttonStyle(.plain)
+                                NavigationLink(value: AppRoute.verUnidad(
+                                    curso: item.bloque.resumen,
+                                    asignatura: asignatura,
+                                    unidadId: String(unidad.id),
+                                    unidadNombre: unidad.name,
+                                    initialTab: "clases"
+                                )) {
+                                    Label("Abrir clases", systemImage: "rectangle.stack.fill")
+                                        .font(.system(size: 12, weight: .black))
+                                        .foregroundStyle(EPTheme.primary)
+                                }
+                                .buttonStyle(.plain)
 
-                            NavigationLink(value: AppRoute.verUnidad(
-                                curso: item.bloque.resumen,
-                                asignatura: asignatura,
-                                unidadId: String(unidad.id),
-                                unidadNombre: unidad.name,
-                                initialTab: "unidad"
-                            )) {
-                                Label("Unidad", systemImage: "arrow.right")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundStyle(.secondary)
+                                NavigationLink(value: AppRoute.verUnidad(
+                                    curso: item.bloque.resumen,
+                                    asignatura: asignatura,
+                                    unidadId: String(unidad.id),
+                                    unidadNombre: unidad.name,
+                                    initialTab: "unidad"
+                                )) {
+                                    Label("Unidad", systemImage: "arrow.right")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
-                        }
                         }
                     }
                 }
@@ -339,7 +339,7 @@ struct ClasesView: View {
     private func estudiantesDelDia(_ snapshot: DashboardSnapshot) -> Int {
         let cursos = Set(itemsDelDia(snapshot).map(\.bloque.resumen))
         return cursos.reduce(0) { total, curso in
-            total + (snapshot.studentCounts[curso] ?? 0)
+            total + snapshot.studentCount(name: curso)
         }
     }
 
@@ -371,7 +371,9 @@ struct ClasesView: View {
             if selectedCurso != "__todos__", !data.courses.contains(selectedCurso) {
                 selectedCurso = "__todos__"
             }
-            let asignaturas = Array(Set(data.academicClasses.compactMap(\.asignatura))).sorted()
+            let asignaturasHorario = data.academicClasses.compactMap(\.asignatura)
+            let asignaturasCatalogo = data.activeCourses.flatMap(\.subjects).map(\.label)
+            let asignaturas = Array(Set(asignaturasHorario + asignaturasCatalogo)).sorted()
             planes = try await planificacionRepository.listarTodosPlanesCurso(
                 posiblesCursos: data.courses,
                 posiblesAsignaturas: asignaturas
