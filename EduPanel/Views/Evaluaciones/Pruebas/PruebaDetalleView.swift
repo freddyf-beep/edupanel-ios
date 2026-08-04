@@ -126,6 +126,7 @@ struct PruebaDetalleView: View {
 
             summaryGrid(test)
             configurationCard(test)
+            objectiveCard(test)
             instructionsCard(test)
             curriculumCard(test)
 
@@ -205,6 +206,21 @@ struct PruebaDetalleView: View {
                 }
                 if let date = test.fechaActualizacion ?? test.fechaCreacion {
                     keyValue("Última actualización", date.formatted(date: .long, time: .shortened))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func objectiveCard(_ test: PruebaTemplate) -> some View {
+        let objective = test.objetivoEvaluacion.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !objective.isEmpty {
+            EPWebCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    EPSectionHeader(title: "Objetivo de la evaluación", icon: "target")
+                    Text(objective)
+                        .font(.system(size: 13, weight: .medium))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }

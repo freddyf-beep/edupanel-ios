@@ -59,7 +59,7 @@ Importante: esta carpeta `edupanel_IOS` debe estar subida a un repositorio de Gi
 
 Para validar el primer hito en un iPhone real sin Mac y sin pagar Apple Developer todavia, usa el workflow `.github/workflows/unsigned-ipa.yml`.
 
-Ese workflow genera un `.ipa` sin firma para instalarlo manualmente con Sideloadly o AltStore desde Windows. Requiere solo estos secrets:
+Ese workflow genera un `.ipa` sin firma para inspección. Sideloadly, AltStore u otra herramienta solo podrán usarlo si realizan una firma válida para el dispositivo; el archivo descargado no es instalable por sí mismo. Requiere solo estos secrets:
 
 - `GOOGLE_SERVICE_INFO_PLIST_BASE64`
 - `EDUPANEL_API_BASE_URL`
@@ -73,7 +73,7 @@ Ese workflow genera un `.ipa` sin firma para instalarlo manualmente con Sideload
 4. Cuando termine en verde, abre la ejecución y descarga el artefacto `EduPanel-unsigned-ipa` desde **Artifacts**.
 5. El artefacto contiene `EduPanel-unsigned.ipa` y su checksum SHA-256.
 
-La IPA de verificación es deliberadamente sin firma. Para instalarla en un iPhone se necesita Sideloadly/AltStore u otra herramienta compatible; para una IPA firmada usa `testflight.yml` y configura los secretos de Apple indicados más abajo.
+La IPA de verificación es deliberadamente sin firma y no es instalable directamente. Para usarla en un iPhone debe volver a firmarse con certificado y aprovisionamiento válidos; para una entrega firmada y distribuible usa `testflight.yml` y configura los secretos de Apple indicados más abajo.
 
 Guia paso a paso: `docs/FREE_IOS_TESTING.md`.
 

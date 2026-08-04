@@ -10,13 +10,15 @@ struct EvaluacionesShell: View {
 
     init(
         dashboardRepository: DashboardRepository,
-        evaluacionesRepository: EvaluacionesRepository = EvaluacionesRepository()
+        evaluacionesRepository: EvaluacionesRepository = EvaluacionesRepository(),
+        apiClient: APIClient? = nil
     ) {
         self.dashboardRepository = dashboardRepository
         self.evaluacionesRepository = evaluacionesRepository
         _viewModel = State(initialValue: EvaluacionesViewModel(
             dashboardRepository: dashboardRepository,
-            evaluacionesRepository: evaluacionesRepository
+            evaluacionesRepository: evaluacionesRepository,
+            apiClient: apiClient
         ))
     }
 
@@ -82,7 +84,16 @@ struct EvaluacionesShell: View {
         }
         .onAppear {
             guard hasLoaded, !viewModel.isLoading else { return }
-            Task { await viewModel.loadContenido() }
+            Task {
+                async let classicContent: Void = viewModel.loadContenido()
+                async let newEngineContent: Void = viewModel.refreshExamForge()
+                _ = await (classicContent, newEngineContent)
+            }
+        }
+        .refreshable {
+            async let classicContent: Void = viewModel.loadContenido()
+            async let newEngineContent: Void = viewModel.refreshExamForge()
+            _ = await (classicContent, newEngineContent)
         }
     }
 

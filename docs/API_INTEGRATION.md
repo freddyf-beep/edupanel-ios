@@ -22,6 +22,23 @@ duplicar esos endpoints dentro del proyecto Xcode.
 - `POST /api/asistencia/qr/resolve`
 - `POST /api/courses/{courseId}/preview-delete`
 - `DELETE /api/courses/{courseId}`
+- `GET /api/examforge/access`
+- `GET /api/examforge/v1/exams`
+- `GET /api/examforge/v1/exams/{examId}`
+- `GET /api/examforge/v1/assets/{assetId}`
+
+Las rutas ExamForge se consumen en modo **solo lectura** y, cuando corresponde,
+incluyen `x-edupanel-school-id`. iOS muestra listados, detalle y assets
+autenticados sin reconstruir ni escribir el documento. La edición y la
+exportación de este motor nuevo no se consideran terminadas y no forman parte
+de esta integración; los flujos legacy continúan disponibles por separado.
+
+Los assets autenticados tienen un requisito adicional de aislamiento: la ruta
+del backend no debe responder con `Cache-Control: public, immutable`; antes de
+producción debe usar caché privada o `no-store`. iOS fuerza recarga sin caché,
+particiona su caché de imágenes por usuario/colegio, limita la descarga a 12 MB
+y reduce imágenes grandes antes de decodificarlas. Esto protege al cliente,
+pero no reemplaza la corrección del encabezado HTTP en el despliegue web.
 
 El dictado actual no llama `/api/bitacora-por-voz`: Apple Speech produce texto y
 el docente lo revisa antes de guardarlo en el leccionario. El endpoint web exige

@@ -1095,6 +1095,8 @@ struct GrupoNoLectivoSheet: View {
     @State private var horaFin = "14:00"
     @State private var colorHex = "#6B7280"
     @State private var confirmandoEliminar = false
+    @State private var isSaving = false
+    @State private var errorMessage: String?
 
     private var puedeGuardar: Bool {
         !etiqueta.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
@@ -1127,6 +1129,10 @@ struct GrupoNoLectivoSheet: View {
 
                     BloqueColorPalette(colorHex: $colorHex)
 
+                    if let errorMessage {
+                        ProfileErrorBanner(message: errorMessage)
+                    }
+
                     Button(role: .destructive) {
                         confirmandoEliminar = true
                     } label: {
@@ -1144,14 +1150,15 @@ struct GrupoNoLectivoSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancelar") { dismiss() }
+                        .disabled(isSaving)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Aplicar al grupo") {
+                    Button(isSaving ? "Guardando…" : "Aplicar al grupo") {
                         aplicar()
                     }
                     .font(.subheadline.weight(.black))
                     .tint(EPTheme.primary)
-                    .disabled(!puedeGuardar)
+                    .disabled(!puedeGuardar || isSaving)
                 }
             }
             .confirmationDialog("¿Eliminar \(grupo.bloques.count) bloque(s) de \"\(grupo.title)\"?", isPresented: $confirmandoEliminar, titleVisibility: .visible) {
@@ -1163,6 +1170,7 @@ struct GrupoNoLectivoSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .interactiveDismissDisabled(isSaving)
         .onAppear {
             etiqueta = grupo.title
             colorHex = grupo.colorHex
@@ -1175,15 +1183,24 @@ struct GrupoNoLectivoSheet: View {
 
     private func aplicar() {
         let nombre = etiqueta.trimmingCharacters(in: .whitespacesAndNewlines)
-        for bloque in grupo.bloques {
-            viewModel.upsertBloque(bloque.copia(
+        let bloques = grupo.bloques.map { bloque in
+            bloque.copia(
                 resumen: nombre,
                 horaInicio: horaInicio,
                 horaFin: horaFin,
                 colorHex: colorHex
-            ))
+            )
         }
-        dismiss()
+        isSaving = true
+        errorMessage = nil
+        Task {
+            if await viewModel.upsertBloques(bloques) {
+                dismiss()
+            } else {
+                errorMessage = viewModel.errorMessage ?? "No se pudo guardar el grupo. Inténtalo nuevamente."
+                isSaving = false
+            }
+        }
     }
 }
 

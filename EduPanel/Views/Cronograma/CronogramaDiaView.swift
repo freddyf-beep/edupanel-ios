@@ -30,7 +30,7 @@ struct CronogramaDiaView: View {
         return VStack(alignment: .leading, spacing: 12) {
             EPWebCard {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("\(diaNombre) \(Calendar.current.component(.day, from: viewModel.currentDate)) · \(CronoDateHelpers.tituloMes(viewModel.currentDate))")
+                    Text("\(diaNombre) \(CronoDateHelpers.civilCalendar.component(.day, from: viewModel.currentDate)) · \(CronoDateHelpers.tituloMes(viewModel.currentDate))")
                         .font(.headline.weight(.black))
                     Text("Semana \(semana) · \(actividades.count) actividad\(actividades.count == 1 ? "" : "es") · \(bloques.count) bloque\(bloques.count == 1 ? "" : "s")")
                         .font(.caption.weight(.semibold))

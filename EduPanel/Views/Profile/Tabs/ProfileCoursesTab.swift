@@ -626,9 +626,14 @@ private struct CourseWorkspaceContent: View {
     @State private var wizardPreset: WizardPreset?
     @State private var editingBloque: ClaseHorario?
     @State private var editingSubjectsCourse: AcademicCourse?
+    @State private var operationError: String?
 
     private var academicCourse: AcademicCourse? {
         viewModel.snapshot?.courseCatalog.first { $0.courseID == course.courseID }
+    }
+
+    private var isSavingCourse: Bool {
+        viewModel.isCourseMutationPending(course.courseID)
     }
 
     var body: some View {
@@ -636,6 +641,10 @@ private struct CourseWorkspaceContent: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     header
+
+                    if let operationError {
+                        ProfileErrorBanner(message: operationError)
+                    }
 
                     Picker("Contenido del curso", selection: $selectedSection) {
                         ForEach(CourseWorkspaceSection.allCases) { section in
@@ -699,9 +708,13 @@ private struct CourseWorkspaceContent: View {
                     viewModel.removeCurso(course.name)
                     dismiss()
                 } else {
+                    operationError = nil
                     Task {
-                        await viewModel.archiveCourse(course.courseID)
-                        dismiss()
+                        if await viewModel.archiveCourse(course.courseID) {
+                            dismiss()
+                        } else {
+                            operationError = viewModel.errorMessage ?? "No se pudo archivar el curso. Inténtalo nuevamente."
+                        }
                     }
                 }
             }
@@ -766,9 +779,15 @@ private struct CourseWorkspaceContent: View {
                                     .font(.caption.weight(.black))
                                     .foregroundStyle(.secondary)
                                     .frame(width: 26, height: 26)
-                                    .background(Color(.systemGray5), in: Circle())
+                                .background(Color(.systemGray5), in: Circle())
                             }
                             .buttonStyle(.plain)
+                            .disabled(isSavingCourse)
+                        }
+                        if isSavingCourse {
+                            ProgressView()
+                                .controlSize(.small)
+                                .accessibilityLabel("Guardando cambios del curso")
                         }
                     }
                 }
@@ -791,7 +810,13 @@ private struct CourseWorkspaceContent: View {
         Menu {
             ForEach(BloqueHelpers.paleta, id: \.self) { hex in
                 Button {
-                    viewModel.recolorCurso(course.name, colorHex: hex)
+                    operationError = nil
+                    Task {
+                        let saved = await viewModel.recolorCurso(courseID: course.courseID, colorHex: hex)
+                        if !saved {
+                            operationError = viewModel.errorMessage ?? "No se pudo guardar el color del curso. Inténtalo nuevamente."
+                        }
+                    }
                 } label: {
                     Label(hex.uppercased() == course.colorHex.uppercased() ? "Actual" : hex, systemImage: hex.uppercased() == course.colorHex.uppercased() ? "checkmark.circle.fill" : "circle.fill")
                 }
@@ -808,12 +833,23 @@ private struct CourseWorkspaceContent: View {
                 .shadow(color: Color(profileHex: course.colorHex).opacity(0.35), radius: 6, y: 3)
         }
         .buttonStyle(.plain)
+        .disabled(isSavingCourse)
     }
 
     private func confirmarRenombre() {
         let clean = nuevoNombre.trimmingCharacters(in: .whitespacesAndNewlines)
         if !clean.isEmpty, clean != course.name {
-            viewModel.renameCurso(course.name, to: clean)
+            operationError = nil
+            Task {
+                let saved = await viewModel.renameCurso(
+                    courseID: course.courseID,
+                    oldName: course.name,
+                    to: clean
+                )
+                if !saved {
+                    operationError = viewModel.errorMessage ?? "No se pudo cambiar el nombre del taller. Inténtalo nuevamente."
+                }
+            }
         }
         renombrando = false
     }
@@ -1363,6 +1399,7 @@ private struct CourseSubjectsEditorSheet: View {
     @State private var draft: AcademicCourse
     @State private var options: [CurriculumSubjectOption] = []
     @State private var isSaving = false
+    @State private var errorMessage: String?
 
     init(viewModel: ProfileViewModel, course: AcademicCourse) {
         self.viewModel = viewModel
@@ -1393,6 +1430,13 @@ private struct CourseSubjectsEditorSheet: View {
                     Text("Asignaturas que impartes")
                 } footer: {
                     Text("Solo las asignaturas seleccionadas aparecerán al gestionar el horario de este curso.")
+                }
+
+                if let errorMessage {
+                    Section {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                    }
                 }
             }
             .navigationTitle(draft.name)
@@ -1439,10 +1483,15 @@ private struct CourseSubjectsEditorSheet: View {
 
     private func save() {
         isSaving = true
+        errorMessage = nil
         Task {
-            await viewModel.saveCourse(draft)
+            let saved = await viewModel.saveCourse(draft)
             isSaving = false
-            dismiss()
+            if saved {
+                dismiss()
+            } else {
+                errorMessage = viewModel.errorMessage ?? "No se pudieron guardar las asignaturas. Inténtalo nuevamente."
+            }
         }
     }
 }
@@ -1456,6 +1505,8 @@ private struct AcademicCourseEditorSheet: View {
     @State private var workshopName = ""
     @State private var colorHex = "#EC4899"
     @State private var isSaving = false
+    @State private var errorMessage: String?
+    @State private var courseID = UUID().uuidString.lowercased()
 
     private var officialName: String {
         (try? AcademicContract.officialCourseName(level: level, section: section)) ?? "Curso"
@@ -1493,6 +1544,13 @@ private struct AcademicCourseEditorSheet: View {
                 }
 
                 Section("Color") { BloqueColorPalette(colorHex: $colorHex) }
+
+                if let errorMessage {
+                    Section {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                    }
+                }
             }
             .navigationTitle(kind == .oficial ? "Nuevo curso" : "Nuevo taller")
             .navigationBarTitleDisplayMode(.inline)
@@ -1509,7 +1567,6 @@ private struct AcademicCourseEditorSheet: View {
     }
 
     private func create() {
-        let courseID = UUID().uuidString.lowercased()
         let name = kind == .oficial ? officialName : workshopName.trimmingCharacters(in: .whitespacesAndNewlines)
         let dataKeySource = kind == .oficial ? name : "\(name)_\(courseID)"
         let course = AcademicCourse(
@@ -1527,10 +1584,15 @@ private struct AcademicCourseEditorSheet: View {
             deleteEligibleAt: nil
         )
         isSaving = true
+        errorMessage = nil
         Task {
-            await viewModel.saveCourse(course)
+            let saved = await viewModel.saveCourse(course)
             isSaving = false
-            if viewModel.errorMessage == nil { dismiss() }
+            if saved {
+                dismiss()
+            } else {
+                errorMessage = viewModel.errorMessage ?? "No se pudo crear el curso. Inténtalo nuevamente."
+            }
         }
     }
 }

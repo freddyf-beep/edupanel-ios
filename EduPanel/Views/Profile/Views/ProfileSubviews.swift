@@ -329,38 +329,59 @@ let profileBannerPresets: [ProfileBannerPreset] = [
 struct ProfileBannerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var viewModel: ProfileViewModel
+    @State private var isSaving = false
+    @State private var errorMessage: String?
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    ForEach(profileBannerPresets) { preset in
-                        Button {
-                            viewModel.draftPreferences.bannerStyle = preset.id
-                            Task {
-                                await viewModel.savePreferences()
-                                dismiss()
-                            }
-                        } label: {
-                            VStack(alignment: .leading, spacing: 10) {
-                                LinearGradient(colors: preset.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
-                                    .frame(height: 72)
-                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-                                HStack {
-                                    Text(preset.title)
-                                        .font(.footnote.weight(.black))
-                                    Spacer()
-                                    if viewModel.draftPreferences.bannerStyle == preset.id {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(.green)
+                VStack(spacing: 12) {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                        ForEach(profileBannerPresets) { preset in
+                            Button {
+                                guard !isSaving else { return }
+                                viewModel.draftPreferences.bannerStyle = preset.id
+                                isSaving = true
+                                errorMessage = nil
+                                Task {
+                                    if await viewModel.savePreferences() {
+                                        dismiss()
+                                    } else {
+                                        errorMessage = viewModel.errorMessage ?? "No se pudo guardar el fondo. Inténtalo nuevamente."
+                                        isSaving = false
                                     }
                                 }
+                            } label: {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    LinearGradient(colors: preset.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+                                        .frame(height: 72)
+                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                                    HStack {
+                                        Text(preset.title)
+                                            .font(.footnote.weight(.black))
+                                        Spacer()
+                                        if viewModel.draftPreferences.bannerStyle == preset.id {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundStyle(.green)
+                                        }
+                                    }
+                                }
+                                .padding(10)
+                                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                             }
-                            .padding(10)
-                            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .buttonStyle(.plain)
+                            .disabled(isSaving)
                         }
-                        .buttonStyle(.plain)
+                    }
+
+                    if isSaving {
+                        ProgressView("Guardando fondo…")
+                            .frame(maxWidth: .infinity)
+                    }
+
+                    if let errorMessage {
+                        ProfileErrorBanner(message: errorMessage)
                     }
                 }
                 .padding(18)
@@ -369,9 +390,11 @@ struct ProfileBannerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Cerrar") { dismiss() }
+                        .disabled(isSaving)
                 }
             }
         }
+        .interactiveDismissDisabled(isSaving)
     }
 }
 

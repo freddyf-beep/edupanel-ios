@@ -27,7 +27,6 @@ struct DashboardView: View {
     @State private var selectedTab: DashboardTabKey = .hoy
     @State private var newReminder = ""
     @State private var reminderColor: ReminderColor = .amarillo
-    @State private var showDictadoModal = false
     @AppStorage("edupanel_dashboard_reminders") private var remindersData = "[]"
     @AppStorage(AppTheme.storageKey) private var appThemeRaw = AppTheme.auto.rawValue
     @AppStorage("edupanel_dashboard_date_button") private var showDashboardDateButton = true
@@ -68,15 +67,6 @@ struct DashboardView: View {
         .navigationTitle("Inicio")
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
-        .sheet(isPresented: $showDictadoModal) {
-            DictadoModalView(contextualStrings: dictationContext)
-                .presentationDetents([.medium, .large])
-        }
-    }
-
-    private var dictationContext: [String] {
-        guard let snapshot = viewModel.snapshot else { return [] }
-        return snapshot.activeCourses.flatMap { [$0.name] + $0.subjects.map(\.label) }
     }
 
     private func toolbarIcon(_ systemName: String) -> some View {
@@ -103,7 +93,7 @@ struct DashboardView: View {
                 switch selectedTab {
                 case .hoy:
                     todayTimeline(snapshot)
-                    quickActions
+                    quickActions(snapshot)
                     if !decodedReminders.isEmpty {
                         remindersReadCard
                     }
@@ -333,8 +323,13 @@ struct DashboardView: View {
 
     // MARK: - Acciones rápidas
 
-    private var quickActions: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private func quickActions(_ snapshot: DashboardSnapshot) -> some View {
+        let target = dictationTarget(in: snapshot)
+        let dictationRoute = target.map {
+            AppRoute.classDetail(id: $0.id, title: routeTitle(for: $0))
+        } ?? AppRoute.module(.clases)
+
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Hazlo rápido")
                     .font(.system(size: 20, weight: .bold, design: .rounded))
@@ -345,12 +340,39 @@ struct DashboardView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    QuickAction(title: "Dictado voz", icon: "mic.fill", colors: [.pink, EPTheme.primary], kind: .action({ showDictadoModal = true }))
+                    QuickAction(
+                        title: "Registro por voz",
+                        icon: "mic.fill",
+                        colors: [.pink, EPTheme.primary],
+                        detail: target?.resumen ?? "Elegir clase",
+                        kind: .route(dictationRoute)
+                    )
+                    .accessibilityHint(
+                        target == nil
+                            ? "Abre Clases para elegir el bloque antes de dictar."
+                            : "Abre el bloque de \(target?.resumen ?? "la clase") para revisar y guardar el dictado."
+                    )
                     QuickAction(title: "Planificar", icon: "square.and.pencil", colors: [.purple, EPTheme.primary], kind: .action(onOpenPlanificaciones))
                     QuickAction(title: "Mi Perfil", icon: "person.crop.circle.fill", colors: [.indigo, .purple], kind: .action(onOpenProfile))
                 }
             }
         }
+    }
+
+    private func dictationTarget(in snapshot: DashboardSnapshot, now: Date = Date()) -> ClaseHorario? {
+        let currentMinutes = DateHelpers.minutesSinceMidnight(for: now)
+        let classes = snapshot.academicTodayClasses.filter {
+            !$0.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
+        if let current = classes.first(where: { item in
+            currentMinutes >= DateHelpers.minutes(from: item.horaInicio)
+                && currentMinutes < DateHelpers.minutes(from: item.horaFin)
+        }) {
+            return current
+        }
+
+        return classes.first { currentMinutes < DateHelpers.minutes(from: $0.horaInicio) }
     }
 
     // MARK: - Pendientes
@@ -671,6 +693,7 @@ private struct QuickAction: View {
     let title: String
     let icon: String
     let colors: [Color]
+    var detail = "Abrir"
     let kind: Kind
 
     var body: some View {
@@ -701,9 +724,10 @@ private struct QuickAction: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             HStack {
-                Text("Abrir")
+                Text(detail)
                     .font(.system(size: 10, weight: .black))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 Spacer()
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 10, weight: .black))

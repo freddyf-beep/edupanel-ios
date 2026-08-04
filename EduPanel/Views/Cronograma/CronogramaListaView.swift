@@ -67,8 +67,8 @@ struct CronogramaListaView: View {
 
     private func fila(_ actividad: ActividadCronograma) -> some View {
         let fecha = viewModel.fecha(de: actividad)
-        let dia = Calendar.current.component(.day, from: fecha)
-        let mes = Calendar.current.component(.month, from: fecha)
+        let dia = CronoDateHelpers.civilCalendar.component(.day, from: fecha)
+        let mes = CronoDateHelpers.civilCalendar.component(.month, from: fecha)
 
         return HStack(spacing: 12) {
             Capsule()

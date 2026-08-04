@@ -30,6 +30,7 @@ enum AppRoute: Hashable {
     case pruebaDetalle(pruebaId: String, scope: EvaluacionScope)
     case pruebaEditor(pruebaId: String?, curso: String, asignatura: String, scope: EvaluacionScope)
     case pruebaResultados(pruebaId: String, scope: EvaluacionScope)
+    case examForgeDocument(id: String, kind: ExamForgeDocumentKind, schoolID: String?)
     case guiaDetalle(guiaId: String, scope: EvaluacionScope)
     case guiaEditor(guiaId: String?, curso: String, asignatura: String, scope: EvaluacionScope)
     case attendance(course: String, subject: String, dateKey: String, blockID: String)
@@ -65,6 +66,7 @@ enum AppRoute: Hashable {
         case .pruebaDetalle: return "Detalle de prueba"
         case .pruebaEditor(let pruebaId, _, _, _): return pruebaId == nil ? "Nueva prueba" : "Editar prueba"
         case .pruebaResultados: return "Aplicar y corregir"
+        case .examForgeDocument(_, let kind, _): return kind == .guia ? "Guía" : "Prueba"
         case .guiaDetalle: return "Detalle de guía"
         case .guiaEditor(let guiaId, _, _, _): return guiaId == nil ? "Nueva guía" : "Editar guía"
         case .attendance: return "Asistencia"
@@ -102,6 +104,7 @@ enum AppRoute: Hashable {
         case .pruebaDetalle: return "doc.text.fill"
         case .pruebaEditor: return "square.and.pencil"
         case .pruebaResultados: return "checkmark.rectangle.stack.fill"
+        case .examForgeDocument(_, let kind, _): return kind == .guia ? "book.pages.fill" : "doc.text.fill"
         case .guiaDetalle: return "book.pages.fill"
         case .guiaEditor: return "square.and.pencil"
         case .attendance: return "person.3.sequence.fill"
@@ -291,7 +294,8 @@ struct AppShell: View {
             tabStack(path: $evaluacionesPath) {
                 EvaluacionesShell(
                     dashboardRepository: dashboardRepository,
-                    evaluacionesRepository: evaluacionesRepository
+                    evaluacionesRepository: evaluacionesRepository,
+                    apiClient: authSession.apiClient
                 )
             }
         case .clases:
@@ -413,7 +417,8 @@ struct AppShell: View {
         case .module(.evaluaciones), .evaluacionNueva:
             EvaluacionesShell(
                 dashboardRepository: dashboardRepository,
-                evaluacionesRepository: evaluacionesRepository
+                evaluacionesRepository: evaluacionesRepository,
+                apiClient: authSession.apiClient
             )
         case .module(.clases):
             ClasesView(
@@ -508,6 +513,21 @@ struct AppShell: View {
                 scope: scope,
                 repository: evaluacionesRepository
             )
+        case .examForgeDocument(let id, let kind, let schoolID):
+            if let apiClient = authSession.apiClient {
+                ExamForgeDocumentDetailView(
+                    documentID: id,
+                    expectedKind: kind,
+                    schoolID: schoolID,
+                    repository: ExamForgeRepository(apiClient: apiClient)
+                )
+            } else {
+                ContentUnavailableView(
+                    "Servicio no configurado",
+                    systemImage: "doc.text.magnifyingglass",
+                    description: Text("No es posible abrir este documento en este momento.")
+                )
+            }
         case .guiaDetalle(let guiaId, let scope):
             GuiaDetalleView(
                 guiaId: guiaId,

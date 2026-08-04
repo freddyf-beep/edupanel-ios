@@ -465,6 +465,16 @@ struct EvaluacionesRepository {
                 guard testSnapshot.exists, var testPayload = testSnapshot.data() else {
                     throw EvaluacionesRepositoryError.invalidDocument(collection: "pruebas", id: prueba.id)
                 }
+                let remoteTest = PruebaDocumentParser.prueba(
+                    id: prueba.id,
+                    scope: scope,
+                    isFromCache: false,
+                    dictionary: testPayload
+                )
+                guard self.applicationStructureFingerprint(remoteTest) ==
+                        self.applicationStructureFingerprint(prueba) else {
+                    throw EvaluacionesRepositoryError.editConflict(path: "pruebas/\(prueba.id)")
+                }
 
                 var applicationPayload: [String: Any]
                 if draft.isNew {
@@ -518,6 +528,28 @@ struct EvaluacionesRepository {
             }
         }
         return draft.id
+    }
+
+    /// La corrección y el cálculo de notas dependen de exigencia, preguntas,
+    /// alternativas y puntajes. Si esa estructura cambió desde que se abrió la
+    /// pantalla, se obliga a recargar antes de escribir resultados antiguos.
+    private func applicationStructureFingerprint(_ prueba: PruebaTemplate) -> String {
+        let draft = PruebaEditorDraft.from(prueba)
+        let requirement = String(
+            format: "%.8f",
+            locale: Locale(identifier: "en_US_POSIX"),
+            draft.exigencia
+        )
+        let maximumScore = String(
+            format: "%.8f",
+            locale: Locale(identifier: "en_US_POSIX"),
+            prueba.puntajeMaximo
+        )
+        let identity = [prueba.nombre, prueba.asignatura, prueba.curso].map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return (identity + [requirement, maximumScore] + draft.secciones.map(\.contentFingerprint))
+            .joined(separator: "\u{1C}")
     }
 
     private func applyApplicationRootFields(

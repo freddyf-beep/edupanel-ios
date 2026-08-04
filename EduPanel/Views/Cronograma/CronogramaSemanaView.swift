@@ -20,8 +20,8 @@ struct CronogramaSemanaView: View {
         HStack(spacing: 6) {
             ForEach(CronoDateHelpers.diasSemana, id: \.self) { dia in
                 let fecha = CronoDateHelpers.fechaReal(lunes: viewModel.lunesActual, dia: dia)
-                let esHoy = Calendar.current.isDateInToday(fecha)
-                let numDia = Calendar.current.component(.day, from: fecha)
+                let esHoy = CronoDateHelpers.civilCalendar.isDateInToday(fecha)
+                let numDia = CronoDateHelpers.civilCalendar.component(.day, from: fecha)
                 let isSelected = selectedDayName == dia
 
                 Button {
@@ -66,7 +66,7 @@ struct CronogramaSemanaView: View {
             // Encabezado del día
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(dia) \(Calendar.current.component(.day, from: fecha)) · \(CronoDateHelpers.tituloMes(fecha))")
+                    Text("\(dia) \(CronoDateHelpers.civilCalendar.component(.day, from: fecha)) · \(CronoDateHelpers.tituloMes(fecha))")
                         .font(.headline.weight(.black))
                     Text("\(actividades.count) actividad\(actividades.count == 1 ? "" : "es") · \(bloques.count) bloque\(bloques.count == 1 ? "" : "s") de clase")
                         .font(.caption.weight(.semibold))
@@ -86,6 +86,13 @@ struct CronogramaSemanaView: View {
                         .background(EPTheme.primary, in: Capsule())
                 }
                 .buttonStyle(.plain)
+                .disabled(!viewModel.puedeCrearActividad)
+                .opacity(viewModel.puedeCrearActividad ? 1 : 0.55)
+                .accessibilityHint(
+                    viewModel.puedeCrearActividad
+                        ? "Abre el formulario para crear una actividad"
+                        : "Disponible cuando el cronograma del curso termine de cargar"
+                )
             }
             .padding(14)
             .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))

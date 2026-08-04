@@ -24,6 +24,7 @@ final class AcademicContractTests: XCTestCase {
     func testCronogramaUsesISOWeekYearAcrossNewYearBoundary() throws {
         let boundary = try XCTUnwrap(ISO8601DateFormatter().date(from: "2024-12-30T12:00:00Z"))
 
+        XCTAssertEqual(CronoDateHelpers.isoCalendar.timeZone.identifier, "America/Santiago")
         XCTAssertEqual(CronoDateHelpers.semanaISO(boundary), 1)
         XCTAssertEqual(CronoDateHelpers.anioISO(boundary), 2025)
         XCTAssertTrue(
@@ -32,6 +33,98 @@ final class AcademicContractTests: XCTestCase {
                 inSameDayAs: boundary
             )
         )
+    }
+
+    func testCronogramaPersistsISOYearAndMigratesLegacyActivityDeterministically() throws {
+        let legacy = try XCTUnwrap(ActividadCronograma.from(
+            dictionary: [
+                "id": "legacy",
+                "nombre": "Consejo de curso",
+                "semana": 12.0,
+                "dia": "Martes",
+            ],
+            legacyFallbackYear: 2024
+        ))
+
+        XCTAssertEqual(legacy.semana, 12)
+        XCTAssertEqual(legacy.anioISO, 2024)
+        XCTAssertEqual(legacy.firestoreDictionary["anioISO"] as? Int, 2024)
+
+        let roundTrip = try XCTUnwrap(ActividadCronograma.from(
+            dictionary: legacy.firestoreDictionary,
+            legacyFallbackYear: 2030
+        ))
+        XCTAssertEqual(roundTrip.anioISO, 2024)
+    }
+
+    func testCronogramaActivityBelongsToOnlyOneISOYear() throws {
+        let activity = try XCTUnwrap(ActividadCronograma.from(
+            dictionary: [
+                "id": "new-year",
+                "nombre": "Actividad de inicio",
+                "semana": 1,
+                "anioISO": 2025,
+                "dia": "Lunes",
+            ],
+            legacyFallbackYear: 2030
+        ))
+
+        XCTAssertTrue(CronoDateHelpers.pertenece(activity, alAnioISO: 2025))
+        XCTAssertFalse(CronoDateHelpers.pertenece(activity, alAnioISO: 2024))
+        XCTAssertFalse(CronoDateHelpers.pertenece(activity, alAnioISO: 2026))
+
+        let date = CronoDateHelpers.fechaReal(
+            lunes: CronoDateHelpers.lunesDeSemana(activity.semana, anio: activity.anioISO),
+            dia: activity.dia
+        )
+        XCTAssertEqual(AcademicContract.dateKey(for: date), "2024-12-30")
+    }
+
+    func testCronogramaCivilMonthIncludesBothISOYearsAtDecemberBoundary() throws {
+        let decemberReference = try XCTUnwrap(
+            CronoDateHelpers.civilCalendar.date(
+                from: DateComponents(year: 2024, month: 12, day: 15, hour: 12)
+            )
+        )
+        let december23 = try XCTUnwrap(ActividadCronograma.from(
+            dictionary: [
+                "id": "iso-2024",
+                "nombre": "Cierre de unidad",
+                "semana": 52,
+                "anioISO": 2024,
+                "dia": "Lunes",
+            ]
+        ))
+        let december30 = try XCTUnwrap(ActividadCronograma.from(
+            dictionary: [
+                "id": "iso-2025",
+                "nombre": "Preparación del año",
+                "semana": 1,
+                "anioISO": 2025,
+                "dia": "Lunes",
+            ]
+        ))
+
+        XCTAssertTrue(CronoDateHelpers.pertenece(december23, alMesCivilDe: decemberReference))
+        XCTAssertTrue(CronoDateHelpers.pertenece(december30, alMesCivilDe: decemberReference))
+        XCTAssertEqual(AcademicContract.dateKey(for: CronoDateHelpers.fecha(de: december30)), "2024-12-30")
+    }
+
+    func testCronogramaClampsMalformedWeekToActualISOYearRange() throws {
+        let activity = try XCTUnwrap(ActividadCronograma.from(
+            dictionary: [
+                "id": "invalid-week",
+                "nombre": "Dato importado",
+                "semana": 999,
+                "anioISO": 2024,
+                "dia": "Lunes",
+            ]
+        ))
+
+        XCTAssertEqual(CronoDateHelpers.numeroSemanasISO(en: 2024), 52)
+        XCTAssertEqual(CronoDateHelpers.numeroSemanasISO(en: 2020), 53)
+        XCTAssertEqual(activity.semana, 52)
+        XCTAssertEqual(activity.firestoreDictionary["semana"] as? Int, 52)
     }
 
     func testClassAIDraftIsReviewableAndPreservesFirestoreIdentity() throws {
@@ -91,6 +184,193 @@ final class AcademicContractTests: XCTestCase {
         }
     }
 
+    func testExamForgeSummaryUsesExactBackendContractAndContextAliases() throws {
+        let data = try JSONSerialization.data(withJSONObject: [
+            "data": [[
+                "id": "exam-1",
+                "workspaceId": "workspace-1",
+                "title": "Prueba de fracciones",
+                "status": "ready",
+                "schemaVersion": "1.1.0",
+                "lockVersion": 2,
+                "currentRevision": 3,
+                "createdAt": "2026-08-01T12:00:00.000Z",
+                "updatedAt": "2026-08-02T12:00:00.000Z",
+                "deletedAt": NSNull(),
+                "integration": [
+                    "documentKind": "prueba",
+                    "courseId": "course-6a",
+                    "courseLabel": "6° Básico A",
+                    "subjectId": "matematica",
+                    "subjectLabel": "Matemática",
+                    "unitId": "unidad_2",
+                    "unitLabel": "Unidad 2",
+                    "evaluationType": "sumativa"
+                ],
+                "metadata": [
+                    "durationMinutes": 60,
+                    "totalPoints": 30,
+                    "objectivesCount": 2,
+                    "objectiveIds": ["oa-1", "oa-2"]
+                ]
+            ]]
+        ])
+
+        let summary = try XCTUnwrap(JSONDecoder().decode(ExamForgeSummaryFixture.self, from: data).data.first)
+        XCTAssertEqual(summary.kind, .prueba)
+        XCTAssertEqual(summary.status, .ready)
+        XCTAssertTrue(summary.matches(courseID: "course-6a", courseName: "6to Basico A"))
+        XCTAssertTrue(summary.matches(subjectID: "matematica", subjectName: "Matemática"))
+        XCTAssertFalse(summary.matches(subjectID: "lenguaje", subjectName: "Lenguaje"))
+        XCTAssertTrue(summary.matches(unitID: "2", unitName: "Unidad 2"))
+        XCTAssertFalse(summary.matches(unitID: "unidad_3", unitName: "Unidad 3"))
+        XCTAssertTrue(summary.searchableText.contains("Matemática"))
+    }
+
+    func testExamForgeLegacyIntegrationWithoutKindFallsBackToPrueba() throws {
+        let data = try JSONSerialization.data(withJSONObject: [
+            "data": [[
+                "id": "legacy-exam",
+                "workspaceId": "workspace-1",
+                "title": "Documento anterior",
+                "status": "draft",
+                "schemaVersion": "1.0.0",
+                "lockVersion": 1,
+                "currentRevision": 1,
+                "createdAt": "2026-07-01T12:00:00.000Z",
+                "updatedAt": "2026-07-01T12:00:00.000Z",
+                "deletedAt": NSNull(),
+                "integration": ["courseLabel": "5° Básico A"],
+                "metadata": ["objectivesCount": 0]
+            ]]
+        ])
+
+        let summary = try XCTUnwrap(JSONDecoder().decode(ExamForgeSummaryFixture.self, from: data).data.first)
+        XCTAssertEqual(summary.kind, .prueba)
+    }
+
+    func testLegacyPruebaParserKeepsEvaluationObjectiveForReadOnlyDetail() {
+        let test = PruebaDocumentParser.prueba(
+            id: "legacy-test",
+            scope: .principal,
+            isFromCache: false,
+            dictionary: [
+                "nombre": "Evaluación de fracciones",
+                "asignatura": "Matemática",
+                "curso": "5° Básico A",
+                "objetivoEvaluacion": "Comprobar la comprensión de fracciones equivalentes.",
+                "secciones": []
+            ]
+        )
+
+        XCTAssertEqual(
+            test.objetivoEvaluacion,
+            "Comprobar la comprensión de fracciones equivalentes."
+        )
+    }
+
+    func testCurriculumDecoderRecoversNumbersFromLegacyBooleanFields() throws {
+        let data = try JSONSerialization.data(withJSONObject: [
+            "id": "unidad_3",
+            "numero_unidad": true,
+            "nombre_unidad": "Fracciones",
+            "objetivos_aprendizaje": [[
+                "id": "OA7",
+                "numero": false,
+                "descripcion": "Demostrar comprensión de fracciones."
+            ]]
+        ])
+
+        let unit = try JSONDecoder().decode(UnidadCurricular.self, from: data)
+        XCTAssertEqual(unit.numeroUnidad, 3)
+        XCTAssertEqual(unit.objetivosAprendizaje?.first?.numero, 7)
+        XCTAssertEqual(unit.objetivosAprendizaje?.first?.descripcion, "Demostrar comprensión de fracciones.")
+    }
+
+    func testCurriculumDecoderRejectsUnsafeOrFractionalDoubleNumbers() throws {
+        let data = try JSONSerialization.data(withJSONObject: [
+            "id": "unidad_4",
+            "numero_unidad": 1e300,
+            "nombre_unidad": "Medición",
+            "objetivos_aprendizaje": [[
+                "id": "OA9",
+                "numero": 9.5,
+                "descripcion": "Resolver problemas de medición."
+            ]]
+        ])
+
+        let unit = try JSONDecoder().decode(UnidadCurricular.self, from: data)
+        XCTAssertEqual(unit.numeroUnidad, 4)
+        XCTAssertEqual(unit.objetivosAprendizaje?.first?.numero, 9)
+    }
+
+    func testExamForgeDocumentDecodesReadableBlocksWithoutDroppingUnknownExtensions() throws {
+        let inlineText: [String: Any] = [
+            "id": "text-1", "type": "text", "text": "Explica tu estrategia"
+        ]
+        let richText: [String: Any] = [
+            "id": "rich-1", "type": "doc", "children": [[
+                "id": "paragraph-1", "type": "paragraph", "children": [inlineText]
+            ]]
+        ]
+        let document: [String: Any] = [
+            "data": [
+                "id": "exam-1",
+                "workspaceId": "workspace-1",
+                "title": "Prueba nueva",
+                "status": "draft",
+                "schemaVersion": "1.1.0",
+                "lockVersion": 1,
+                "currentRevision": 1,
+                "createdAt": "2026-08-01T12:00:00.000Z",
+                "updatedAt": "2026-08-01T12:00:00.000Z",
+                "deletedAt": NSNull(),
+                "document": [
+                    "schemaVersion": "1.1.0",
+                    "documentId": "doc-1",
+                    "locale": "es-CL",
+                    "metadata": [
+                        "id": "meta-1",
+                        "title": "Prueba nueva",
+                        "objectives": [["id": "oa-1", "text": "Resolver problemas"]],
+                        "instructions": richText
+                    ],
+                    "regions": [
+                        "header": ["id": "header", "enabled": true, "blocks": [[
+                            "id": "header-1", "type": "header", "version": 1, "layout": [:], "data": [
+                                "schoolName": "Escuela EduPanel", "logoAssetId": NSNull(), "showStudentFields": true
+                            ]
+                        ]]],
+                        "body": ["id": "body", "blocks": [
+                            ["id": "q-1", "type": "question", "version": 1, "layout": [:], "data": [
+                                "questionType": "essay", "prompt": richText, "points": 4,
+                                "numbering": ["mode": "fixed", "value": 7],
+                                "answer": ["id": "answer-1", "lines": 5, "rubric": richText]
+                            ]],
+                            ["id": "plugin-1", "type": "edupanel:future", "version": 1, "layout": [:], "data": ["future": true]]
+                        ]],
+                        "footer": ["id": "footer", "enabled": true, "blocks": [[
+                            "id": "footer-1", "type": "footer", "version": 1, "layout": [:], "data": [
+                                "leftText": "EduPanel", "showPageNumber": true
+                            ]
+                        ]]]
+                    ]
+                ]
+            ]
+        ]
+        let data = try JSONSerialization.data(withJSONObject: document)
+
+        let record = try JSONDecoder().decode(ExamForgeRecordFixture.self, from: data).data
+        XCTAssertEqual(record.document.metadata.instructions.richPlainText, "Explica tu estrategia")
+        XCTAssertEqual(record.document.regions.header.blocks.first?.data.objectValue?["schoolName"]?.stringValue, "Escuela EduPanel")
+        XCTAssertEqual(record.document.regions.body.blocks.map(\.type), ["question", "edupanel:future"])
+        XCTAssertEqual(record.document.regions.body.blocks.first?.data.objectValue?["points"]?.numberValue, 4)
+        XCTAssertEqual(record.document.regions.body.blocks.first?.data.objectValue?["numbering"]?.objectValue?["value"]?.numberValue, 7)
+        XCTAssertEqual(record.document.regions.body.blocks.first?.data.objectValue?["answer"]?.objectValue?["rubric"]?.richPlainText, "Explica tu estrategia")
+        XCTAssertEqual(record.document.regions.body.blocks.last?.data.objectValue?["future"]?.boolValue, true)
+        XCTAssertEqual(record.document.regions.footer.blocks.first?.data.objectValue?["showPageNumber"]?.boolValue, true)
+    }
+
     func testScheduleBatchRejectsCollisionAndRequiresJourneyModule() throws {
         let module = JourneyModule(moduleID: "m1", name: "Primero", startTime: "08:00", endTime: "08:45", kind: .lectivo)
         let journey = JourneyConfig(version: 2, region: "CL", year: 2026, activeDays: [.monday], modulesByDay: [.monday: [module]])
@@ -143,6 +423,45 @@ final class AcademicContractTests: XCTestCase {
         ]))
         XCTAssertEqual(period.blocks.first?.courseID, "course-id")
         XCTAssertEqual(period.blocks.first?.moduleID, "m1")
+    }
+
+    func testCourseScheduleMutationUsesStableIDAndLegacyNameFallback() {
+        let stable = block(id: "stable", start: "08:00", end: "08:45")
+        let legacy = ClaseHorario(
+            id: "legacy",
+            resumen: "Nombre anterior",
+            dia: "Martes",
+            horaInicio: "10:00",
+            horaFin: "10:45",
+            colorHex: "#111111",
+            tipo: .clase,
+            asignatura: "Música"
+        )
+        let unrelated = ClaseHorario(
+            id: "other",
+            resumen: "Otro taller",
+            dia: "Miércoles",
+            horaInicio: "11:00",
+            horaFin: "11:45",
+            colorHex: "#222222",
+            tipo: .clase,
+            asignatura: "Música",
+            courseID: "other-course"
+        )
+
+        let updated = ProfileCourseScheduleMutation.updating(
+            [stable, legacy, unrelated],
+            courseID: "course-id",
+            oldName: "Nombre anterior",
+            newName: "Taller actualizado",
+            colorHex: "#ABCDEF"
+        )
+
+        XCTAssertEqual(updated[0].resumen, "Taller actualizado")
+        XCTAssertEqual(updated[0].colorHex, "#ABCDEF")
+        XCTAssertEqual(updated[1].resumen, "Taller actualizado")
+        XCTAssertEqual(updated[1].colorHex, "#ABCDEF")
+        XCTAssertEqual(updated[2], unrelated)
     }
 
     func testScheduleResolutionFallsBackOnlyWhenNoPublishedPeriodContainsDate() throws {
@@ -436,6 +755,14 @@ final class DictadoServiceTests: XCTestCase {
         XCTFail("El reconocedor no alcanzó \(expected) inicios")
         throw DictationTestTimeout.timedOut
     }
+}
+
+private struct ExamForgeSummaryFixture: Decodable {
+    let data: [ExamForgeExamSummary]
+}
+
+private struct ExamForgeRecordFixture: Decodable {
+    let data: ExamForgeExamRecord
 }
 
 private enum DictationTestTimeout: Error { case timedOut }

@@ -65,12 +65,23 @@ struct CronogramaView: View {
     private var contenido: some View {
         VStack(alignment: .leading, spacing: 16) {
             if let errorMessage = viewModel.errorMessage {
-                Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.orange)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                HStack(alignment: .top, spacing: 10) {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.orange)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if viewModel.hasUnsavedChanges {
+                        Button("Reintentar") {
+                            Task { await viewModel.guardarAhora() }
+                        }
+                        .font(.caption.weight(.black))
+                        .buttonStyle(.bordered)
+                        .disabled(viewModel.saveStatus == .saving)
+                    }
+                }
+                .padding(12)
+                .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
 
             heroCard
@@ -279,6 +290,7 @@ struct ActividadEditorSheet: View {
     @State private var unidadId = ""
     @State private var cursoOrigen = ""
     @State private var confirmandoEliminar = false
+    @State private var errorMessage: String?
 
     private var esNueva: Bool {
         !viewModel.actividades.contains { $0.id == actividad.id }
@@ -289,6 +301,10 @@ struct ActividadEditorSheet: View {
             return viewModel.unidades.filter { $0.curso == cursoOrigen }
         }
         return viewModel.unidades
+    }
+
+    private var maxWeek: Int {
+        CronoDateHelpers.numeroSemanasISO(en: actividad.anioISO)
     }
 
     var body: some View {
@@ -302,7 +318,7 @@ struct ActividadEditorSheet: View {
                             Text("Curso")
                                 .profileFieldLabel()
                             Picker("Curso", selection: $cursoOrigen) {
-                                ForEach(viewModel.cursosDisponibles, id: \.self) { curso in
+                                ForEach(viewModel.cursosEditables, id: \.self) { curso in
                                     Text(curso).tag(curso)
                                 }
                             }
@@ -318,7 +334,7 @@ struct ActividadEditorSheet: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Semana ISO")
                                 .profileFieldLabel()
-                            Stepper("Semana \(semana)", value: $semana, in: 1...53)
+                            Stepper("Semana \(semana)", value: $semana, in: 1...maxWeek)
                                 .font(.footnote.weight(.bold))
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
@@ -344,6 +360,12 @@ struct ActividadEditorSheet: View {
                     }
 
                     ProfileTextField(title: "Duración", placeholder: "Ej. 45 min", text: $duracion)
+
+                    if let errorMessage {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.red)
+                    }
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Unidad")
@@ -392,8 +414,11 @@ struct ActividadEditorSheet: View {
             }
             .confirmationDialog("¿Eliminar esta actividad?", isPresented: $confirmandoEliminar, titleVisibility: .visible) {
                 Button("Eliminar", role: .destructive) {
-                    viewModel.eliminar(id: actividad.id)
-                    dismiss()
+                    if viewModel.eliminar(id: actividad.id) {
+                        dismiss()
+                    } else {
+                        errorMessage = viewModel.errorMessage ?? "No se pudo eliminar la actividad."
+                    }
                 }
                 Button("Cancelar", role: .cancel) {}
             }
@@ -401,7 +426,7 @@ struct ActividadEditorSheet: View {
         .presentationDetents([.large])
         .onAppear {
             nombre = actividad.nombre
-            semana = actividad.semana
+            semana = max(1, min(maxWeek, actividad.semana))
             dia = actividad.dia
             hora = actividad.hora
             duracion = actividad.duracion
@@ -420,7 +445,10 @@ struct ActividadEditorSheet: View {
         copia.unidad = unidadId
         copia.color = viewModel.colorUnidad(unidadId)
         copia.cursoOrigen = viewModel.cursoSeleccionado == "__todos__" ? cursoOrigen : nil
-        viewModel.upsert(copia)
-        dismiss()
+        if viewModel.upsert(copia) {
+            dismiss()
+        } else {
+            errorMessage = viewModel.errorMessage ?? "No se pudo guardar la actividad."
+        }
     }
 }

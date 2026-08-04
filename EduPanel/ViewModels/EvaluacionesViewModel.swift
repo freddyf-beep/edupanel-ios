@@ -20,6 +20,10 @@ final class EvaluacionesViewModel {
     var pruebasDesdeCache = false
     var guiasConAdvertencias = 0
     var guiasDesdeCache = false
+    var examForgeDocuments: [ExamForgeExamSummary] = []
+    var isExamForgeEnabled = false
+    var isLoadingExamForge = false
+    var examForgeErrorMessage: String?
     var selectedCurso: String = ""
     var selectedSubject: String?
     var selectedCourseID: String?
@@ -27,12 +31,19 @@ final class EvaluacionesViewModel {
 
     private let dashboardRepository: DashboardRepository
     private let evaluacionesRepository: EvaluacionesRepository
+    private let examForgeRepository: ExamForgeRepository?
     private static let defaultSubject = "M\u{00FA}sica"
     @ObservationIgnored private var contentLoadGeneration = 0
+    @ObservationIgnored private var loadedExamForgeScope: EvaluacionScope?
 
-    init(dashboardRepository: DashboardRepository, evaluacionesRepository: EvaluacionesRepository = EvaluacionesRepository()) {
+    init(
+        dashboardRepository: DashboardRepository,
+        evaluacionesRepository: EvaluacionesRepository = EvaluacionesRepository(),
+        apiClient: APIClient? = nil
+    ) {
         self.dashboardRepository = dashboardRepository
         self.evaluacionesRepository = evaluacionesRepository
+        self.examForgeRepository = apiClient.map(ExamForgeRepository.init(apiClient:))
     }
 
     var activeSubject: String {
@@ -115,6 +126,9 @@ final class EvaluacionesViewModel {
         selectedCurso = curso
         selectedCourseID = snapshot?.course(id: nil, named: curso)?.courseID
         selectedSubject = nil
+        selectedSubjectID = snapshot?.course(id: selectedCourseID, named: curso)?.subjects.first {
+            Self.subjectKey($0.label) == Self.subjectKey(activeSubject)
+        }?.id
         await loadContenido()
     }
 
@@ -152,9 +166,60 @@ final class EvaluacionesViewModel {
                 selectedCurso = snap.courses.first ?? ""
             }
             selectedCourseID = snap.course(id: nil, named: selectedCurso)?.courseID
-            await loadContenido()
+            selectedSubjectID = snap.course(id: selectedCourseID, named: selectedCurso)?.subjects.first {
+                Self.subjectKey($0.label) == Self.subjectKey(activeSubject)
+            }?.id
+            async let contentLoad: Void = loadContenido()
+            async let examForgeLoad: Void = loadExamForgeIfNeeded()
+            _ = await (contentLoad, examForgeLoad)
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    var examForgeTests: [ExamForgeExamSummary] {
+        examForgeDocuments.filter { $0.kind == .prueba }
+    }
+
+    var examForgeGuides: [ExamForgeExamSummary] {
+        examForgeDocuments.filter { $0.kind == .guia }
+    }
+
+    func refreshExamForge() async {
+        loadedExamForgeScope = nil
+        await loadExamForgeIfNeeded()
+    }
+
+    private func loadExamForgeIfNeeded() async {
+        let scope = evaluacionScope
+        guard loadedExamForgeScope != scope else { return }
+        guard let examForgeRepository else {
+            loadedExamForgeScope = scope
+            isExamForgeEnabled = false
+            examForgeDocuments = []
+            return
+        }
+
+        isLoadingExamForge = true
+        examForgeErrorMessage = nil
+        defer { isLoadingExamForge = false }
+
+        do {
+            switch try await examForgeRepository.loadActiveDocuments(schoolID: scope.colegioId) {
+            case .disabled:
+                isExamForgeEnabled = false
+                examForgeDocuments = []
+            case .enabled(let documents):
+                isExamForgeEnabled = true
+                examForgeDocuments = documents
+            }
+            loadedExamForgeScope = scope
+        } catch is CancellationError {
+            return
+        } catch {
+            isExamForgeEnabled = false
+            examForgeDocuments = []
+            examForgeErrorMessage = "No pudimos consultar los documentos del nuevo motor. Las evaluaciones clásicas siguen disponibles."
         }
     }
 

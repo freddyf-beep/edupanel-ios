@@ -9,6 +9,25 @@ struct OACurricular: Codable, Hashable {
     var numero: Int
     var descripcion: String
     var indicadores: [String]?
+
+    enum CodingKeys: String, CodingKey {
+        case id, tipo, numero, descripcion, indicadores
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? values.decode(String.self, forKey: .id)) ?? ""
+        tipo = try? values.decodeIfPresent(String.self, forKey: .tipo)
+        numero = values.flexibleInt(forKey: .numero)
+            ?? Self.number(in: id)
+            ?? 0
+        descripcion = (try? values.decode(String.self, forKey: .descripcion)) ?? ""
+        indicadores = try? values.decodeIfPresent([String].self, forKey: .indicadores)
+    }
+
+    private static func number(in identifier: String) -> Int? {
+        identifier.split(whereSeparator: { !$0.isNumber }).last.flatMap { Int($0) }
+    }
 }
 
 struct UnidadCurricular: Codable, Hashable, Identifiable {
@@ -32,6 +51,42 @@ struct UnidadCurricular: Codable, Hashable, Identifiable {
         case actitudes
         case conocimientosPrevios = "conocimientos_previos"
         case objetivosAprendizaje = "objetivos_aprendizaje"
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? values.decode(String.self, forKey: .id)) ?? ""
+        numeroUnidad = values.flexibleInt(forKey: .numeroUnidad)
+            ?? Self.number(in: id)
+            ?? 0
+        nombreUnidad = (try? values.decode(String.self, forKey: .nombreUnidad))
+            ?? (numeroUnidad > 0 ? "Unidad \(numeroUnidad)" : "Unidad")
+        proposito = try? values.decodeIfPresent(String.self, forKey: .proposito)
+        conocimientos = try? values.decodeIfPresent([String].self, forKey: .conocimientos)
+        habilidades = try? values.decodeIfPresent([String].self, forKey: .habilidades)
+        actitudes = try? values.decodeIfPresent([String].self, forKey: .actitudes)
+        conocimientosPrevios = try? values.decodeIfPresent([String].self, forKey: .conocimientosPrevios)
+        objetivosAprendizaje = try? values.decodeIfPresent([OACurricular].self, forKey: .objetivosAprendizaje)
+    }
+
+    private static func number(in identifier: String) -> Int? {
+        identifier.split(whereSeparator: { !$0.isNumber }).last.flatMap { Int($0) }
+    }
+}
+
+private extension KeyedDecodingContainer {
+    /// Firestore histórico contiene algunos números como `Double`, texto o,
+    /// por una importación defectuosa, booleanos. Los booleanos se ignoran para
+    /// que el identificador del documento entregue el número real.
+    func flexibleInt(forKey key: Key) -> Int? {
+        if let value = try? decode(Int.self, forKey: key) { return value }
+        if let value = try? decode(Double.self, forKey: key), value.isFinite {
+            return Int(exactly: value)
+        }
+        if let value = try? decode(String.self, forKey: key) {
+            return Int(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return nil
     }
 }
 
