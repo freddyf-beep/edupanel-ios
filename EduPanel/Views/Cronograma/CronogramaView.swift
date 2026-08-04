@@ -9,7 +9,7 @@ struct CronogramaView: View {
 
     @Environment(\.displayMode) private var displayMode
 
-    private let tabs = [
+    private let allTabs = [
         EPWebTab(id: "semana", title: "Semana", icon: "square.grid.2x2"),
         EPWebTab(id: "mes", title: "Mes", icon: "square.grid.3x3"),
         EPWebTab(id: "dia", title: "Día", icon: "calendar.day.timeline.left"),
@@ -17,6 +17,10 @@ struct CronogramaView: View {
         EPWebTab(id: "gantt", title: "Gantt", icon: "chart.bar.doc.horizontal"),
         EPWebTab(id: "heatmap", title: "Heatmap", icon: "chart.bar.xaxis")
     ]
+
+    private var visibleTabs: [EPWebTab] {
+        displayMode.isSimple ? Array(allTabs.prefix(3)) : allTabs
+    }
 
     init(dashboardRepository: DashboardRepository, planificacionRepository: PlanificacionRepository) {
         self._viewModel = State(initialValue: CronogramaViewModel(
@@ -86,7 +90,7 @@ struct CronogramaView: View {
 
             heroCard
 
-            EPWebTabBar(tabs: tabs, selected: $selectedVista)
+            EPWebTabBar(tabs: visibleTabs, selected: $selectedVista)
 
             if viewModel.cursosDisponibles.isEmpty {
                 EPWebCard {
@@ -126,6 +130,11 @@ struct CronogramaView: View {
                 default:
                     EmptyView()
                 }
+            }
+        }
+        .onChange(of: displayMode) { _, mode in
+            if mode.isSimple, !visibleTabs.contains(where: { $0.id == selectedVista }) {
+                selectedVista = "semana"
             }
         }
     }
@@ -173,7 +182,7 @@ struct CronogramaView: View {
                         .font(.system(size: 12, weight: .black))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 11)
-                        .padding(.vertical, 8)
+                        .frame(minHeight: 44)
                         .background(.white.opacity(0.18), in: Capsule())
                     }
                     .accessibilityLabel("Asignatura del cronograma")
@@ -203,7 +212,7 @@ struct CronogramaView: View {
                     .font(.system(size: 12, weight: .black))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 11)
-                    .padding(.vertical, 8)
+                    .frame(minHeight: 44)
                     .background(.white.opacity(0.18), in: Capsule())
                 }
 
@@ -224,7 +233,7 @@ struct CronogramaView: View {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 11, weight: .black))
                             .foregroundStyle(.white)
-                            .frame(width: 28, height: 28)
+                            .frame(width: 44, height: 44)
                     }
                     Text(CronoDateHelpers.etiquetaSemana(viewModel.lunesActual))
                         .font(.system(size: 12, weight: .black))
@@ -237,7 +246,7 @@ struct CronogramaView: View {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 11, weight: .black))
                             .foregroundStyle(.white)
-                            .frame(width: 28, height: 28)
+                            .frame(width: 44, height: 44)
                     }
                 }
                 .background(.white.opacity(0.18), in: Capsule())
@@ -251,7 +260,7 @@ struct CronogramaView: View {
                         .font(.system(size: 12, weight: .black))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
+                        .frame(minHeight: 44)
                         .background(.white.opacity(0.18), in: Capsule())
                 }
 

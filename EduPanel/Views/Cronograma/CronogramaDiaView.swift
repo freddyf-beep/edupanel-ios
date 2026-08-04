@@ -11,8 +11,8 @@ struct CronogramaDiaView: View {
             EPWebCard {
                 EPEmptyState(
                     icon: "moon.zzz.fill",
-                    title: "Fin de semana",
-                    message: "Sábado y domingo no tienen clases programadas. Usa el scrubber para ir a un día laboral."
+                    title: "Domingo",
+                    message: "No hay jornada académica configurada para el domingo. Usa el selector para revisar otro día."
                 )
             }
         }
@@ -23,7 +23,7 @@ struct CronogramaDiaView: View {
         let actividades = viewModel.actividadesFiltradas
             .filter { $0.dia == diaNombre && $0.semana == semana }
             .sorted { $0.hora < $1.hora }
-        let bloques = viewModel.horarioVisible
+        let bloques = viewModel.horarioVisible(on: viewModel.currentDate)
             .filter { $0.dia == diaNombre }
             .sorted { $0.horaInicio < $1.horaInicio }
 

@@ -2,10 +2,35 @@ import SwiftUI
 
 struct SettingsAppearanceSection: View {
     @AppStorage(AppTheme.storageKey) private var appThemeRaw = AppTheme.auto.rawValue
+    @AppStorage(DisplayMode.storageKey) private var displayModeRaw = DisplayMode.simple.rawValue
+
+    private var displayMode: DisplayMode {
+        DisplayMode(rawValue: displayModeRaw) ?? .simple
+    }
 
     var body: some View {
         ProfileSection(title: "Apariencia", icon: "paintbrush.fill", hint: nil) {
             VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Forma de uso")
+                        .profileFieldLabel()
+                    Picker("Forma de uso", selection: $displayModeRaw) {
+                        ForEach(DisplayMode.allCases) { mode in
+                            Text(mode.title).tag(mode.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(minHeight: 44)
+                    .accessibilityHint("El modo simple muestra menos accesos; el completo ofrece todas las opciones")
+
+                    Text(displayMode.description)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Divider()
+
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Tema")
                         .profileFieldLabel()
@@ -15,6 +40,7 @@ struct SettingsAppearanceSection: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .frame(minHeight: 44)
                 }
             }
         }
@@ -115,7 +141,7 @@ struct SettingsTabBarSection: View {
             tabIcon(tab, tint: EPTheme.primary)
 
             Text(tab.title)
-                .font(.footnote.weight(.bold))
+                .font(.body.weight(.bold))
 
             Spacer(minLength: 6)
 
@@ -123,7 +149,7 @@ struct SettingsTabBarSection: View {
                 moveTab(from: index, offset: -1)
             } label: {
                 Image(systemName: "arrow.up")
-                    .frame(width: 30, height: 30)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
             .disabled(index == 0)
@@ -133,7 +159,7 @@ struct SettingsTabBarSection: View {
                 moveTab(from: index, offset: 1)
             } label: {
                 Image(systemName: "arrow.down")
-                    .frame(width: 30, height: 30)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
             .disabled(index == selectedTabs.count - 1)
@@ -144,7 +170,7 @@ struct SettingsTabBarSection: View {
             } label: {
                 Image(systemName: "minus.circle.fill")
                     .foregroundStyle(.red)
-                    .frame(width: 30, height: 30)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
             .disabled(selectedTabs.count <= TabBarPreferences.minimumCount)
@@ -162,7 +188,7 @@ struct SettingsTabBarSection: View {
                 tabIcon(tab, tint: .secondary)
 
                 Text(tab.title)
-                    .font(.footnote.weight(.bold))
+                    .font(.body.weight(.bold))
                     .foregroundStyle(.primary)
 
                 Spacer()
@@ -184,8 +210,8 @@ struct SettingsTabBarSection: View {
         Image(systemName: tab.systemImage)
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(tint)
-            .frame(width: 30, height: 30)
-            .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .frame(width: 44, height: 44)
+            .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func add(_ tab: AppTab) {

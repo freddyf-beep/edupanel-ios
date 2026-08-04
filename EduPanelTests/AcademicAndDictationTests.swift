@@ -35,6 +35,24 @@ final class AcademicContractTests: XCTestCase {
         )
     }
 
+    func testCronogramaWeekIncludesSaturdayInNameOffsetAndLabel() throws {
+        let monday = try XCTUnwrap(
+            CronoDateHelpers.civilCalendar.date(
+                from: DateComponents(year: 2026, month: 8, day: 3, hour: 12)
+            )
+        )
+        let saturday = CronoDateHelpers.fechaReal(lunes: monday, dia: "Sábado")
+
+        XCTAssertEqual(CronoDateHelpers.diasSemana.last, "Sábado")
+        XCTAssertEqual(CronoDateHelpers.nombreDia(saturday), "Sábado")
+        XCTAssertEqual(
+            CronoDateHelpers.isoCalendar.dateComponents([.day], from: monday, to: saturday).day,
+            5
+        )
+        XCTAssertEqual(AcademicContract.dateKey(for: saturday), "2026-08-08")
+        XCTAssertEqual(CronoDateHelpers.etiquetaSemana(monday), "3 – 8 Agosto")
+    }
+
     func testCronogramaPersistsISOYearAndMigratesLegacyActivityDeterministically() throws {
         let legacy = try XCTUnwrap(ActividadCronograma.from(
             dictionary: [
@@ -470,7 +488,8 @@ final class AcademicContractTests: XCTestCase {
         let july = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-07-21T12:00:00Z"))
         let august = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-08-21T12:00:00Z"))
         XCTAssertEqual(AcademicContract.resolveSchedule([current], legacy: legacy, for: july).first?.id, "v2")
-        XCTAssertEqual(AcademicContract.resolveSchedule([current], legacy: legacy, for: august).first?.id, "legacy")
+        XCTAssertTrue(AcademicContract.resolveSchedule([current], legacy: legacy, for: august).isEmpty)
+        XCTAssertEqual(AcademicContract.resolveSchedule([], legacy: legacy, for: august).first?.id, "legacy")
     }
 
     func testBatchSupportsDifferentTimesAcrossDaysAndMultipleBlocksPerDay() throws {
@@ -754,6 +773,127 @@ final class DictadoServiceTests: XCTestCase {
         }
         XCTFail("El reconocedor no alcanzó \(expected) inicios")
         throw DictationTestTimeout.timedOut
+    }
+}
+
+final class VoiceNoteDraftStoreTests: XCTestCase {
+    func testDraftRoundTripIsScopedToItsOwnerAndCanBeDeletedAfterSaving() async throws {
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("EduPanelVoiceNoteDraftStoreTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let store = VoiceNoteDraftStore(rootURL: rootURL)
+        let original = VoiceNoteDraft(
+            mode: .guiado,
+            text: "El curso participó activamente en la lectura.",
+            status: .pendienteSincronizacion,
+            context: VoiceNoteContext(
+                courseID: "course-6a",
+                courseName: "6° Básico A",
+                subjectID: "lenguaje",
+                subjectName: "Lenguaje",
+                classID: "class-1",
+                dateKey: "2026-08-04",
+                observationScope: .grupal,
+                studentIDs: ["student-17"],
+                topic: "Comprensión lectora"
+            )
+        )
+
+        let saved = try await store.upsert(original, ownerID: "teacher-a")
+        let sameOwnerNotes = try await store.load(ownerID: "teacher-a")
+        XCTAssertEqual(sameOwnerNotes.count, 1)
+        XCTAssertEqual(sameOwnerNotes.first?.id, original.id)
+        XCTAssertEqual(sameOwnerNotes.first?.text, original.text)
+        XCTAssertEqual(sameOwnerNotes.first?.context, original.context)
+        XCTAssertEqual(sameOwnerNotes.first?.status, .pendienteSincronizacion)
+        XCTAssertEqual(saved.id, original.id)
+        XCTAssertEqual(saved.text, original.text)
+        XCTAssertEqual(saved.context, original.context)
+
+        let otherOwnerNotes = try await store.load(ownerID: "teacher-b")
+        XCTAssertTrue(otherOwnerNotes.isEmpty)
+
+        try await store.delete(id: saved.id, ownerID: "teacher-a")
+        let notesAfterExplicitDelete = try await store.load(ownerID: "teacher-a")
+        XCTAssertTrue(notesAfterExplicitDelete.isEmpty)
+
+        _ = try await store.upsert(saved, ownerID: "teacher-a")
+
+        var empty = saved
+        empty.text = " \n "
+        _ = try await store.upsert(empty, ownerID: "teacher-a")
+        let notesAfterEmptyUpdate = try await store.load(ownerID: "teacher-a")
+        XCTAssertTrue(notesAfterEmptyUpdate.isEmpty)
+    }
+
+    func testSafeContextualStringsExcludeStudentIdentifiersAndSensitiveDetails() {
+        let context = VoiceNoteContext(
+            courseID: "course-6a",
+            courseName: "6° Básico A",
+            subjectID: "lenguaje",
+            subjectName: "Lenguaje",
+            classID: "class-2026-08-04",
+            unitID: "unit-2",
+            unitName: "Unidad 2",
+            observationScope: .individual,
+            studentIDs: ["student-17", "student-99"],
+            topic: "Participación oral",
+            observationType: "Apoyo PIE",
+            outcome: "Requiere seguimiento",
+            nextStep: "Conversar con familia",
+            classSummary: "Camila R. respondió bien"
+        )
+
+        XCTAssertEqual(
+            context.safeContextualStrings,
+            ["6° Básico A", "Lenguaje", "Unidad 2", "Participación oral"]
+        )
+        XCTAssertFalse(context.safeContextualStrings.contains("student-17"))
+        XCTAssertFalse(context.safeContextualStrings.contains("student-99"))
+        XCTAssertFalse(context.safeContextualStrings.contains("Apoyo PIE"))
+        XCTAssertFalse(context.safeContextualStrings.contains("Camila R. respondió bien"))
+
+        XCTAssertEqual(
+            context.attendanceMetadata,
+            AttendanceVoiceNoteMetadata(
+                observationScope: "individual",
+                studentIDs: ["student-17", "student-99"],
+                topic: "Participación oral",
+                observationType: "Apoyo PIE",
+                outcome: "Requiere seguimiento",
+                nextStep: "Conversar con familia",
+                summary: "Camila R. respondió bien"
+            )
+        )
+    }
+
+    func testReidentifyReplacesConflictingDraftWithoutLeavingADuplicate() async throws {
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("EduPanelVoiceNoteReidentifyTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let store = VoiceNoteDraftStore(rootURL: rootURL)
+        let original = VoiceNoteDraft(
+            mode: .rapido,
+            text: "Versión corregida de la observación.",
+            status: .pendienteSincronizacion,
+            context: VoiceNoteContext(classID: "class-1", dateKey: "2026-08-04")
+        )
+        _ = try await store.upsert(original, ownerID: "teacher-a")
+
+        let replacement = try await store.reidentify(original, ownerID: "teacher-a")
+        let stored = try await store.load(ownerID: "teacher-a")
+
+        XCTAssertNotEqual(replacement.id, original.id)
+        XCTAssertEqual(replacement.text, original.text)
+        XCTAssertEqual(replacement.context, original.context)
+        XCTAssertEqual(stored.count, 1)
+        XCTAssertEqual(stored.first?.id, replacement.id)
+        XCTAssertEqual(stored.first?.text, replacement.text)
+        XCTAssertEqual(stored.first?.context, replacement.context)
+        XCTAssertEqual(stored.first?.status, replacement.status)
+        XCTAssertFalse(stored.contains { $0.id == original.id })
     }
 }
 

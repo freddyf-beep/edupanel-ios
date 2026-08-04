@@ -58,6 +58,10 @@ struct AcademicCourse: Identifiable, Hashable {
 
     let courseID: String
     let dataKey: String
+    /// Claves históricas usadas por nóminas, horarios y planificaciones
+    /// anteriores a `courseID`. El contrato web las conserva para resolver
+    /// cambios de nombre sin volver a depender de la etiqueta visible.
+    var aliasKeys: [String] = []
     var kind: AcademicCourseKind
     var name: String
     var level: String?
@@ -77,6 +81,12 @@ struct AcademicCourse: Identifiable, Hashable {
         let storedDataKey = (dictionary["dataKey"] as? String)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let dataKey = storedDataKey.isEmpty ? AcademicContract.normalizedKey(name) : storedDataKey
+        var seenAliasKeys = Set<String>()
+        let aliasKeys = (dictionary["aliasKeys"] as? [String] ?? []).compactMap { rawValue -> String? in
+            let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty, value != dataKey, seenAliasKeys.insert(value).inserted else { return nil }
+            return value
+        }
         let rawSubjects = dictionary["asignaturas"] as? [[String: Any]] ?? []
         var subjects = rawSubjects.compactMap(CourseSubjectSelection.from(dictionary:))
         if subjects.isEmpty, let legacySubjects = dictionary["asignaturas"] as? [String] {
@@ -91,14 +101,26 @@ struct AcademicCourse: Identifiable, Hashable {
             }
         }
         let rawStatus = dictionary["estado"] as? String ?? ""
+        let rawKind = (dictionary["tipo"] as? String ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let kind: AcademicCourseKind = rawKind == "libre"
+            ? .taller
+            : (AcademicCourseKind(rawValue: rawKind) ?? .oficial)
+        let storedWorkshopName = (dictionary["nombreTaller"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         return Self(
             courseID: courseID,
             dataKey: dataKey,
-            kind: AcademicCourseKind(rawValue: dictionary["tipo"] as? String ?? "") ?? .oficial,
+            aliasKeys: aliasKeys,
+            // Algunas cuentas anteriores guardaban talleres como `libre`.
+            // Se leen como taller, pero al volver a guardar se escribe el
+            // contrato canónico `taller`.
+            kind: kind,
             name: name,
             level: dictionary["nivel"] as? String,
             section: dictionary["seccion"] as? String,
-            workshopName: dictionary["nombreTaller"] as? String,
+            workshopName: kind == .taller && (storedWorkshopName ?? "").isEmpty ? name : storedWorkshopName,
             subjects: subjects,
             colorHex: dictionary["color"] as? String ?? "#EC4899",
             status: rawStatus == "archived" || rawStatus == "archivado" ? .archived : .active,
@@ -111,6 +133,9 @@ struct AcademicCourse: Identifiable, Hashable {
         var value: [String: Any] = [
             "courseId": courseID,
             "dataKey": dataKey,
+            // Se escribe incluso vacío porque `saveCourse` usa merge. Omitirlo
+            // impediría retirar aliases agregados por una mutación revertida.
+            "aliasKeys": aliasKeys,
             "tipo": kind.rawValue,
             "nombre": name,
             "asignaturas": subjects.map(\.firestoreDictionary),
@@ -134,6 +159,17 @@ struct AcademicCourse: Identifiable, Hashable {
         if let date = raw as? Date { return date }
         if let text = raw as? String { return ISO8601DateFormatter().date(from: text) }
         return nil
+    }
+}
+
+enum AcademicCourseResolution: Equatable {
+    case resolved(AcademicCourse)
+    case notFound
+    case ambiguous(courseIDs: [String])
+
+    var course: AcademicCourse? {
+        guard case .resolved(let course) = self else { return nil }
+        return course
     }
 }
 
@@ -274,6 +310,93 @@ struct SchedulePeriod: Identifiable, Hashable {
     }
 }
 
+/// Tipos de hitos civiles que conviven con el horario semanal. Mantenerlos
+/// separados evita convertir una recurrencia en clases persistidas para todo
+/// el año académico.
+enum AcademicCalendarEventKind: String, Hashable, CaseIterable {
+    case vacation = "vacaciones"
+    case holiday = "feriado"
+    case suspension = "suspension"
+    case scheduleException = "excepcion_horario"
+    case evaluation = "evaluacion"
+    case activity = "actividad"
+    case deadline = "fecha_limite"
+    case schoolEvent = "evento_colegio"
+    case academicSpaceEvent = "evento_espacio_academico"
+    case reminder = "recordatorio"
+
+    var suppressesRecurringSchedule: Bool {
+        switch self {
+        case .vacation, .holiday, .suspension:
+            return true
+        default:
+            return false
+        }
+    }
+}
+
+/// Evento del calendario académico independiente del horario recurrente.
+///
+/// `courseID` puede identificar tanto un curso oficial como un taller. Si es
+/// `nil`, el evento se aplica a todo el colegio. Una excepción solo reemplaza
+/// el horario cuando declara `replacementBlocks`; de lo contrario es un hito
+/// informativo y no inventa clases.
+struct AcademicCalendarEvent: Identifiable, Hashable {
+    let id: String
+    var title: String
+    var kind: AcademicCalendarEventKind
+    var startDateKey: String
+    var endDateKey: String
+    var courseID: String? = nil
+    var unitID: String? = nil
+    var classID: String? = nil
+    var replacementBlocks: [ClaseHorario]? = nil
+
+    func contains(_ date: Date) -> Bool {
+        let key = AcademicContract.dateKey(for: date)
+        return startDateKey <= key && endDateKey >= key
+    }
+}
+
+enum AcademicCalendarResolver {
+    /// Proyecta el horario efectivo para una fecha sin crear ni persistir
+    /// instancias de clase. Feriados, vacaciones y suspensiones eliminan la
+    /// recurrencia del ámbito afectado; las excepciones pueden sustituirla.
+    static func effectiveSchedule(
+        periods: [SchedulePeriod],
+        legacy: [ClaseHorario],
+        events: [AcademicCalendarEvent],
+        for date: Date
+    ) -> [ClaseHorario] {
+        var result = AcademicContract.resolveSchedule(periods, legacy: legacy, for: date)
+        let eventsForDate = events.filter { $0.contains(date) }
+
+        for event in eventsForDate where event.kind == .scheduleException {
+            guard let replacement = event.replacementBlocks else { continue }
+            if let courseID = event.courseID {
+                result.removeAll { $0.courseID == courseID }
+                result.append(contentsOf: replacement)
+            } else {
+                result = replacement
+            }
+        }
+
+        for event in eventsForDate where event.kind.suppressesRecurringSchedule {
+            if let courseID = event.courseID {
+                result.removeAll { $0.courseID == courseID }
+            } else {
+                return []
+            }
+        }
+
+        return result.sorted {
+            if $0.dia != $1.dia { return $0.dia < $1.dia }
+            if $0.horaInicio != $1.horaInicio { return $0.horaInicio < $1.horaInicio }
+            return $0.id < $1.id
+        }
+    }
+}
+
 struct AcademicSelection: Hashable {
     let courseID: String
     let courseName: String
@@ -337,6 +460,59 @@ enum AcademicContract {
         return pieces.joined(separator: "_")
     }
 
+    /// Resuelve una referencia solamente dentro del catálogo ya cargado.
+    ///
+    /// Una identidad estable o un nombre vigente siempre gana frente a un
+    /// alias histórico. Si dos cursos comparten el mismo alias, se rechaza la
+    /// resolución para no leer o escribir datos en un curso arbitrario según
+    /// el orden de Firestore.
+    static func resolveCourse(
+        in catalog: [AcademicCourse],
+        id: String? = nil,
+        named reference: String? = nil
+    ) -> AcademicCourseResolution {
+        let cleanID = id?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !cleanID.isEmpty {
+            let matches = catalog.filter { $0.courseID == cleanID }
+            if let resolution = uniqueCourseResolution(matches) { return resolution }
+        }
+
+        let cleanReference = reference?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !cleanReference.isEmpty else { return .notFound }
+
+        let idMatches = catalog.filter { $0.courseID == cleanReference }
+        if let resolution = uniqueCourseResolution(idMatches) { return resolution }
+
+        let exactNameMatches = catalog.filter {
+            $0.name.localizedCaseInsensitiveCompare(cleanReference) == .orderedSame
+        }
+        if let resolution = uniqueCourseResolution(exactNameMatches) { return resolution }
+
+        let requestedKey = normalizedKey(cleanReference)
+        let dataKeyMatches = catalog.filter {
+            $0.dataKey == cleanReference || (!requestedKey.isEmpty && $0.dataKey == requestedKey)
+        }
+        if let resolution = uniqueCourseResolution(dataKeyMatches) { return resolution }
+
+        guard !requestedKey.isEmpty else { return .notFound }
+        let aliasMatches = catalog.filter { course in
+            course.aliasKeys.contains { alias in
+                alias == cleanReference || normalizedKey(alias) == requestedKey
+            }
+        }
+        return uniqueCourseResolution(aliasMatches) ?? .notFound
+    }
+
+    private static func uniqueCourseResolution(_ matches: [AcademicCourse]) -> AcademicCourseResolution? {
+        guard !matches.isEmpty else { return nil }
+        let unique = Dictionary(grouping: matches, by: \.courseID)
+            .compactMap { $0.value.first }
+        guard unique.count == 1, let course = unique.first else {
+            return .ambiguous(courseIDs: unique.map(\.courseID).sorted())
+        }
+        return .resolved(course)
+    }
+
     static func displayLevel(_ level: String) -> String {
         var result = level
         let replacements = ["1ro": "1°", "2do": "2°", "3ro": "3°", "4to": "4°", "5to": "5°", "6to": "6°", "7mo": "7°", "8vo": "8°"]
@@ -378,7 +554,9 @@ enum AcademicContract {
     }
 
     static func resolveSchedule(_ periods: [SchedulePeriod], legacy: [ClaseHorario], for date: Date) -> [ClaseHorario] {
-        resolvePublishedPeriod(periods, for: date)?.blocks ?? legacy
+        let publishedPeriods = periods.filter { $0.status == .published }
+        guard !publishedPeriods.isEmpty else { return legacy }
+        return resolvePublishedPeriod(publishedPeriods, for: date)?.blocks ?? []
     }
 
     /// Convierte el horario anterior en candidatos v2 sin mutar ni eliminar
@@ -404,11 +582,17 @@ enum AcademicContract {
             let subjects = Array(Set(blocks.compactMap(\.asignatura))).sorted().map {
                 CourseSubjectSelection(id: normalizedKey($0), label: $0, availability: nil)
             }
+            let canonicalName: String
+            if canBeOfficial, let level, let section {
+                canonicalName = try officialCourseName(level: level, section: section)
+            } else {
+                canonicalName = name
+            }
             result.append(AcademicCourse(
                 courseID: UUID().uuidString.lowercased(),
                 dataKey: dataKey,
                 kind: canBeOfficial ? .oficial : .taller,
-                name: canBeOfficial ? try officialCourseName(level: level!, section: section!) : name,
+                name: canonicalName,
                 level: canBeOfficial ? level : nil,
                 section: canBeOfficial ? section : nil,
                 workshopName: canBeOfficial ? nil : name,

@@ -58,7 +58,7 @@ struct CronogramaSemanaView: View {
         let actividades = viewModel.actividadesFiltradas
             .filter { $0.semana == viewModel.semanaActual && $0.dia == dia }
             .sorted { $0.hora < $1.hora }
-        let bloques = viewModel.horarioVisible
+        let bloques = viewModel.horarioVisible(on: fecha)
             .filter { $0.dia == dia }
             .sorted { $0.horaInicio < $1.horaInicio }
 

@@ -23,7 +23,7 @@ struct ClasesView: View {
 
     @Environment(\.displayMode) private var displayMode
 
-    private let diasSemana = ["Lunes", "Martes", "Mi\u{00E9}rcoles", "Jueves", "Viernes"]
+    private let diasSemana = DateHelpers.scheduleDays
 
     private var tabs: [EPWebTab] {
         diasSemana.map { dia in
@@ -70,7 +70,9 @@ struct ClasesView: View {
                     }
                 } else {
                     controles(snapshot)
-                    kpis(snapshot)
+                    if !displayMode.isSimple {
+                        kpis(snapshot)
+                    }
                     EPWebTabBar(tabs: tabs, selected: $selectedDia)
                     bloquesDelDia(snapshot)
                 }
@@ -104,10 +106,12 @@ struct ClasesView: View {
             icon: "person.3.sequence.fill",
             accent: .primary
         ) {
-            HStack(spacing: 8) {
-                EPStatusPill(text: "\(snapshot.academicClasses.count) bloques", icon: "calendar", tint: .white)
-                EPStatusPill(text: "\(snapshot.courses.count) cursos", icon: "person.3.fill", tint: .white)
-                Spacer(minLength: 0)
+            if !displayMode.isSimple {
+                HStack(spacing: 8) {
+                    EPStatusPill(text: "\(snapshot.academicClasses.count) bloques", icon: "calendar", tint: .white)
+                    EPStatusPill(text: "\(snapshot.courses.count) cursos", icon: "person.3.fill", tint: .white)
+                    Spacer(minLength: 0)
+                }
             }
         }
     }
@@ -134,6 +138,7 @@ struct ClasesView: View {
                         text: selectedCurso == "__todos__" ? "Todos los cursos" : selectedCurso,
                         icon: "folder.fill"
                     )
+                    .frame(minHeight: 44)
                 }
 
                 Spacer(minLength: 0)
@@ -147,6 +152,7 @@ struct ClasesView: View {
                         Label("Hoy", systemImage: "location.fill")
                             .font(.system(size: 12, weight: .black))
                             .foregroundStyle(EPTheme.primary)
+                            .frame(minHeight: 44)
                     }
                     .buttonStyle(.plain)
                 }
@@ -407,6 +413,7 @@ struct ClasesView: View {
         case "Mi\u{00E9}rcoles": return "Mi\u{00E9}"
         case "Jueves": return "Jue"
         case "Viernes": return "Vie"
+        case "S\u{00E1}bado": return "S\u{00E1}b"
         default: return dia
         }
     }

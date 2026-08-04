@@ -5,13 +5,18 @@ struct FloatingTabBar: View {
     var badges: [AppTab: Int] = [:]
     var isCompact = false
 
+    @Environment(\.displayMode) private var displayMode
+
     @AppStorage(TabBarPreferences.storageKey)
     private var visibleTabsRaw = TabBarPreferences.defaultValue
 
     @Namespace private var barNamespace
 
     private var visibleTabs: [AppTab] {
-        TabBarPreferences.decode(visibleTabsRaw)
+        if displayMode.isSimple {
+            return [.inicio, .planificaciones, .clases, .perfil]
+        }
+        return TabBarPreferences.decode(visibleTabsRaw)
     }
 
     @ViewBuilder
@@ -54,6 +59,10 @@ struct FloatingTabBar: View {
             guard !visibleTabs.contains(selected), let firstTab = visibleTabs.first else { return }
             selected = firstTab
         }
+        .onChange(of: displayMode) { _, _ in
+            guard !visibleTabs.contains(selected), let firstTab = visibleTabs.first else { return }
+            selected = firstTab
+        }
     }
 
     private func tabItem(_ tab: AppTab) -> some View {
@@ -90,11 +99,12 @@ struct FloatingTabBar: View {
             }
             .foregroundStyle(isSelected ? Color.primary : Color.secondary)
             .frame(maxWidth: .infinity)
-            .frame(height: isCompact ? 38 : 48)
+            .frame(height: isCompact ? 44 : 48)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(tab.title)
+        .accessibilityHint("Abre \(tab.title)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

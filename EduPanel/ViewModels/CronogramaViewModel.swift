@@ -31,8 +31,15 @@ enum CronoDateHelpers {
         return calendar
     }
 
-    static let diasSemana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
-    static let diasIndice: [String: Int] = ["Lunes": 0, "Martes": 1, "Miércoles": 2, "Jueves": 3, "Viernes": 4]
+    static let diasSemana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
+    static let diasIndice: [String: Int] = [
+        "Lunes": 0,
+        "Martes": 1,
+        "Miércoles": 2,
+        "Jueves": 3,
+        "Viernes": 4,
+        "Sábado": 5
+    ]
 
     static func semanaISO(_ date: Date) -> Int {
         isoCalendar.component(.weekOfYear, from: date)
@@ -102,21 +109,22 @@ enum CronoDateHelpers {
         case 4: return "Miércoles"
         case 5: return "Jueves"
         case 6: return "Viernes"
+        case 7: return "Sábado"
         default: return nil
         }
     }
 
     static func etiquetaSemana(_ lunes: Date) -> String {
-        let viernes = isoCalendar.date(byAdding: .day, value: 4, to: lunes) ?? lunes
+        let sabado = isoCalendar.date(byAdding: .day, value: 5, to: lunes) ?? lunes
         let formatter = DateFormatter()
         formatter.calendar = civilCalendar
         formatter.locale = Locale(identifier: "es_CL")
         formatter.timeZone = santiagoTimeZone
         formatter.dateFormat = "MMMM"
-        let mes = formatter.string(from: viernes)
+        let mes = formatter.string(from: sabado)
         let diaLunes = civilCalendar.component(.day, from: lunes)
-        let diaViernes = civilCalendar.component(.day, from: viernes)
-        return "\(diaLunes) – \(diaViernes) \(mes.capitalized)"
+        let diaSabado = civilCalendar.component(.day, from: sabado)
+        return "\(diaLunes) – \(diaSabado) \(mes.capitalized)"
     }
 
     static func tituloMes(_ date: Date) -> String {
@@ -132,7 +140,6 @@ enum CronoDateHelpers {
 @MainActor
 @Observable
 final class CronogramaViewModel {
-    var horario: [ClaseHorario] = []
     var cursosDisponibles: [String] = []
     var asignaturasDisponibles: [String] = []
     var actividades: [ActividadCronograma] = []
@@ -154,6 +161,11 @@ final class CronogramaViewModel {
     private let cronogramaRepository: CronogramaRepository
 
     @ObservationIgnored private var saveTask: Task<Void, Never>?
+    @ObservationIgnored private var schedulePeriods: [SchedulePeriod] = []
+    @ObservationIgnored private var legacySchedule: [ClaseHorario] = []
+    /// Preparado para conectar el calendario académico cuando exista un
+    /// contrato remoto verificado. El resolver no materializa clases.
+    @ObservationIgnored private var academicCalendarEvents: [AcademicCalendarEvent] = []
     @ObservationIgnored private var loadedActivityCourses: Set<String> = []
     @ObservationIgnored private var dirtyActivityCourses: Set<String> = []
     @ObservationIgnored private var activityMutationGeneration = 0
@@ -181,7 +193,9 @@ final class CronogramaViewModel {
 
         do {
             let snapshot = try await dashboardRepository.fetchDashboard()
-            horario = snapshot.horario
+            schedulePeriods = snapshot.schedulePeriods
+            legacySchedule = snapshot.legacySchedule
+            academicCalendarEvents = snapshot.academicCalendarEvents
 
             let configuredSubjects = snapshot.activeCourses.flatMap(\.subjects).map(\.label)
             let subjects = Self.dedupeSubjects(
@@ -202,6 +216,15 @@ final class CronogramaViewModel {
             }
 
             cursosDisponibles = snapshot.courses
+            if cursoSeleccionado == "__todos__" {
+                selectedCourseID = nil
+                selectedSubjectID = nil
+            } else if let selected = snapshot.course(id: selectedCourseID, named: cursoSeleccionado) {
+                selectedCourseID = selected.courseID
+                selectedSubjectID = selected.subjects.first {
+                    Self.subjectKey($0.label) == Self.subjectKey(asignatura)
+                }?.id
+            }
             await cargarActividades()
         } catch {
             errorMessage = error.localizedDescription
@@ -300,7 +323,10 @@ final class CronogramaViewModel {
             return
         }
         cursoSeleccionado = curso
-        if curso != "__todos__" {
+        if curso == "__todos__" {
+            selectedCourseID = nil
+            selectedSubjectID = nil
+        } else {
             let snapshot = try? await dashboardRepository.fetchDashboard()
             selectedCourseID = snapshot?.course(id: nil, named: curso)?.courseID
             selectedSubjectID = snapshot?.course(id: selectedCourseID, named: curso)?.subjects.first {
@@ -569,10 +595,36 @@ final class CronogramaViewModel {
     }
 
     var horarioVisible: [ClaseHorario] {
-        horario.filter { bloque in
+        horarioVisible(on: currentDate)
+    }
+
+    /// Resuelve el horario para la fecha que realmente se está mostrando.
+    /// Antes se reutilizaba el snapshot de hoy al navegar a otra semana o mes.
+    func horarioVisible(on date: Date) -> [ClaseHorario] {
+        effectiveSchedule(for: date).filter { bloque in
             guard bloque.isAcademic else { return false }
-            return cursoSeleccionado == "__todos__" || bloque.resumen == cursoSeleccionado
+            guard cursoSeleccionado != "__todos__" else { return true }
+            if let selectedCourseID {
+                if bloque.courseID == selectedCourseID { return true }
+                // Compatibilidad con bloques legacy que aún no tienen ID.
+                if bloque.courseID == nil { return bloque.resumen == cursoSeleccionado }
+                return false
+            }
+            return bloque.resumen == cursoSeleccionado
         }
+    }
+
+    var horario: [ClaseHorario] {
+        effectiveSchedule(for: currentDate)
+    }
+
+    private func effectiveSchedule(for date: Date) -> [ClaseHorario] {
+        AcademicCalendarResolver.effectiveSchedule(
+            periods: schedulePeriods,
+            legacy: legacySchedule,
+            events: academicCalendarEvents,
+            for: date
+        )
     }
 
     var semanaActual: Int {

@@ -503,6 +503,9 @@ struct DashboardSnapshot: Equatable {
     var profile: PerfilUsuario
     var school: InfoColegio
     var preferences: PreferenciasUsuario
+    /// Copia de compatibilidad del horario anterior. Solo puede usarse cuando
+    /// el colegio aún no tiene ningún periodo v2 publicado.
+    var legacySchedule: [ClaseHorario] = []
     var horario: [ClaseHorario]
     var classState: [String: Bool]
     var studentCounts: [String: Int]
@@ -515,6 +518,9 @@ struct DashboardSnapshot: Equatable {
     var journey: JourneyConfig?
     var schedulePeriods: [SchedulePeriod] = []
     var activeSchedulePeriodID: String?
+    /// Vacío mientras no exista un contrato remoto verificado. Mantenerlo en
+    /// el snapshot evita que consumidores futuros ignoren excepciones civiles.
+    var academicCalendarEvents: [AcademicCalendarEvent] = []
 
     var todayName: String? {
         DateHelpers.weekdayName(for: date)
@@ -577,13 +583,7 @@ struct DashboardSnapshot: Equatable {
     }
 
     func course(id: String?, named name: String? = nil) -> AcademicCourse? {
-        if let id, let match = courseCatalog.first(where: { $0.courseID == id }) { return match }
-        guard let name else { return nil }
-        let key = DashboardRepository.buildCursoId(name)
-        return courseCatalog.first {
-            $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame ||
-            $0.dataKey == key
-        }
+        AcademicContract.resolveCourse(in: courseCatalog, id: id, named: name).course
     }
 
     func students(forCourseID courseID: String?, name: String) -> [EstudiantePerfil] {

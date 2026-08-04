@@ -22,15 +22,49 @@ private enum DashboardTabKey: String, CaseIterable, Identifiable {
     }
 }
 
+private enum DashboardVoiceSheet: String, Identifiable {
+    case rapido
+    case guiado
+    case borradores
+
+    var id: String { rawValue }
+}
+
+private enum DashboardVoiceLinkError: LocalizedError {
+    case missingContext
+    case unavailableBlock
+    case signedBlock
+    case saveFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .missingContext:
+            return "Falta curso, asignatura o fecha para vincular esta nota. Puedes conservarla como borrador."
+        case .unavailableBlock:
+            return "No encontramos el bloque de clase. Conservamos la nota para que puedas intentarlo después."
+        case .signedBlock:
+            return "El leccionario está firmado. Reábrelo antes de vincular esta nota."
+        case .saveFailed:
+            return "No pudimos guardar la nota en la clase. Quedó disponible en Notas sin vincular."
+        }
+    }
+}
+
 struct DashboardView: View {
     @State private var viewModel: DashboardViewModel
     @State private var selectedTab: DashboardTabKey = .hoy
     @State private var newReminder = ""
     @State private var reminderColor: ReminderColor = .amarillo
+    @State private var voiceSheet: DashboardVoiceSheet?
+    @State private var voiceDraftCount = 0
+    @State private var voiceDraftError: String?
     @AppStorage("edupanel_dashboard_reminders") private var remindersData = "[]"
     @AppStorage(AppTheme.storageKey) private var appThemeRaw = AppTheme.auto.rawValue
     @AppStorage("edupanel_dashboard_date_button") private var showDashboardDateButton = true
+    @Environment(\.displayMode) private var displayMode
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    private let repository: DashboardRepository
     let user: AuthenticatedUser
     let onOpenProfile: () -> Void
     let onOpenPlanificaciones: () -> Void
@@ -42,6 +76,7 @@ struct DashboardView: View {
         onOpenPlanificaciones: @escaping () -> Void = {}
     ) {
         _viewModel = State(initialValue: DashboardViewModel(repository: repository))
+        self.repository = repository
         self.user = user
         self.onOpenProfile = onOpenProfile
         self.onOpenPlanificaciones = onOpenPlanificaciones
@@ -57,6 +92,10 @@ struct DashboardView: View {
                 } else {
                     emptyState
                 }
+
+                // El dictado sigue disponible aunque el panel remoto falle o
+                // todavía esté cargando; las notas se guardan localmente.
+                quickActions
             }
             .padding(.horizontal, 18)
             .padding(.top, 10)
@@ -65,8 +104,18 @@ struct DashboardView: View {
         .reportsTabBarScroll()
         .background(EPTheme.background)
         .navigationTitle("Inicio")
-        .task { await viewModel.load() }
+        .task {
+            await viewModel.load()
+            await refreshVoiceDraftCount()
+        }
         .refreshable { await viewModel.refresh() }
+        .sheet(item: $voiceSheet, onDismiss: {
+            Task { await refreshVoiceDraftCount() }
+        }) { destination in
+            voiceSheetContent(destination)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     private func toolbarIcon(_ systemName: String) -> some View {
@@ -87,13 +136,14 @@ struct DashboardView: View {
 
             if snapshot.horario.isEmpty {
                 noScheduleCard
+            } else if displayMode.isSimple {
+                todayTimeline(snapshot)
             } else {
                 dashboardTabs(snapshot)
 
                 switch selectedTab {
                 case .hoy:
                     todayTimeline(snapshot)
-                    quickActions(snapshot)
                     if !decodedReminders.isEmpty {
                         remindersReadCard
                     }
@@ -202,17 +252,19 @@ struct DashboardView: View {
                             .foregroundStyle(.white)
                     }
 
-                    HStack(spacing: 10) {
-                        HeroKPI(
-                            label: "Clases hoy",
-                            value: "\(snapshot.completedAcademicCount)/\(snapshot.totalAcademicCount)",
-                            subtitle: "\(Int(snapshot.progress * 100))% completadas"
-                        )
-                        HeroKPI(
-                            label: "Pendientes",
-                            value: "\(snapshot.pendingClasses.count)",
-                            subtitle: snapshot.pendingClasses.isEmpty ? "Todo en orden" : "Por registrar"
-                        )
+                    if !displayMode.isSimple {
+                        HStack(spacing: 10) {
+                            HeroKPI(
+                                label: "Clases hoy",
+                                value: "\(snapshot.completedAcademicCount)/\(snapshot.totalAcademicCount)",
+                                subtitle: "\(Int(snapshot.progress * 100))% completadas"
+                            )
+                            HeroKPI(
+                                label: "Pendientes",
+                                value: "\(snapshot.pendingClasses.count)",
+                                subtitle: snapshot.pendingClasses.isEmpty ? "Todo en orden" : "Por registrar"
+                            )
+                        }
                     }
                 }
             }
@@ -257,7 +309,7 @@ struct DashboardView: View {
                     }
                     .foregroundStyle(isSelected ? EPTheme.primary : EPTheme.muted)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
+                    .frame(minHeight: 44)
                     .background(
                         isSelected ? AnyShapeStyle(EPTheme.primaryLight) : AnyShapeStyle(EPTheme.card),
                         in: RoundedRectangle(cornerRadius: EPTheme.controlRadius, style: .continuous)
@@ -323,13 +375,8 @@ struct DashboardView: View {
 
     // MARK: - Acciones rápidas
 
-    private func quickActions(_ snapshot: DashboardSnapshot) -> some View {
-        let target = dictationTarget(in: snapshot)
-        let dictationRoute = target.map {
-            AppRoute.classDetail(id: $0.id, title: routeTitle(for: $0))
-        } ?? AppRoute.module(.clases)
-
-        return VStack(alignment: .leading, spacing: 12) {
+    private var quickActions: some View {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Hazlo rápido")
                     .font(.system(size: 20, weight: .bold, design: .rounded))
@@ -338,25 +385,271 @@ struct DashboardView: View {
                     .foregroundStyle(EPTheme.primary)
             }
 
-            ScrollView(.horizontal, showsIndicators: false) {
+            voiceModeActions
+
+            Button {
+                voiceSheet = .borradores
+            } label: {
                 HStack(spacing: 10) {
-                    QuickAction(
-                        title: "Registro por voz",
-                        icon: "mic.fill",
-                        colors: [.pink, EPTheme.primary],
-                        detail: target?.resumen ?? "Elegir clase",
-                        kind: .route(dictationRoute)
-                    )
-                    .accessibilityHint(
-                        target == nil
-                            ? "Abre Clases para elegir el bloque antes de dictar."
-                            : "Abre el bloque de \(target?.resumen ?? "la clase") para revisar y guardar el dictado."
-                    )
+                    Image(systemName: "tray.full.fill")
+                        .foregroundStyle(.orange)
+                        .frame(width: 32, height: 32)
+                        .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Notas sin vincular")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.primary)
+                        Text(voiceDraftSummary)
+                            .font(.caption)
+                            .foregroundStyle(voiceDraftError == nil ? Color.secondary : Color.orange)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.secondary)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(EPTheme.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(EPTheme.border, lineWidth: 0.75))
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Abre borradores guardados en este dispositivo")
+
+            if !displayMode.isSimple {
+                ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
                     QuickAction(title: "Planificar", icon: "square.and.pencil", colors: [.purple, EPTheme.primary], kind: .action(onOpenPlanificaciones))
                     QuickAction(title: "Mi Perfil", icon: "person.crop.circle.fill", colors: [.indigo, .purple], kind: .action(onOpenProfile))
                 }
             }
+            }
         }
+    }
+
+    @ViewBuilder
+    private var voiceModeActions: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(spacing: 10) {
+                quickVoiceAction
+                guidedVoiceAction
+            }
+        } else {
+            HStack(spacing: 10) {
+                quickVoiceAction
+                guidedVoiceAction
+            }
+        }
+    }
+
+    private var quickVoiceAction: some View {
+        VoiceDashboardAction(
+            title: "Dictado rápido",
+            subtitle: "Empieza al instante",
+            icon: "mic.fill",
+            tint: EPTheme.primary
+        ) {
+            voiceSheet = .rapido
+        }
+    }
+
+    private var guidedVoiceAction: some View {
+        VoiceDashboardAction(
+            title: "Dictado guiado",
+            subtitle: "Contexto opcional",
+            icon: "list.bullet.clipboard",
+            tint: .indigo
+        ) {
+            voiceSheet = .guiado
+        }
+    }
+
+    @ViewBuilder
+    private func voiceSheetContent(_ destination: DashboardVoiceSheet) -> some View {
+        switch destination {
+        case .rapido:
+            if let snapshot = viewModel.snapshot {
+                DictadoModalView(
+                    ownerID: user.id,
+                    mode: .rapido,
+                    context: dictationTarget(in: snapshot).map { voiceContext(for: $0, snapshot: snapshot) } ?? VoiceNoteContext(),
+                    linkOptions: voiceLinkOptions(in: snapshot),
+                    startsAutomatically: true,
+                    linkAction: { draft in
+                        try await linkVoiceNote(draft, snapshot: snapshot)
+                    }
+                )
+            } else {
+                DictadoModalView(
+                    ownerID: user.id,
+                    mode: .rapido,
+                    startsAutomatically: true
+                )
+            }
+        case .guiado:
+            if let snapshot = viewModel.snapshot {
+                DictadoModalView(
+                    ownerID: user.id,
+                    mode: .guiado,
+                    context: dictationTarget(in: snapshot).map { voiceContext(for: $0, snapshot: snapshot) } ?? VoiceNoteContext(),
+                    linkOptions: voiceLinkOptions(in: snapshot),
+                    linkAction: { draft in
+                        try await linkVoiceNote(draft, snapshot: snapshot)
+                    }
+                )
+            } else {
+                DictadoModalView(ownerID: user.id, mode: .guiado)
+            }
+        case .borradores:
+            if let snapshot = viewModel.snapshot {
+                VoiceNotesInboxView(
+                    ownerID: user.id,
+                    linkOptions: voiceLinkOptions(in: snapshot),
+                    linkAction: { draft in
+                        try await linkVoiceNote(draft, snapshot: snapshot)
+                    }
+                )
+            } else {
+                VoiceNotesInboxView(ownerID: user.id, linkOptions: [], linkAction: nil)
+            }
+        }
+    }
+
+    private func voiceLinkOptions(in snapshot: DashboardSnapshot) -> [VoiceNoteLinkOption] {
+        let calendar = CronoDateHelpers.civilCalendar
+        let reference = calendar.startOfDay(for: snapshot.date)
+
+        return (-14...14).flatMap { offset -> [VoiceNoteLinkOption] in
+            guard let date = calendar.date(byAdding: .day, value: offset, to: reference),
+                  let weekday = DateHelpers.weekdayName(for: date) else { return [] }
+            let schedule = AcademicCalendarResolver.effectiveSchedule(
+                periods: snapshot.schedulePeriods,
+                legacy: snapshot.legacySchedule,
+                events: snapshot.academicCalendarEvents,
+                for: date
+            )
+            return schedule.compactMap { item in
+                guard item.isAcademic, item.dia == weekday else { return nil }
+                let context = voiceContext(for: item, snapshot: snapshot, date: date)
+                guard context.isLinkedToClass else { return nil }
+                let students = snapshot.students(forCourseID: item.courseID, name: item.resumen).map {
+                    VoiceNoteStudentOption(id: $0.id, name: $0.nombre)
+                }
+                return VoiceNoteLinkOption(
+                    title: "\(voiceDateLabel(date)) · \(item.resumen) · \(item.horaInicio)",
+                    subtitle: item.asignatura ?? "Sin asignatura",
+                    context: context,
+                    students: students
+                )
+            }
+        }
+    }
+
+    private func voiceContext(
+        for item: ClaseHorario,
+        snapshot: DashboardSnapshot,
+        date: Date? = nil
+    ) -> VoiceNoteContext {
+        let course = snapshot.course(id: item.courseID, named: item.resumen)
+        return VoiceNoteContext(
+            courseID: item.courseID ?? course?.courseID,
+            courseName: item.resumen,
+            courseKind: course?.kind,
+            subjectID: item.subjectID,
+            subjectName: item.asignatura,
+            classID: item.id,
+            classTitle: routeTitle(for: item),
+            dateKey: DateHelpers.dateKey(for: date ?? snapshot.date)
+        )
+    }
+
+    private func voiceDateLabel(_ date: Date) -> String {
+        date.formatted(
+            .dateTime
+                .locale(Locale(identifier: "es_CL"))
+                .weekday(.abbreviated)
+                .day()
+                .month(.abbreviated)
+        )
+    }
+
+    @MainActor
+    private func linkVoiceNote(_ draft: VoiceNoteDraft, snapshot: DashboardSnapshot) async throws {
+        let context = draft.context
+        guard let classID = context.classID,
+              let course = context.courseName?.trimmingCharacters(in: .whitespacesAndNewlines), !course.isEmpty,
+              let subject = context.subjectName?.trimmingCharacters(in: .whitespacesAndNewlines), !subject.isEmpty,
+              let dateKey = context.dateKey,
+              let date = AttendanceDate.parse(dateKey) else {
+            throw DashboardVoiceLinkError.missingContext
+        }
+
+        let model = AttendanceViewModel(
+            course: course,
+            subject: subject,
+            date: date,
+            initialBlockID: classID,
+            dashboardRepository: repository
+        )
+        await model.load(forceRefresh: false)
+        guard model.loadState == .loaded, let block = model.activeBlock, block.id == classID else {
+            throw DashboardVoiceLinkError.unavailableBlock
+        }
+        guard !block.isSigned else { throw DashboardVoiceLinkError.signedBlock }
+
+        let rendered = renderedVoiceNote(draft, snapshot: snapshot)
+        switch model.appendVoiceNote(
+            rendered,
+            noteID: draft.id,
+            metadata: draft.context.attendanceMetadata
+        ) {
+        case .appended, .metadataUpdated, .duplicate:
+            break
+        case .contentChanged:
+            throw VoiceNoteLinkingError.contentChanged
+        case .signedBlock:
+            throw DashboardVoiceLinkError.signedBlock
+        case .unavailableBlock, .emptyContent:
+            throw DashboardVoiceLinkError.unavailableBlock
+        }
+        guard await model.save(providesFeedback: true) else {
+            throw DashboardVoiceLinkError.saveFailed
+        }
+    }
+
+    private func renderedVoiceNote(_ draft: VoiceNoteDraft, snapshot: DashboardSnapshot) -> String {
+        var sections = [draft.text.trimmingCharacters(in: .whitespacesAndNewlines)]
+        let selectedNames = snapshot.students(
+            forCourseID: draft.context.courseID,
+            name: draft.context.courseName ?? ""
+        )
+        .filter { draft.context.studentIDs.contains($0.id) }
+        .map(\.nombre)
+        if !selectedNames.isEmpty {
+            sections.append("Estudiante\(selectedNames.count == 1 ? "" : "s"): \(selectedNames.joined(separator: ", "))")
+        }
+        if let value = draft.context.topic, !value.isEmpty { sections.append("Tema: \(value)") }
+        if let value = draft.context.observationType, !value.isEmpty { sections.append("Observación: \(value)") }
+        if let value = draft.context.outcome, !value.isEmpty { sections.append("Resultado: \(value)") }
+        if let value = draft.context.nextStep, !value.isEmpty { sections.append("Próximo paso: \(value)") }
+        if let value = draft.context.classSummary, !value.isEmpty { sections.append("Resumen: \(value)") }
+        return sections.filter { !$0.isEmpty }.joined(separator: "\n")
+    }
+
+    @MainActor
+    private func refreshVoiceDraftCount() async {
+        do {
+            let drafts = try await VoiceNoteDraftStore.shared.load(ownerID: user.id)
+            voiceDraftCount = drafts.filter { $0.status != .vinculada }.count
+            voiceDraftError = nil
+        } catch {
+            voiceDraftCount = 0
+            voiceDraftError = "No pudimos leer las notas guardadas"
+        }
+    }
+
+    private var voiceDraftSummary: String {
+        if let voiceDraftError { return voiceDraftError }
+        return voiceDraftCount == 0 ? "Nada pendiente" : "\(voiceDraftCount) por revisar o vincular"
     }
 
     private func dictationTarget(in snapshot: DashboardSnapshot, now: Date = Date()) -> ClaseHorario? {
@@ -741,7 +1034,50 @@ private struct QuickAction: View {
     }
 }
 
+private struct VoiceDashboardAction: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let tint: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 10) {
+                Image(systemName: icon)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(tint)
+                    .frame(width: 44, height: 44)
+                    .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
+            .padding(14)
+            .background(EPTheme.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(tint.opacity(0.22), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityHint(subtitle)
+    }
+}
+
 private struct TimelineClassRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let item: ClaseHorario
     let isToday: Bool
     let isCompleted: Bool
@@ -756,6 +1092,21 @@ private struct TimelineClassRow: View {
     }
 
     var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                accessibilityLayout
+            } else {
+                compactLayout
+            }
+        }
+        .padding(.vertical, 9)
+        .overlay(alignment: .bottom) {
+            Divider()
+                .opacity(0.5)
+        }
+    }
+
+    private var compactLayout: some View {
         HStack(spacing: 12) {
             Text(String(item.horaInicio.prefix(5)))
                 .font(.system(size: 11, weight: .black))
@@ -769,13 +1120,7 @@ private struct TimelineClassRow: View {
                         .font(.footnote.weight(.black))
                         .lineLimit(1)
 
-                    if item.tipo.isFreeBlock {
-                        BadgeLabel(text: "No lectivo", color: .secondary)
-                    } else if isCompleted {
-                        BadgeLabel(text: "Dictada", color: .green)
-                    } else if isCurrent {
-                        BadgeLabel(text: "EN CURSO", color: EPTheme.primary)
-                    }
+                    statusBadge
                 }
 
                 HStack(spacing: 6) {
@@ -791,29 +1136,83 @@ private struct TimelineClassRow: View {
             Spacer(minLength: 6)
 
             if item.isAcademic {
-                Button(action: onToggle) {
-                    Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(isCompleted ? .green : Color(.systemGray3))
-                        .contentTransition(.symbolEffect(.replace))
-                }
-                .buttonStyle(.plain)
+                completionButton
 
                 NavigationLink(value: route) {
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.black))
                         .foregroundStyle(.secondary)
-                        .frame(width: 26, height: 26)
+                        .frame(width: 44, height: 44)
                         .background(EPTheme.subtle, in: Circle())
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.vertical, 9)
-        .overlay(alignment: .bottom) {
-            Divider()
-                .opacity(0.5)
+    }
+
+    private var accessibilityLayout: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(item.timeRange)
+                    .font(.caption.weight(.black))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(
+                        Color(hex: item.colorHex),
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
+
+                Spacer(minLength: 4)
+                statusBadge
+            }
+
+            Text(item.resumen.isEmpty ? item.tipo.label : item.resumen)
+                .font(.headline.weight(.bold))
+                .fixedSize(horizontal: false, vertical: true)
+
+            if item.isAcademic {
+                Label("\(studentCount) estudiantes", systemImage: "person.2.fill")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 10) {
+                    completionButton
+
+                    NavigationLink(value: route) {
+                        Label("Abrir clase", systemImage: "chevron.right")
+                            .font(.subheadline.weight(.bold))
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(EPTheme.subtle, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
+    }
+
+    @ViewBuilder
+    private var statusBadge: some View {
+        if item.tipo.isFreeBlock {
+            BadgeLabel(text: "No lectivo", color: .secondary)
+        } else if isCompleted {
+            BadgeLabel(text: "Dictada", color: .green)
+        } else if isCurrent {
+            BadgeLabel(text: "EN CURSO", color: EPTheme.primary)
+        }
+    }
+
+    private var completionButton: some View {
+        Button(action: onToggle) {
+            Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(isCompleted ? .green : Color(.systemGray3))
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isCompleted ? "Marcar como pendiente" : "Marcar como dictada")
     }
 }
 

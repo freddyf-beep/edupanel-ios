@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		500000000000000000000101 /* AttendanceRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500000000000000000000001 /* AttendanceRulesTests.swift */; };
 		44ACAD000000000000000201 /* AcademicAndDictationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44ACAD000000000000000002 /* AcademicAndDictationTests.swift */; };
+		44CACA000000000000000101 /* AcademicCalendarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44CACA000000000000000001 /* AcademicCalendarTests.swift */; };
 		44DAEDEB68159EF8DBB21A2C /* AttendanceViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44CC20E63DABD4E076EE0313 /* AttendanceViewModel.swift */; };
 		449CC2DFDCDBCC6AF11B11F6 /* AttendanceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 440BCD9FEC0F15DD7AD573AA /* AttendanceModels.swift */; };
 		4441635C509E160073486BB2 /* AttendanceRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 447A41A05D7F7305217E2E1C /* AttendanceRules.swift */; };
@@ -219,6 +220,7 @@
 		100000000000000000000005 /* EduPanel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EduPanel.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		100000000000000000000020 /* EduPanelApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EduPanelApp.swift; sourceTree = "<group>"; };
 		44ACAD000000000000000002 /* AcademicAndDictationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AcademicAndDictationTests.swift; sourceTree = "<group>"; };
+		44CACA000000000000000001 /* AcademicCalendarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AcademicCalendarTests.swift; sourceTree = "<group>"; };
 		100000000000000000000021 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		100000000000000000000022 /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTab.swift; sourceTree = "<group>"; };
 		100000000000000000000023 /* DashboardModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardModels.swift; sourceTree = "<group>"; };
@@ -366,6 +368,7 @@
 			children = (
 				500000000000000000000001 /* AttendanceRulesTests.swift */,
 				44ACAD000000000000000002 /* AcademicAndDictationTests.swift */,
+				44CACA000000000000000001 /* AcademicCalendarTests.swift */,
 			);
 			path = EduPanelTests;
 			sourceTree = "<group>";
@@ -792,6 +795,7 @@
 			files = (
 				500000000000000000000101 /* AttendanceRulesTests.swift in Sources */,
 				44ACAD000000000000000201 /* AcademicAndDictationTests.swift in Sources */,
+				44CACA000000000000000101 /* AcademicCalendarTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

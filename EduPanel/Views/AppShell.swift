@@ -241,7 +241,7 @@ struct AppShell: View {
             Image(systemName: isTabBarHidden ? "chevron.up" : "chevron.down")
                 .font(.system(size: 13, weight: .black))
                 .foregroundStyle(.secondary)
-                .frame(width: 34, height: 34)
+                .frame(width: 44, height: 44)
                 .background(.regularMaterial, in: Circle())
                 .overlay {
                     Circle()
@@ -334,7 +334,7 @@ struct AppShell: View {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.primary)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 44, height: 44)
             }
             .accessibilityLabel("Abrir herramientas")
         }

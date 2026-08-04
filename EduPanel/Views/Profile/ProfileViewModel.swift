@@ -582,6 +582,12 @@ final class ProfileViewModel {
         if let newName {
             updatedCourse.name = newName
             updatedCourse.workshopName = newName
+            let previousNameKey = AcademicContract.normalizedKey(previousCourse.name)
+            if !previousNameKey.isEmpty,
+               previousNameKey != updatedCourse.dataKey,
+               !updatedCourse.aliasKeys.contains(previousNameKey) {
+                updatedCourse.aliasKeys.append(previousNameKey)
+            }
         }
         if let colorHex {
             updatedCourse.colorHex = colorHex
@@ -723,7 +729,7 @@ final class ProfileViewModel {
 
     func students(for curso: String) -> [EstudiantePerfil] {
         guard let snapshot else { return [] }
-        let key = snapshot.course(id: nil, named: curso)?.courseID ?? curso
+        guard case .success(let key) = studentCourseKey(for: curso, in: snapshot) else { return [] }
         return (snapshot.studentsByCourse[key] ?? snapshot.studentsByCourse[curso] ?? []).sorted {
             if $0.orden != $1.orden { return $0.orden < $1.orden }
             return $0.nombre.localizedCaseInsensitiveCompare($1.nombre) == .orderedAscending
@@ -732,7 +738,15 @@ final class ProfileViewModel {
 
     func updateStudents(curso: String, _ transform: ([EstudiantePerfil]) -> [EstudiantePerfil]) {
         guard var snap = snapshot else { return }
-        let key = snap.course(id: nil, named: curso)?.courseID ?? curso
+        let key: String
+        switch studentCourseKey(for: curso, in: snap) {
+        case .success(let resolvedKey):
+            key = resolvedKey
+        case .failure(let error):
+            errorMessage = error.localizedDescription
+            saveStudentsStatus = .error
+            return
+        }
         let next = transform(snap.studentsByCourse[key] ?? snap.studentsByCourse[curso] ?? [])
         snap.studentsByCourse[key] = next
         snap.studentCounts[key] = next.count
@@ -742,7 +756,15 @@ final class ProfileViewModel {
     func saveStudents(curso: String) async {
         errorMessage = nil
         guard let snapshot else { return }
-        let key = snapshot.course(id: nil, named: curso)?.courseID ?? curso
+        let key: String
+        switch studentCourseKey(for: curso, in: snapshot) {
+        case .success(let resolvedKey):
+            key = resolvedKey
+        case .failure(let error):
+            errorMessage = error.localizedDescription
+            saveStudentsStatus = .error
+            return
+        }
         guard let list = snapshot.studentsByCourse[key] ?? snapshot.studentsByCourse[curso] else { return }
         saveStudentsStatus = .saving
         do {
@@ -756,6 +778,21 @@ final class ProfileViewModel {
     }
 
     // MARK: - Helpers
+
+    private func studentCourseKey(
+        for reference: String,
+        in snapshot: DashboardSnapshot
+    ) -> Result<String, DashboardRepositoryError> {
+        switch AcademicContract.resolveCourse(in: snapshot.courseCatalog, named: reference) {
+        case .resolved(let course):
+            return .success(course.courseID)
+        case .notFound:
+            // En una cuenta legacy el nombre todavía es la clave de memoria.
+            return .success(reference)
+        case .ambiguous:
+            return .failure(.ambiguousCourseReference(reference))
+        }
+    }
 
     private func resetLater(_ keyPath: ReferenceWritableKeyPath<ProfileViewModel, ProfileSaveStatus>) {
         Task {

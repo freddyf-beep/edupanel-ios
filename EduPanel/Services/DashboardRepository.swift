@@ -20,11 +20,14 @@ enum ActiveSchoolScope {
 
 enum DashboardRepositoryError: LocalizedError {
     case missingUser
+    case ambiguousCourseReference(String)
 
     var errorDescription: String? {
         switch self {
         case .missingUser:
             return "No hay una sesión activa."
+        case .ambiguousCourseReference(let reference):
+            return "“\(reference)” coincide con más de un curso o taller. Selecciónalo nuevamente antes de guardar."
         }
     }
 }
@@ -151,7 +154,7 @@ struct DashboardRepository {
         let classState = stateData?["estado"] as? [String: Bool] ?? [:]
         let studentsByCourse = await loadStudentsByCourse(
             catalog: catalog,
-            legacySchedule: horario,
+            legacySchedule: legacySchedule,
             uid: uid,
             schoolID: schoolID
         )
@@ -170,6 +173,7 @@ struct DashboardRepository {
             profile: PerfilUsuario.from(dictionary: profileSnapshot.data()),
             school: InfoColegio.from(dictionary: scopedSchoolSnapshot.exists ? scopedSchoolSnapshot.data() : legacySchoolSnapshot.data()),
             preferences: preferences,
+            legacySchedule: legacySchedule,
             horario: horario,
             classState: classState,
             studentCounts: studentCounts,
@@ -399,7 +403,17 @@ struct DashboardRepository {
         let courseCatalog = try await getDocuments(
             db.collection("users").document(uid).collection("colegios").document(schoolID).collection("cursos")
         ).documents.compactMap { AcademicCourse.from(id: $0.documentID, dictionary: $0.data()) }
-        let dataKey = courseCatalog.first(where: { $0.name == course || $0.courseID == course })?.dataKey ?? Self.buildCursoId(course)
+        let requestedKey = Self.buildCursoId(course)
+        let dataKey: String
+        switch AcademicContract.resolveCourse(in: courseCatalog, named: course) {
+        case .resolved(let resolvedCourse):
+            dataKey = resolvedCourse.dataKey
+        case .notFound:
+            // Compatibilidad con cuentas que todavía no tienen catálogo v2.
+            dataKey = requestedKey
+        case .ambiguous:
+            throw DashboardRepositoryError.ambiguousCourseReference(course)
+        }
         let ref = db.collection("users").document(uid)
             .collection("colegios").document(schoolID)
             .collection("estudiantes").document(dataKey)
@@ -938,25 +952,21 @@ struct DashboardRepository {
         let userRef = db.collection("users").document(uid)
         let scoped = userRef.collection("colegios").document(schoolID).collection("estudiantes")
         let legacy = userRef.collection("estudiantes")
-        let catalogKeys = Set(catalog.flatMap {
-            [$0.dataKey, $0.courseID, Self.buildCursoId($0.name)]
-        })
+        let catalogKeys = Set(catalog.flatMap(Self.rosterDocumentCandidates(for:)))
         let scheduleOnlyCourses = Array(Set(
             legacySchedule
                 .filter(\.isAcademic)
                 .map(\.resumen)
-                .filter { !catalogKeys.contains(Self.buildCursoId($0)) }
+                .filter {
+                    !catalogKeys.contains(Self.buildCursoId($0)) &&
+                    !catalogKeys.contains(Self.buildLegacyCursoId($0))
+                }
         ))
 
         return await withTaskGroup(of: (String, [EstudiantePerfil]).self) { group in
             for course in catalog {
                 group.addTask {
-                    let candidates = Array(Set([
-                        course.dataKey,
-                        course.courseID,
-                        Self.buildCursoId(course.name),
-                        Self.buildLegacyCursoId(course.name)
-                    ])).filter { !$0.isEmpty }
+                    let candidates = Self.rosterDocumentCandidates(for: course)
                     for key in candidates {
                         if let snapshot = try? await getDocument(scoped.document(key)),
                            snapshot.exists,
@@ -978,10 +988,7 @@ struct DashboardRepository {
             }
             for courseName in scheduleOnlyCourses {
                 group.addTask {
-                    let candidates = Array(Set([
-                        Self.buildCursoId(courseName),
-                        Self.buildLegacyCursoId(courseName)
-                    ])).filter { !$0.isEmpty }
+                    let candidates = Self.legacyRosterDocumentCandidates(for: courseName)
                     for key in candidates {
                         if let snapshot = try? await getDocument(scoped.document(key)),
                            snapshot.exists,
@@ -1097,6 +1104,46 @@ struct DashboardRepository {
         }
 
         return String(String.UnicodeScalarView(scalars))
+    }
+
+    /// Orden de autoridad para nóminas: documento canónico actual, ID estable,
+    /// derivados del nombre vigente y finalmente aliases históricos. No usar un
+    /// `Set` como resultado porque volvería no determinista cuál documento gana
+    /// cuando aún conviven una migración nueva y otra antigua.
+    static func rosterDocumentCandidates(for course: AcademicCourse) -> [String] {
+        var result: [String] = []
+        var seen = Set<String>()
+
+        func append(_ rawValue: String) {
+            let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty, seen.insert(value).inserted else { return }
+            result.append(value)
+        }
+
+        append(course.dataKey)
+        append(course.courseID)
+        append(buildCursoId(course.name))
+        append(buildLegacyCursoId(course.name))
+        for alias in course.aliasKeys {
+            append(alias)
+            append(buildCursoId(alias))
+            append(buildLegacyCursoId(alias))
+        }
+        return result
+    }
+
+    /// Conserva el mismo orden estable para cuentas que todavía no tienen
+    /// catálogo académico v2: primero la normalización vigente y luego la
+    /// variante histórica, sin depender del orden interno de un `Set`.
+    static func legacyRosterDocumentCandidates(for courseName: String) -> [String] {
+        var result: [String] = []
+        var seen = Set<String>()
+        for rawValue in [buildCursoId(courseName), buildLegacyCursoId(courseName)] {
+            let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty, seen.insert(value).inserted else { continue }
+            result.append(value)
+        }
+        return result
     }
 
     private static func students(from data: [String: Any]?) -> [EstudiantePerfil]? {

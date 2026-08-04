@@ -101,6 +101,52 @@ final class AttendanceViewModel {
         set { updateActiveBlock { $0.activity = newValue } }
     }
 
+    /// Agrega una nota de voz exactamente una vez por UUID. El UUID se guarda
+    /// con el bloque y la edición queda pendiente de la misma sincronización
+    /// que usa el resto del leccionario.
+    @discardableResult
+    func appendVoiceNote(
+        _ content: String,
+        noteID: UUID,
+        metadata: AttendanceVoiceNoteMetadata? = nil
+    ) -> AttendanceVoiceNoteAppendResult {
+        guard let index = activeBlockIndex else { return .unavailableBlock }
+        guard !blocks[index].isSigned else { return .signedBlock }
+
+        let cleanContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanContent.isEmpty else { return .emptyContent }
+
+        let stableID = AttendanceVoiceNoteIdentity.id(for: noteID)
+        let contentHash = AttendanceVoiceNoteIdentity.contentHash(for: cleanContent)
+        if blocks[index].voiceNoteIDs.contains(stableID) {
+            // Un registro legacy puede tener UUID pero no huella. No es seguro
+            // asumir que el texto nuevo sea el mismo, por lo que se conserva el
+            // bloque y se pide revisar el conflicto.
+            guard let storedHash = blocks[index].voiceNoteHashes[stableID] else {
+                return .contentChanged
+            }
+            guard storedHash == contentHash else { return .contentChanged }
+            if let metadata, blocks[index].voiceNoteMetadata[stableID] != metadata {
+                blocks[index].voiceNoteMetadata[stableID] = metadata
+                markEdited()
+                return .metadataUpdated
+            }
+            return .duplicate
+        }
+
+        let existingActivity = blocks[index].activity.trimmingCharacters(in: .whitespacesAndNewlines)
+        blocks[index].activity = existingActivity.isEmpty
+            ? cleanContent
+            : "\(existingActivity)\n\n\(cleanContent)"
+        blocks[index].voiceNoteIDs.append(stableID)
+        blocks[index].voiceNoteHashes[stableID] = contentHash
+        if let metadata {
+            blocks[index].voiceNoteMetadata[stableID] = metadata
+        }
+        markEdited()
+        return .appended
+    }
+
     var signBlockingMessage: String? {
         guard let block = activeBlock else { return "No hay un bloque disponible." }
         if block.objective.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

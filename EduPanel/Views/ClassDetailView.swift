@@ -2,8 +2,9 @@ import SwiftUI
 
 private struct ClassDictationContext: Identifiable {
     let id = UUID()
-    let initialText: String
     let contextualStrings: [String]
+    let voiceContext: VoiceNoteContext
+    let linkOptions: [VoiceNoteLinkOption]
 }
 
 private enum ClassDetailLogError: LocalizedError {
@@ -42,6 +43,7 @@ struct ClassDetailView: View {
     @State private var dictationContext: ClassDictationContext?
 
     @Environment(\.displayMode) private var displayMode
+    @Environment(AuthSession.self) private var authSession
 
     var body: some View {
         ScrollView {
@@ -71,13 +73,19 @@ struct ClassDetailView: View {
         .sheet(item: $dictationContext) { context in
             DictadoModalView(
                 contextualStrings: context.contextualStrings,
-                initialText: context.initialText
-            ) { text in
-                try await guardarRegistro(text)
-            }
+                ownerID: activeUserID,
+                mode: .guiado,
+                context: context.voiceContext,
+                linkOptions: context.linkOptions,
+                linkAction: { draft in
+                    try await guardarRegistro(
+                        draft,
+                        students: context.linkOptions.first?.students ?? []
+                    )
+                }
+            )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
-            .interactiveDismissDisabled(false)
         }
     }
 
@@ -281,7 +289,7 @@ struct ClassDetailView: View {
             VStack(alignment: .leading, spacing: 12) {
                 EPSectionHeader(
                     title: "Registro de la clase",
-                    subtitle: "Dicta, revisa y guarda tus comentarios en el leccionario de este bloque.",
+                    subtitle: "Agrega una nota nueva sin reemplazar los comentarios que ya guardaste.",
                     icon: "waveform.and.mic"
                 )
 
@@ -341,7 +349,7 @@ struct ClassDetailView: View {
                         abrirDictado(snapshot: snapshot, clase: clase)
                     } label: {
                         Label(
-                            attendanceModel?.activeBlock?.activity.isEmpty == false ? "Continuar registro por voz" : "Registrar por voz",
+                            attendanceModel?.activeBlock?.activity.isEmpty == false ? "Agregar comentario por voz" : "Registrar por voz",
                             systemImage: "mic.fill"
                         )
                         .font(.system(size: 14, weight: .black))
@@ -352,7 +360,7 @@ struct ClassDetailView: View {
                     .buttonStyle(.plain)
                     .disabled(attendanceModel?.activeBlock?.isSigned == true || isLoadingClassLog)
                     .opacity(attendanceModel?.activeBlock?.isSigned == true ? 0.55 : 1)
-                    .accessibilityHint("Abre un texto editable. Nada se guarda hasta confirmar.")
+                    .accessibilityHint("Abre un texto editable. El borrador se guarda localmente y puedes confirmar después para vincularlo a esta clase.")
 
                     if attendanceModel?.activeBlock?.isSigned == true {
                         Label("El leccionario está firmado y se muestra en modo lectura.", systemImage: "lock.fill")
@@ -438,32 +446,98 @@ struct ClassDetailView: View {
             classLogErrorMessage = "Define una asignatura para registrar comentarios."
             return
         }
-        let students = snapshot.students(forCourseID: clase.courseID, name: clase.resumen)
-        let context = [
-            clase.resumen,
-            subject,
-            plan.flatMap(unidadActiva(en:))?.name
-        ].compactMap { $0 } + students.map(\.nombre)
+        let course = snapshot.course(id: clase.courseID, named: clase.resumen)
+        let activeUnit = plan.flatMap(unidadActiva(en:))
+        let voiceContext = VoiceNoteContext(
+            courseID: clase.courseID ?? course?.courseID,
+            courseName: course?.name ?? clase.resumen,
+            courseKind: course?.kind,
+            subjectID: clase.subjectID ?? snapshot.academicSelection(courseName: clase.resumen, subjectName: subject)?.subjectID,
+            subjectName: subject,
+            classID: clase.id,
+            classTitle: clase.resumen.isEmpty ? clase.tipo.label : clase.resumen,
+            dateKey: DateHelpers.dateKey(for: snapshot.date),
+            unitID: activeUnit.map { String($0.id) },
+            unitName: activeUnit?.name,
+            activityID: attendanceModel?.activeBlock?.id
+        )
+        let students = snapshot.students(forCourseID: clase.courseID, name: clase.resumen).map {
+            VoiceNoteStudentOption(id: $0.id, name: $0.nombre)
+        }
+        let option = VoiceNoteLinkOption(
+            title: "\(course?.name ?? clase.resumen) · \(clase.horaInicio)",
+            subtitle: subject,
+            context: voiceContext,
+            students: students
+        )
 
         classLogSavedNotice = false
         dictationContext = ClassDictationContext(
-            initialText: attendanceModel?.activeBlock?.activity ?? "",
-            contextualStrings: context
+            contextualStrings: voiceContext.safeContextualStrings,
+            voiceContext: voiceContext,
+            linkOptions: [option]
         )
     }
 
-    private func guardarRegistro(_ text: String) async throws {
+    private var activeUserID: String? {
+        guard case .signedIn(let user) = authSession.state else { return nil }
+        return user.id
+    }
+
+    private func guardarRegistro(
+        _ draft: VoiceNoteDraft,
+        students: [VoiceNoteStudentOption]
+    ) async throws {
         guard let attendanceModel, let block = attendanceModel.activeBlock else {
             throw ClassDetailLogError.unavailable
         }
         guard !block.isSigned else { throw ClassDetailLogError.signedBlock }
 
-        attendanceModel.activity = text
+        let rendered = renderedVoiceNote(draft, students: students)
+        switch attendanceModel.appendVoiceNote(
+            rendered,
+            noteID: draft.id,
+            metadata: draft.context.attendanceMetadata
+        ) {
+        case .appended, .metadataUpdated, .duplicate:
+            break
+        case .contentChanged:
+            throw VoiceNoteLinkingError.contentChanged
+        case .signedBlock:
+            throw ClassDetailLogError.signedBlock
+        case .unavailableBlock, .emptyContent:
+            throw ClassDetailLogError.unavailable
+        }
         guard await attendanceModel.save(providesFeedback: true) else {
             throw ClassDetailLogError.saveFailed
         }
         classLogErrorMessage = nil
         classLogSavedNotice = true
+    }
+
+    private func renderedVoiceNote(
+        _ draft: VoiceNoteDraft,
+        students: [VoiceNoteStudentOption]
+    ) -> String {
+        var sections = [draft.text.trimmingCharacters(in: .whitespacesAndNewlines)]
+        let selectedNames = students
+            .filter { draft.context.studentIDs.contains($0.id) }
+            .map(\.name)
+        if !selectedNames.isEmpty {
+            sections.append("Estudiante\(selectedNames.count == 1 ? "" : "s"): \(selectedNames.joined(separator: ", "))")
+        }
+        if let value = nonEmpty(draft.context.topic) { sections.append("Tema: \(value)") }
+        if let value = nonEmpty(draft.context.observationType) { sections.append("Observación: \(value)") }
+        if let value = nonEmpty(draft.context.outcome) { sections.append("Resultado: \(value)") }
+        if let value = nonEmpty(draft.context.nextStep) { sections.append("Próximo paso: \(value)") }
+        if let value = nonEmpty(draft.context.classSummary) { sections.append("Resumen: \(value)") }
+        return sections.filter { !$0.isEmpty }.joined(separator: "\n")
+    }
+
+    private func nonEmpty(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let clean = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return clean.isEmpty ? nil : clean
     }
 
     private func resolvedSubject(for clase: ClaseHorario) -> String? {

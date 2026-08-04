@@ -328,6 +328,62 @@ final class AttendanceRulesTests: XCTestCase {
         XCTAssertEqual(decoded, original)
     }
 
+    func testVoiceNoteIDsRoundTripAndLegacyBlocksRemainReadable() throws {
+        var block = try XCTUnwrap(makeNewBlock())
+        let firstID = "2f5e13a2-9aa8-4b9c-ba87-d4e1b89d0fad"
+        let secondID = "f2ebf0b5-4704-4a22-8c05-d3270f973876"
+        let firstHash = AttendanceVoiceNoteIdentity.contentHash(for: "Primera nota")
+        let metadata = AttendanceVoiceNoteMetadata(
+            observationScope: "individual",
+            studentIDs: ["student-1"],
+            topic: "Participación",
+            observationType: "Fortaleza",
+            outcome: "Explica su estrategia",
+            nextStep: "Seguir observando",
+            summary: "Trabajo en parejas"
+        )
+        block.voiceNoteIDs = [firstID, " \(firstID) ", "", secondID]
+        block.voiceNoteHashes = [firstID: firstHash]
+        block.voiceNoteMetadata = [firstID: metadata]
+
+        let encoded = AttendanceRepository.blockDictionary(block)
+        XCTAssertEqual(encoded["notasVozIds"] as? [String], [firstID, secondID])
+        XCTAssertEqual(encoded["notasVozHashes"] as? [String: String], [firstID: firstHash])
+        XCTAssertEqual(
+            (encoded["notasVozMetadatos"] as? [String: [String: Any]])?[firstID]?["topic"] as? String,
+            "Participación"
+        )
+        let decoded = try XCTUnwrap(AttendanceRepository.parseBlock(encoded))
+        XCTAssertEqual(decoded.voiceNoteIDs, [firstID, secondID])
+        XCTAssertEqual(decoded.voiceNoteHashes, [firstID: firstHash])
+        XCTAssertEqual(decoded.voiceNoteMetadata, [firstID: metadata])
+
+        var arrayCompatible = encoded
+        arrayCompatible["notasVozMetadatos"] = [[
+            "id": firstID,
+            "observationScope": "individual",
+            "estudiantesIds": ["student-1"],
+            "tema": "Participación",
+            "tipo": "Fortaleza",
+            "resultado": "Explica su estrategia",
+            "proximoPaso": "Seguir observando",
+            "resumen": "Trabajo en parejas"
+        ]]
+        XCTAssertEqual(
+            try XCTUnwrap(AttendanceRepository.parseBlock(arrayCompatible)).voiceNoteMetadata,
+            [firstID: metadata]
+        )
+
+        var legacy = encoded
+        legacy.removeValue(forKey: "notasVozIds")
+        legacy.removeValue(forKey: "notasVozHashes")
+        legacy.removeValue(forKey: "notasVozMetadatos")
+        let decodedLegacy = try XCTUnwrap(AttendanceRepository.parseBlock(legacy))
+        XCTAssertEqual(decodedLegacy.voiceNoteIDs, [])
+        XCTAssertEqual(decodedLegacy.voiceNoteHashes, [:])
+        XCTAssertEqual(decodedLegacy.voiceNoteMetadata, [:])
+    }
+
     func testScannerCapabilityReportsDeniedAndUnsupported() {
         XCTAssertEqual(
             AttendanceQRScannerCapability.resolve(
@@ -453,6 +509,63 @@ final class AttendanceQRCoordinatorTests: XCTestCase {
 
         let callCount = await resolver.callCount()
         XCTAssertEqual(callCount, 1)
+    }
+
+    func testVoiceNoteAppendIsIdempotentAndMarksEditableBlockDirty() throws {
+        let model = AttendanceViewModel.preview(isSigned: false, allConfirmed: false)
+        let noteID = try XCTUnwrap(UUID(uuidString: "2F5E13A2-9AA8-4B9C-BA87-D4E1B89D0FAD"))
+        let metadata = AttendanceVoiceNoteMetadata(
+            observationScope: "grupal",
+            studentIDs: ["est_1", "est_2"],
+            topic: "Comprensión lectora"
+        )
+
+        XCTAssertEqual(
+            model.appendVoiceNote("Observación de participación.", noteID: noteID, metadata: metadata),
+            .appended
+        )
+        XCTAssertTrue(model.isDirty)
+        XCTAssertEqual(model.activeBlock?.voiceNoteIDs, [noteID.uuidString.lowercased()])
+        let activityAfterFirstAppend = model.activeBlock?.activity
+
+        XCTAssertEqual(model.appendVoiceNote("Observación de participación.", noteID: noteID), .duplicate)
+        XCTAssertEqual(model.activeBlock?.activity, activityAfterFirstAppend)
+        XCTAssertEqual(model.activeBlock?.voiceNoteIDs, [noteID.uuidString.lowercased()])
+        XCTAssertEqual(
+            model.activeBlock?.voiceNoteHashes[noteID.uuidString.lowercased()],
+            AttendanceVoiceNoteIdentity.contentHash(for: "Observación de participación.")
+        )
+        XCTAssertEqual(model.activeBlock?.voiceNoteMetadata[noteID.uuidString.lowercased()], metadata)
+
+        var correctedMetadata = metadata
+        correctedMetadata.observationScope = "individual"
+        correctedMetadata.studentIDs = ["est_2"]
+        XCTAssertEqual(
+            model.appendVoiceNote(
+                "Observación de participación.",
+                noteID: noteID,
+                metadata: correctedMetadata
+            ),
+            .metadataUpdated
+        )
+        XCTAssertEqual(model.activeBlock?.activity, activityAfterFirstAppend)
+        XCTAssertEqual(
+            model.activeBlock?.voiceNoteMetadata[noteID.uuidString.lowercased()],
+            correctedMetadata
+        )
+
+        XCTAssertEqual(model.appendVoiceNote("Contenido distinto.", noteID: noteID), .contentChanged)
+        XCTAssertEqual(model.activeBlock?.activity, activityAfterFirstAppend)
+        XCTAssertEqual(model.activeBlock?.voiceNoteIDs, [noteID.uuidString.lowercased()])
+    }
+
+    func testVoiceNoteAppendDoesNotChangeSignedBlock() throws {
+        let model = AttendanceViewModel.preview(isSigned: true, allConfirmed: true)
+        let original = model.activeBlock
+
+        XCTAssertEqual(model.appendVoiceNote("No debe guardarse.", noteID: UUID()), .signedBlock)
+        XCTAssertEqual(model.activeBlock, original)
+        XCTAssertFalse(model.isDirty)
     }
 }
 
