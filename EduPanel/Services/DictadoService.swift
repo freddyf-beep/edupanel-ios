@@ -398,7 +398,12 @@ final class AppleDictationRecognizer: DictationRecognizing {
             guard recognizer.isAvailable else { throw DictationEngineError.unavailable }
 
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .measurement, options: [.duckOthers, .allowBluetooth])
+#if compiler(>=6.2)
+            let bluetoothOption: AVAudioSession.CategoryOptions = .allowBluetoothHFP
+#else
+            let bluetoothOption: AVAudioSession.CategoryOptions = .allowBluetooth
+#endif
+            try session.setCategory(.record, mode: .measurement, options: [.duckOthers, bluetoothOption])
             try session.setActive(true, options: .notifyOthersOnDeactivation)
 
             let nextRequest = SFSpeechAudioBufferRecognitionRequest()

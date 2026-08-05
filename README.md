@@ -32,6 +32,9 @@ así nunca se distribuye `localhost` por accidente.
 
 Puedes editar todo el codigo SwiftUI desde Windows. Para compilar, firmar e instalar en un iPhone real sigue siendo necesario Xcode/macOS o un servicio cloud con macOS. No existe un Simulator iOS oficial local para Windows.
 
+El relevo completo, la preparación del equipo y el helper seguro para ejecutar CI están
+documentados en [`docs/WINDOWS_HANDOFF.md`](docs/WINDOWS_HANDOFF.md).
+
 ## Pruebas en iPhone real
 
 Cuando tengas acceso a Xcode en Mac o a un runner macOS:
