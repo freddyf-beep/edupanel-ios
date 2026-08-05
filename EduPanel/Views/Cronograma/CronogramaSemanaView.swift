@@ -5,129 +5,211 @@ struct CronogramaSemanaView: View {
     var onEdit: (ActividadCronograma) -> Void
     var onCreate: (String, String) -> Void
 
+    @State private var selectedDayName: String = CronoDateHelpers.nombreDia(Date()) ?? "Lunes"
+
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: true) {
-            HStack(alignment: .top, spacing: 10) {
-                ForEach(CronoDateHelpers.diasSemana, id: \.self) { dia in
-                    columnaDia(dia)
-                }
-            }
-            .padding(.bottom, 4)
+        VStack(spacing: 12) {
+            daySelectorHeader
+            selectedDayColumn(selectedDayName)
         }
     }
 
-    private func columnaDia(_ dia: String) -> some View {
-        let fecha = CronoDateHelpers.fechaReal(lunes: viewModel.lunesActual, dia: dia)
-        let esHoy = Calendar.current.isDateInToday(fecha)
-        let actividades = viewModel.actividadesFiltradas
-            .filter { $0.semana == viewModel.semanaActual && $0.dia == dia }
-            .sorted { $0.hora < $1.hora }
-        let bloques = viewModel.horarioVisible
-            .filter { $0.dia == dia }
-            .sorted { $0.horaInicio < $1.horaInicio }
+    // MARK: - Selector de Día
 
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(dia.uppercased())
-                        .font(.system(size: 10, weight: .black))
-                        .foregroundStyle(esHoy ? EPTheme.primary : .secondary)
-                    Text("\(Calendar.current.component(.day, from: fecha))")
-                        .font(.system(size: 16, weight: .black))
-                        .foregroundStyle(esHoy ? EPTheme.primary : .primary)
-                }
-                Spacer()
+    private var daySelectorHeader: some View {
+        HStack(spacing: 6) {
+            ForEach(CronoDateHelpers.diasSemana, id: \.self) { dia in
+                let fecha = CronoDateHelpers.fechaReal(lunes: viewModel.lunesActual, dia: dia)
+                let esHoy = CronoDateHelpers.civilCalendar.isDateInToday(fecha)
+                let numDia = CronoDateHelpers.civilCalendar.component(.day, from: fecha)
+                let isSelected = selectedDayName == dia
+
                 Button {
-                    onCreate(dia, "08:30")
+                    withAnimation(EPTheme.spring) {
+                        selectedDayName = dia
+                    }
                 } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 11, weight: .black))
-                        .foregroundStyle(EPTheme.primary)
-                        .frame(width: 26, height: 26)
-                        .background(EPTheme.primary.opacity(0.1), in: Circle())
+                    VStack(spacing: 3) {
+                        Text(String(dia.prefix(3)).uppercased())
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundStyle(isSelected ? .white : (esHoy ? EPTheme.primary : .secondary))
+                        
+                        Text("\(numDia)")
+                            .font(.system(size: 14, weight: .black))
+                            .foregroundStyle(isSelected ? .white : (esHoy ? EPTheme.primary : .primary))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(
+                        isSelected ? EPTheme.primary : Color(.secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    )
+                    .shadow(color: isSelected ? EPTheme.primary.opacity(0.3) : .clear, radius: 4, y: 2)
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 11)
-            .padding(.top, 11)
+        }
+    }
 
-            Divider()
+    // MARK: - Columna del Día Seleccionado
 
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(bloques) { bloque in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Label("\(bloque.horaInicio)–\(bloque.horaFin)", systemImage: "clock")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.secondary)
-                        Text(bloque.resumen)
-                            .font(.system(size: 11, weight: .black))
-                            .lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
-                    .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
+    private func selectedDayColumn(_ dia: String) -> some View {
+        let fecha = CronoDateHelpers.fechaReal(lunes: viewModel.lunesActual, dia: dia)
+        let actividades = viewModel.actividadesFiltradas
+            .filter { $0.semana == viewModel.semanaActual && $0.dia == dia }
+            .sorted { $0.hora < $1.hora }
+        let bloques = viewModel.horarioVisible(on: fecha)
+            .filter { $0.dia == dia }
+            .sorted { $0.horaInicio < $1.horaInicio }
 
-                ForEach(actividades) { actividad in
-                    tarjetaActividad(actividad)
-                }
-
-                if actividades.isEmpty && bloques.isEmpty {
-                    Text("Sin actividades")
-                        .font(.caption.weight(.medium))
+        return VStack(alignment: .leading, spacing: 12) {
+            // Encabezado del día
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(dia) \(CronoDateHelpers.civilCalendar.component(.day, from: fecha)) · \(CronoDateHelpers.tituloMes(fecha))")
+                        .font(.headline.weight(.black))
+                    Text("\(actividades.count) actividad\(actividades.count == 1 ? "" : "es") · \(bloques.count) bloque\(bloques.count == 1 ? "" : "s") de clase")
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, 14)
+                }
+
+                Spacer()
+
+                Button {
+                    onCreate(dia, "08:30")
+                } label: {
+                    Label("Nueva actividad", systemImage: "plus")
+                        .font(.caption.weight(.black))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(EPTheme.primary, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(!viewModel.puedeCrearActividad)
+                .opacity(viewModel.puedeCrearActividad ? 1 : 0.55)
+                .accessibilityHint(
+                    viewModel.puedeCrearActividad
+                        ? "Abre el formulario para crear una actividad"
+                        : "Disponible cuando el cronograma del curso termine de cargar"
+                )
+            }
+            .padding(14)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            // Contenido del día
+            if bloques.isEmpty && actividades.isEmpty {
+                EPWebCard {
+                    EPEmptyState(
+                        icon: "sun.max.fill",
+                        title: "Sin actividades en \(dia)",
+                        message: "Toca \"Nueva actividad\" para programar una clase o evaluación en este día."
+                    )
+                }
+            } else {
+                if !bloques.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("BLOQUES DE HORARIO")
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundStyle(.secondary)
+
+                        VStack(spacing: 8) {
+                            ForEach(bloques) { bloque in
+                                HStack(spacing: 12) {
+                                    Text(bloque.horaInicio)
+                                        .font(.system(size: 11, weight: .black))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 54, height: 38)
+                                        .background(Color(profileHex: bloque.colorHex), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(bloque.resumen)
+                                            .font(.footnote.weight(.black))
+                                            .lineLimit(1)
+                                        Text("\(bloque.horaInicio) – \(bloque.horaFin)")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    Spacer()
+                                }
+                                .padding(10)
+                                .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                        }
+                    }
+                }
+
+                if !actividades.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("ACTIVIDADES DEL CRONOGRAMA")
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundStyle(.secondary)
+
+                        VStack(spacing: 8) {
+                            ForEach(actividades) { actividad in
+                                tarjetaActividad(actividad)
+                            }
+                        }
+                    }
                 }
             }
-            .padding(.horizontal, 9)
-            .padding(.bottom, 11)
         }
-        .frame(width: 178, alignment: .top)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(esHoy ? EPTheme.primary : Color(.separator).opacity(0.1), lineWidth: esHoy ? 1.8 : 1)
-        )
-        .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
     }
+
+    // MARK: - Tarjeta de Actividad
 
     private func tarjetaActividad(_ actividad: ActividadCronograma) -> some View {
         Button {
             onEdit(actividad)
         } label: {
-            HStack(spacing: 0) {
-                RoundedRectangle(cornerRadius: 2)
+            HStack(spacing: 12) {
+                Capsule()
                     .fill(EPTheme.color(hex: viewModel.colorUnidad(actividad.unidad)))
-                    .frame(width: 4)
+                    .frame(width: 4, height: 42)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(actividad.hora) · \(actividad.duracion)")
-                        .font(.system(size: 9, weight: .black))
-                        .foregroundStyle(.secondary)
-                    Text(actividad.nombre)
-                        .font(.system(size: 11, weight: .black))
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                    if let curso = actividad.cursoOrigen, !curso.isEmpty {
-                        Text(curso)
-                            .font(.system(size: 9, weight: .black))
-                            .foregroundStyle(EPTheme.primary)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(actividad.nombre)
+                            .font(.subheadline.weight(.black))
+                            .foregroundStyle(.primary)
                             .lineLimit(1)
+
+                        if let curso = actividad.cursoOrigen, !curso.isEmpty {
+                            Text(curso)
+                                .font(.system(size: 9, weight: .black))
+                                .foregroundStyle(EPTheme.primary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(EPTheme.primary.opacity(0.1), in: Capsule())
+                                .lineLimit(1)
+                        }
                     }
-                    if !actividad.unidad.isEmpty {
-                        Text(viewModel.nombreUnidad(actividad.unidad))
-                            .font(.system(size: 9, weight: .semibold))
+
+                    HStack(spacing: 6) {
+                        Text("\(actividad.hora) · \(actividad.duracion)")
+                            .font(.caption.weight(.bold))
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
+
+                        if !actividad.unidad.isEmpty {
+                            Text("· \(viewModel.nombreUnidad(actividad.unidad))")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
                 }
-                .padding(8)
 
-                Spacer(minLength: 0)
+                Spacer(minLength: 8)
+
+                Image(systemName: "pencil")
+                    .font(.caption.weight(.black))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 30, height: 30)
+                    .background(Color(.systemGray5), in: Circle())
             }
-            .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(12)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
     }

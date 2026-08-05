@@ -16,17 +16,10 @@ on:
         required: true
         type: number
         default: 14
-  push:
-    branches:
-      - main
-      - agent/**
-      - feature/planificaciones-unidades
-      - codex/**
-      - preview-planificaciones
 
 jobs:
   unsigned-ipa:
-    name: Build unsigned IPA for sideloading
+    name: Build unsigned IPA for inspection
     runs-on: macos-26
     timeout-minutes: 45
     permissions:
@@ -164,7 +157,7 @@ jobs:
             echo "- Configuración: `$CONFIGURATION`"
             echo "- SHA-256: `$(cut -d ' ' -f 1 "$IPA_PATH.sha256")`"
             echo ""
-            echo "Es una IPA sin firma: sirve para inspección y sideloading con una herramienta compatible, no para instalarla directamente desde Xcode/App Store."
+            echo "Es una IPA sin firma: sirve para inspección, pero no se puede instalar directamente. Para un dispositivo debe firmarse con certificado y aprovisionamiento válidos; el workflow de TestFlight cubre esa entrega cuando están configurados."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload unsigned IPA artifact

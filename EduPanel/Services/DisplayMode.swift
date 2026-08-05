@@ -1,11 +1,32 @@
 import SwiftUI
 
-enum DisplayMode {
-    case detallado
+/// Nivel de complejidad que se muestra en la navegación y en las pantallas que
+/// ya admiten divulgación progresiva. La preferencia se mantiene en el equipo.
+enum DisplayMode: String, CaseIterable, Identifiable {
+    case simple
+    case completo
 
-    /// Puente para las vistas que aún se están migrando al diseño único.
-    /// Siempre es falso: el modo simple ya no forma parte de la aplicación.
-    var isSimple: Bool { false }
+    static let storageKey = "edupanel_display_mode"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .simple: return "Simple"
+        case .completo: return "Completo"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .simple:
+            return "Muestra las tareas de uso diario y una navegación más directa."
+        case .completo:
+            return "Incluye accesos y opciones avanzadas para organizar tu trabajo."
+        }
+    }
+
+    var isSimple: Bool { self == .simple }
 }
 
 enum AppTheme: String, CaseIterable, Identifiable {
@@ -34,10 +55,8 @@ enum AppTheme: String, CaseIterable, Identifiable {
     }
 }
 
-// Compatibilidad temporal para las vistas heredadas durante su migración al
-// único diseño completo. No existe selector ni preferencia visible al usuario.
 private struct DisplayModeKey: EnvironmentKey {
-    static let defaultValue = DisplayMode.detallado
+    static let defaultValue = DisplayMode.simple
 }
 
 extension EnvironmentValues {

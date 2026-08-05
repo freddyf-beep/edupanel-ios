@@ -18,12 +18,34 @@ struct PlanificacionRepository {
 
     private func userDoc(col: String, id: String) throws -> DocumentReference {
         let uid = try getUid()
-        return db.collection("users").document(uid).collection(col).document(id)
+        return userCol(uid: uid, col: col).document(id)
     }
 
     private func userCol(col: String) throws -> CollectionReference {
         let uid = try getUid()
-        return db.collection("users").document(uid).collection(col)
+        return userCol(uid: uid, col: col)
+    }
+
+    private func userCol(uid: String, col: String) -> CollectionReference {
+        let user = db.collection("users").document(uid)
+        let schoolID = ActiveSchoolScope.schoolID(for: uid)
+        if schoolID != "principal" {
+            return user.collection("colegios").document(schoolID).collection(col)
+        }
+        return user.collection(col)
+    }
+
+    /// La versión web histórica guardó parte de la planificación directamente
+    /// bajo `users/{uid}`. Durante la migración a colegios, leemos ambas
+    /// ubicaciones para que una pantalla no aparezca vacía sólo por el alcance
+    /// activo. La colección del colegio va primero y nunca se escribe en la
+    /// ubicación heredada desde este helper.
+    private func userColCandidates(col: String) throws -> [CollectionReference] {
+        let uid = try getUid()
+        let scoped = userCol(uid: uid, col: col)
+        let legacy = db.collection("users").document(uid).collection(col)
+        if scoped.path == legacy.path { return [scoped] }
+        return [scoped, legacy]
     }
 
     // MARK: - sluggifiers
@@ -112,90 +134,49 @@ struct PlanificacionRepository {
     // MARK: - Database Actions
 
     func listarPlanesCurso(asignatura: String) async throws -> [PlanificacionCurso] {
-        let colRef = try userCol(col: "planificaciones_curso")
-        return try await withCheckedThrowingContinuation { continuation in
-            colRef.whereField("asignatura", isEqualTo: asignatura).getDocuments { snapshot, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if let snapshot {
-                    let results = snapshot.documents.compactMap { doc -> PlanificacionCurso? in
-                        let dict = doc.data()
-                        return PlanificacionCurso.fromFirestore(dict, fallbackAsignatura: asignatura)
-                    }
-                    continuation.resume(returning: results)
-                } else {
-                    continuation.resume(returning: [])
-                }
-            }
+        var plans: [PlanificacionCurso] = []
+        for colRef in try userColCandidates(col: "planificaciones_curso") {
+            let snapshot = try await getDocuments(colRef.whereField("asignatura", isEqualTo: asignatura))
+            plans.append(contentsOf: snapshot.documents.compactMap { doc in
+                PlanificacionCurso.fromFirestore(doc.data(), fallbackAsignatura: asignatura)
+            })
         }
+        return mergePlans(plans)
     }
 
     func listarTodosPlanesCurso(posiblesCursos: [String] = [], posiblesAsignaturas: [String] = []) async throws -> [PlanificacionCurso] {
-        let colRef = try userCol(col: "planificaciones_curso")
-        return try await withCheckedThrowingContinuation { continuation in
-            colRef.getDocuments { snapshot, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if let snapshot {
-                    let results = snapshot.documents.compactMap { doc -> PlanificacionCurso? in
-                        let dict = doc.data()
-                        let docId = doc.documentID
-                        
-                        var fallbackCurso: String? = nil
-                        var fallbackAsignatura: String? = nil
-                        
-                        for asignatura in posiblesAsignaturas {
-                            for curso in posiblesCursos {
-                                let expectedId = Self.buildPlanCursoId(asignatura: asignatura, curso: curso)
-                                if expectedId == docId {
-                                    fallbackCurso = curso
-                                    fallbackAsignatura = asignatura
-                                    break
-                                }
-                            }
-                            if fallbackCurso != nil { break }
-                        }
-                        
-                        if fallbackCurso == nil && docId.hasPrefix("plan_") {
-                            let cleanId = String(docId.dropFirst(5))
-                            for asignatura in posiblesAsignaturas {
-                                let slugAsig = asignatura.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL"))
-                                    .lowercased()
-                                    .replacingOccurrences(of: " ", with: "_")
-                                    .replacingOccurrences(of: "[^a-z0-9_]", with: "", options: .regularExpression)
-                                if cleanId.hasPrefix(slugAsig + "_") {
-                                    fallbackAsignatura = asignatura
-                                    let slugCursoPart = String(cleanId.dropFirst(slugAsig.count + 1))
-                                    for curso in posiblesCursos {
-                                        let slugCurso = curso.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL"))
-                                            .lowercased()
-                                            .replacingOccurrences(of: " ", with: "_")
-                                            .replacingOccurrences(of: "[^a-z0-9_]", with: "", options: .regularExpression)
-                                        if slugCurso == slugCursoPart {
-                                            fallbackCurso = curso
-                                            break
-                                        }
-                                    }
-                                    break
-                                }
-                            }
-                        }
-                        
-                        return PlanificacionCurso.fromFirestore(dict, fallbackCurso: fallbackCurso, fallbackAsignatura: fallbackAsignatura)
-                    }
-                    continuation.resume(returning: results)
-                } else {
-                    continuation.resume(returning: [])
+        var plans: [PlanificacionCurso] = []
+        for colRef in try userColCandidates(col: "planificaciones_curso") {
+            let snapshot = try await getDocuments(colRef)
+            for doc in snapshot.documents {
+                let docId = doc.documentID
+                let fallback = fallbackRoute(
+                    for: docId,
+                    cursos: posiblesCursos,
+                    asignaturas: posiblesAsignaturas
+                )
+                if let plan = PlanificacionCurso.fromFirestore(
+                    doc.data(),
+                    fallbackCurso: fallback.curso,
+                    fallbackAsignatura: fallback.asignatura
+                ) {
+                    plans.append(plan)
                 }
             }
         }
+        return mergePlans(plans)
     }
 
     func cargarPlanCurso(asignatura: String, curso: String) async throws -> PlanificacionCurso? {
         let docId = Self.buildPlanCursoId(asignatura: asignatura, curso: curso)
         let docRef = try userDoc(col: "planificaciones_curso", id: docId)
         let snapshot = try await getDocument(docRef)
-        guard snapshot.exists, let dict = snapshot.data() else {
+        if snapshot.exists, let dict = snapshot.data() {
+            return PlanificacionCurso.fromFirestore(dict, fallbackCurso: curso, fallbackAsignatura: asignatura)
+        }
+
+        guard let legacy = try await findPlanCourseDocument(asignatura: asignatura, curso: curso),
+              let dict = legacy.data() else {
             return nil
         }
         return PlanificacionCurso.fromFirestore(dict, fallbackCurso: curso, fallbackAsignatura: asignatura)
@@ -203,6 +184,9 @@ struct PlanificacionRepository {
 
     func guardarPlanCurso(asignatura: String, curso: String, units: [UnidadPlan]) async throws {
         let docId = Self.buildPlanCursoId(asignatura: asignatura, curso: curso)
+        // Las ubicaciones heredadas son solo una fuente de lectura/migración.
+        // Escribir siempre en el ámbito activo evita que un colegio secundario
+        // sobrescriba accidentalmente la planificación raíz del docente.
         let docRef = try userDoc(col: "planificaciones_curso", id: docId)
         let plan = PlanificacionCurso(curso: curso, asignatura: asignatura, units: units)
         guard var dict = plan.dictionary else {
@@ -210,6 +194,73 @@ struct PlanificacionRepository {
         }
         dict["updatedAt"] = FieldValue.serverTimestamp()
         try await setData(dict, at: docRef, merge: false)
+    }
+
+    private func findPlanCourseDocument(asignatura: String, curso: String) async throws -> DocumentSnapshot? {
+        let subjectKey = Self.normalizedIdentity(asignatura)
+        let courseKey = Self.normalizedIdentity(curso)
+        for colRef in try userColCandidates(col: "planificaciones_curso") {
+            let snapshot = try await getDocuments(colRef)
+            if let document = snapshot.documents.first(where: { document in
+                let data = document.data()
+                guard let storedSubject = PlanificacionValue.string(data["asignatura"]),
+                      let storedCourse = PlanificacionValue.string(data["curso"]) else {
+                    return false
+                }
+                return Self.normalizedIdentity(storedSubject) == subjectKey &&
+                    Self.normalizedIdentity(storedCourse) == courseKey
+            }) {
+                return document
+            }
+        }
+        return nil
+    }
+
+    private func fallbackRoute(
+        for documentID: String,
+        cursos: [String],
+        asignaturas: [String]
+    ) -> (curso: String?, asignatura: String?) {
+        for asignatura in asignaturas {
+            for curso in cursos where Self.buildPlanCursoId(asignatura: asignatura, curso: curso) == documentID {
+                return (curso, asignatura)
+            }
+        }
+
+        guard documentID.hasPrefix("plan_") else { return (nil, nil) }
+        let cleanID = String(documentID.dropFirst(5))
+        for asignatura in asignaturas {
+            let subjectSlug = Self.normalizedIdentity(asignatura)
+            guard cleanID.hasPrefix(subjectSlug + "_") else { continue }
+            let courseSlug = String(cleanID.dropFirst(subjectSlug.count + 1))
+            if let curso = cursos.first(where: { Self.normalizedIdentity($0) == courseSlug }) {
+                return (curso, asignatura)
+            }
+        }
+        return (nil, nil)
+    }
+
+    private func mergePlans(_ plans: [PlanificacionCurso]) -> [PlanificacionCurso] {
+        var result: [PlanificacionCurso] = []
+        var indexes: [String: Int] = [:]
+        for plan in plans {
+            let key = "\(Self.normalizedIdentity(plan.asignatura))::\(Self.normalizedIdentity(plan.curso))"
+            if indexes[key] == nil {
+                // userColCandidates entrega primero el ámbito activo. La copia
+                // heredada solo completa cursos ausentes y nunca lo reemplaza.
+                indexes[key] = result.count
+                result.append(plan)
+            }
+        }
+        return result
+    }
+
+    private static func normalizedIdentity(_ value: String) -> String {
+        value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL"))
+            .lowercased()
+            .split { !$0.isLetter && !$0.isNumber }
+            .joined(separator: "_")
     }
 
     func cargarVerUnidad(asignatura: String, curso: String, unidadId: String) async throws -> VerUnidadGuardada? {
@@ -572,23 +623,55 @@ struct PlanificacionRepository {
     }
 
     func eliminarUnidadCompleta(asignatura: String, curso: String, unidadId: String) async throws {
-        let verUnidadId = Self.buildVerUnidadId(asignatura: asignatura, curso: curso, unidadId: unidadId)
-        let cronogramaId = Self.buildCronogramaUnidadId(asignatura: asignatura, curso: curso, unidadId: unidadId)
-        
-        let verUnidadRef = try userDoc(col: "ver_unidad", id: verUnidadId)
-        let cronogramaRef = try userDoc(col: "cronograma_unidad", id: cronogramaId)
-        
-        let crono = try? await cargarCronogramaUnidad(asignatura: asignatura, curso: curso, unidadId: unidadId)
-        let totalClases = max(crono?.totalClases ?? 0, crono?.clases.count ?? 0)
-        
-        try await deleteDocument(verUnidadRef)
-        try await deleteDocument(cronogramaRef)
-        
-        let count = max(totalClases, 30)
-        for n in 1...count {
-            let actId = Self.buildActividadClaseId(curso: curso, unidadId: unidadId, numeroClase: n, asignatura: asignatura)
-            if let actRef = try? userDoc(col: "actividades_clase", id: actId) {
-                try? await deleteDocument(actRef)
+        try await eliminarUnidadCompleta(
+            asignatura: asignatura,
+            curso: curso,
+            unidadIds: Self.unidadIdCandidates(raw: unidadId)
+        )
+    }
+
+    func eliminarUnidadCompleta(
+        asignatura: String,
+        curso: String,
+        unidadIds: [String]
+    ) async throws {
+        let candidates = Self.uniqueNonEmpty(
+            unidadIds.flatMap { Self.unidadIdCandidates(raw: $0) }
+        )
+        for unidadId in candidates {
+            let verUnidadId = Self.buildVerUnidadId(
+                asignatura: asignatura,
+                curso: curso,
+                unidadId: unidadId
+            )
+            let cronogramaId = Self.buildCronogramaUnidadId(
+                asignatura: asignatura,
+                curso: curso,
+                unidadId: unidadId
+            )
+            let verUnidadRef = try userDoc(col: "ver_unidad", id: verUnidadId)
+            let cronogramaRef = try userDoc(col: "cronograma_unidad", id: cronogramaId)
+            let crono = try? await cargarCronogramaUnidad(
+                asignatura: asignatura,
+                curso: curso,
+                unidadId: unidadId
+            )
+            let totalClases = max(crono?.totalClases ?? 0, crono?.clases.count ?? 0)
+
+            try await deleteDocument(verUnidadRef)
+            try await deleteDocument(cronogramaRef)
+
+            let count = max(totalClases, 30)
+            for n in 1...count {
+                let actId = Self.buildActividadClaseId(
+                    curso: curso,
+                    unidadId: unidadId,
+                    numeroClase: n,
+                    asignatura: asignatura
+                )
+                if let actRef = try? userDoc(col: "actividades_clase", id: actId) {
+                    try? await deleteDocument(actRef)
+                }
             }
         }
     }

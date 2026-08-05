@@ -69,7 +69,7 @@ struct CronogramaMesView: View {
 
     private var actividadesPorFecha: [String: [ActividadCronograma]] {
         var resultado: [String: [ActividadCronograma]] = [:]
-        for actividad in viewModel.actividadesFiltradas {
+        for actividad in viewModel.actividadesDelMes {
             let fecha = viewModel.fecha(de: actividad)
             resultado[DateHelpers.dateKey(for: fecha), default: []].append(actividad)
         }
@@ -77,7 +77,7 @@ struct CronogramaMesView: View {
     }
 
     private var diasDelMes: [Date?] {
-        let calendar = Calendar.current
+        let calendar = CronoDateHelpers.civilCalendar
         var comps = calendar.dateComponents([.year, .month], from: viewModel.currentDate)
         comps.day = 1
         guard let primerDia = calendar.date(from: comps),
@@ -99,7 +99,7 @@ struct CronogramaMesView: View {
     @ViewBuilder
     private func celda(_ date: Date?, porFecha: [String: [ActividadCronograma]]) -> some View {
         if let date {
-            let calendar = Calendar.current
+            let calendar = CronoDateHelpers.civilCalendar
             let esHoy = calendar.isDateInToday(date)
             let weekday = calendar.component(.weekday, from: date)
             let esFinDeSemana = weekday == 1 || weekday == 7

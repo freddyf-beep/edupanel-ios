@@ -32,11 +32,18 @@ struct VerUnidadClasesView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)
+                .tabBarPageBottomPadding()
             }
             .reportsTabBarScroll()
         }
         .background(Color(.systemGroupedBackground))
-        .onAppear(perform: normalizeSelectedClass)
+        .onAppear {
+            selectedClassNum = viewModel.selectedClassNumber
+            normalizeSelectedClass()
+        }
+        .onChange(of: selectedClassNum) { _, value in
+            viewModel.selectedClassNumber = value
+        }
         .onChange(of: classNumbers) { _, _ in normalizeSelectedClass() }
         .sheet(item: $presentedSheet) { destination in
             switch destination {

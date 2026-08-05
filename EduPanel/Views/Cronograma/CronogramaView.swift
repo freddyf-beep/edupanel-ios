@@ -9,7 +9,7 @@ struct CronogramaView: View {
 
     @Environment(\.displayMode) private var displayMode
 
-    private let tabs = [
+    private let allTabs = [
         EPWebTab(id: "semana", title: "Semana", icon: "square.grid.2x2"),
         EPWebTab(id: "mes", title: "Mes", icon: "square.grid.3x3"),
         EPWebTab(id: "dia", title: "Día", icon: "calendar.day.timeline.left"),
@@ -17,6 +17,10 @@ struct CronogramaView: View {
         EPWebTab(id: "gantt", title: "Gantt", icon: "chart.bar.doc.horizontal"),
         EPWebTab(id: "heatmap", title: "Heatmap", icon: "chart.bar.xaxis")
     ]
+
+    private var visibleTabs: [EPWebTab] {
+        displayMode.isSimple ? Array(allTabs.prefix(3)) : allTabs
+    }
 
     init(dashboardRepository: DashboardRepository, planificacionRepository: PlanificacionRepository) {
         self._viewModel = State(initialValue: CronogramaViewModel(
@@ -36,7 +40,7 @@ struct CronogramaView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
-            .padding(.bottom, 28)
+            .tabBarPageBottomPadding()
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Cronograma")
@@ -65,19 +69,28 @@ struct CronogramaView: View {
     private var contenido: some View {
         VStack(alignment: .leading, spacing: 16) {
             if let errorMessage = viewModel.errorMessage {
-                Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.orange)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                HStack(alignment: .top, spacing: 10) {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.orange)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if viewModel.hasUnsavedChanges {
+                        Button("Reintentar") {
+                            Task { await viewModel.guardarAhora() }
+                        }
+                        .font(.caption.weight(.black))
+                        .buttonStyle(.bordered)
+                        .disabled(viewModel.saveStatus == .saving)
+                    }
+                }
+                .padding(12)
+                .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
 
             heroCard
-            kpiGrid
-            filtrosSection
 
-            EPWebTabBar(tabs: tabs, selected: $selectedVista)
+            EPWebTabBar(tabs: visibleTabs, selected: $selectedVista)
 
             if viewModel.cursosDisponibles.isEmpty {
                 EPWebCard {
@@ -119,6 +132,11 @@ struct CronogramaView: View {
                 }
             }
         }
+        .onChange(of: displayMode) { _, mode in
+            if mode.isSimple, !visibleTabs.contains(where: { $0.id == selectedVista }) {
+                selectedVista = "semana"
+            }
+        }
     }
 
     // MARK: - Hero
@@ -141,6 +159,35 @@ struct CronogramaView: View {
             }
 
             HStack(spacing: 8) {
+                if viewModel.asignaturasDisponibles.count > 1 {
+                    Menu {
+                        ForEach(viewModel.asignaturasDisponibles, id: \.self) { subject in
+                            Button {
+                                Task { await viewModel.seleccionarAsignatura(subject) }
+                            } label: {
+                                Label(
+                                    subject,
+                                    systemImage: viewModel.asignatura == subject ? "checkmark" : "book.closed"
+                                )
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "book.fill")
+                            Text(viewModel.asignatura)
+                                .lineLimit(1)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 9, weight: .black))
+                        }
+                        .font(.system(size: 12, weight: .black))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 11)
+                        .frame(minHeight: 44)
+                        .background(.white.opacity(0.18), in: Capsule())
+                    }
+                    .accessibilityLabel("Asignatura del cronograma")
+                }
+
                 Menu {
                     Button {
                         Task { await viewModel.seleccionarCurso("__todos__") }
@@ -165,7 +212,7 @@ struct CronogramaView: View {
                     .font(.system(size: 12, weight: .black))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 11)
-                    .padding(.vertical, 8)
+                    .frame(minHeight: 44)
                     .background(.white.opacity(0.18), in: Capsule())
                 }
 
@@ -186,7 +233,7 @@ struct CronogramaView: View {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 11, weight: .black))
                             .foregroundStyle(.white)
-                            .frame(width: 28, height: 28)
+                            .frame(width: 44, height: 44)
                     }
                     Text(CronoDateHelpers.etiquetaSemana(viewModel.lunesActual))
                         .font(.system(size: 12, weight: .black))
@@ -199,7 +246,7 @@ struct CronogramaView: View {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 11, weight: .black))
                             .foregroundStyle(.white)
-                            .frame(width: 28, height: 28)
+                            .frame(width: 44, height: 44)
                     }
                 }
                 .background(.white.opacity(0.18), in: Capsule())
@@ -213,7 +260,7 @@ struct CronogramaView: View {
                         .font(.system(size: 12, weight: .black))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
+                        .frame(minHeight: 44)
                         .background(.white.opacity(0.18), in: Capsule())
                 }
 
@@ -232,159 +279,9 @@ struct CronogramaView: View {
         .shadow(color: .blue.opacity(0.25), radius: 14, y: 7)
     }
 
-    // MARK: - KPIs
 
-    private var kpiGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-            EPKPIBox(title: "Actividades", value: "\(viewModel.actividadesFiltradas.count)", subtitle: "totales", icon: "sparkles", tint: .blue)
-            EPKPIBox(title: "Unidades", value: "\(viewModel.unidadesConActividades)", subtitle: "con actividades", icon: "square.stack.3d.up.fill", tint: .purple)
-            if !displayMode.isSimple {
-                EPKPIBox(title: "Cursos", value: "\(viewModel.cursosDisponibles.count)", subtitle: "en horario", icon: "folder.fill", tint: EPTheme.primary)
-                EPKPIBox(title: "Semana", value: "\(viewModel.semanaActual)", subtitle: CronoDateHelpers.tituloMes(viewModel.currentDate), icon: "calendar", tint: .cyan)
-            }
-        }
-    }
 
-    // MARK: - Filtros
 
-    private var filtrosSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if displayMode.isSimple {
-                Button {
-                    withAnimation(EPTheme.spring) {
-                        filtrosVisibles.toggle()
-                    }
-                } label: {
-                    HStack {
-                        Label("Filtros", systemImage: "slider.horizontal.3")
-                            .font(.footnote.weight(.black))
-                            .foregroundStyle(EPTheme.primary)
-                        Spacer()
-                        if viewModel.hayFiltrosActivos {
-                            Text("\(viewModel.filtroCursos.count + viewModel.filtroUnidades.count) activos")
-                                .font(.caption2.weight(.black))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(EPTheme.primary, in: Capsule())
-                        } else {
-                            Image(systemName: filtrosVisibles ? "chevron.up" : "chevron.down")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(12)
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-                .buttonStyle(.plain)
-
-                if filtrosVisibles {
-                    filtrosCard
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-            } else {
-                filtrosCard
-            }
-        }
-    }
-
-    private var filtrosCard: some View {
-        EPWebCard(padding: 12) {
-            VStack(alignment: .leading, spacing: 12) {
-                if viewModel.cursoSeleccionado == "__todos__" {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("CURSO")
-                            .font(.system(size: 10, weight: .black))
-                            .foregroundStyle(.secondary)
-                        ReplicaFlowLayout(spacing: 8) {
-                            ForEach(viewModel.cursosDisponibles, id: \.self) { curso in
-                                filtroChip(
-                                    titulo: curso,
-                                    colorHex: nil,
-                                    seleccionado: viewModel.filtroCursos.contains(curso)
-                                ) {
-                                    if viewModel.filtroCursos.contains(curso) {
-                                        viewModel.filtroCursos.remove(curso)
-                                    } else {
-                                        viewModel.filtroCursos.insert(curso)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("UNIDAD")
-                        .font(.system(size: 10, weight: .black))
-                        .foregroundStyle(.secondary)
-                    if viewModel.unidades.isEmpty {
-                        Text("No hay unidades planificadas en este curso.")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ReplicaFlowLayout(spacing: 8) {
-                            ForEach(viewModel.unidades) { unidad in
-                                filtroChip(
-                                    titulo: unidad.nombre,
-                                    colorHex: unidad.colorHex,
-                                    seleccionado: viewModel.filtroUnidades.contains(unidad.unidadId)
-                                ) {
-                                    if viewModel.filtroUnidades.contains(unidad.unidadId) {
-                                        viewModel.filtroUnidades.remove(unidad.unidadId)
-                                    } else {
-                                        viewModel.filtroUnidades.insert(unidad.unidadId)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if viewModel.hayFiltrosActivos {
-                    Button {
-                        withAnimation(EPTheme.spring) {
-                            viewModel.filtroCursos.removeAll()
-                            viewModel.filtroUnidades.removeAll()
-                        }
-                    } label: {
-                        Label("Limpiar todo", systemImage: "xmark.circle.fill")
-                            .font(.caption.weight(.black))
-                            .foregroundStyle(EPTheme.primary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-
-    private func filtroChip(titulo: String, colorHex: String?, seleccionado: Bool, accion: @escaping () -> Void) -> some View {
-        Button {
-            withAnimation(EPTheme.spring) {
-                accion()
-            }
-        } label: {
-            HStack(spacing: 5) {
-                if seleccionado {
-                    Image(systemName: "checkmark")
-                        .font(.caption2.weight(.black))
-                }
-                if let colorHex {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(seleccionado ? Color.white : EPTheme.color(hex: colorHex))
-                        .frame(width: 8, height: 8)
-                }
-                Text(titulo)
-                    .font(.caption.weight(.black))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(seleccionado ? .white : EPTheme.primary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(seleccionado ? EPTheme.primary : EPTheme.primary.opacity(0.1), in: Capsule())
-        }
-        .buttonStyle(.plain)
-    }
 }
 
 // MARK: - Editor de actividad
@@ -402,6 +299,7 @@ struct ActividadEditorSheet: View {
     @State private var unidadId = ""
     @State private var cursoOrigen = ""
     @State private var confirmandoEliminar = false
+    @State private var errorMessage: String?
 
     private var esNueva: Bool {
         !viewModel.actividades.contains { $0.id == actividad.id }
@@ -412,6 +310,10 @@ struct ActividadEditorSheet: View {
             return viewModel.unidades.filter { $0.curso == cursoOrigen }
         }
         return viewModel.unidades
+    }
+
+    private var maxWeek: Int {
+        CronoDateHelpers.numeroSemanasISO(en: actividad.anioISO)
     }
 
     var body: some View {
@@ -425,7 +327,7 @@ struct ActividadEditorSheet: View {
                             Text("Curso")
                                 .profileFieldLabel()
                             Picker("Curso", selection: $cursoOrigen) {
-                                ForEach(viewModel.cursosDisponibles, id: \.self) { curso in
+                                ForEach(viewModel.cursosEditables, id: \.self) { curso in
                                     Text(curso).tag(curso)
                                 }
                             }
@@ -441,7 +343,7 @@ struct ActividadEditorSheet: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Semana ISO")
                                 .profileFieldLabel()
-                            Stepper("Semana \(semana)", value: $semana, in: 1...53)
+                            Stepper("Semana \(semana)", value: $semana, in: 1...maxWeek)
                                 .font(.footnote.weight(.bold))
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
@@ -467,6 +369,12 @@ struct ActividadEditorSheet: View {
                     }
 
                     ProfileTextField(title: "Duración", placeholder: "Ej. 45 min", text: $duracion)
+
+                    if let errorMessage {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.red)
+                    }
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Unidad")
@@ -515,8 +423,11 @@ struct ActividadEditorSheet: View {
             }
             .confirmationDialog("¿Eliminar esta actividad?", isPresented: $confirmandoEliminar, titleVisibility: .visible) {
                 Button("Eliminar", role: .destructive) {
-                    viewModel.eliminar(id: actividad.id)
-                    dismiss()
+                    if viewModel.eliminar(id: actividad.id) {
+                        dismiss()
+                    } else {
+                        errorMessage = viewModel.errorMessage ?? "No se pudo eliminar la actividad."
+                    }
                 }
                 Button("Cancelar", role: .cancel) {}
             }
@@ -524,7 +435,7 @@ struct ActividadEditorSheet: View {
         .presentationDetents([.large])
         .onAppear {
             nombre = actividad.nombre
-            semana = actividad.semana
+            semana = max(1, min(maxWeek, actividad.semana))
             dia = actividad.dia
             hora = actividad.hora
             duracion = actividad.duracion
@@ -543,7 +454,10 @@ struct ActividadEditorSheet: View {
         copia.unidad = unidadId
         copia.color = viewModel.colorUnidad(unidadId)
         copia.cursoOrigen = viewModel.cursoSeleccionado == "__todos__" ? cursoOrigen : nil
-        viewModel.upsert(copia)
-        dismiss()
+        if viewModel.upsert(copia) {
+            dismiss()
+        } else {
+            errorMessage = viewModel.errorMessage ?? "No se pudo guardar la actividad."
+        }
     }
 }

@@ -47,7 +47,7 @@ struct ListaEvaluacionView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
-            .padding(.bottom, 24)
+            .tabBarPageBottomPadding()
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Evaluar lista")
@@ -64,6 +64,8 @@ struct ListaEvaluacionView: View {
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(bloqueada ? .orange : EPTheme.primary)
                 }
+                .accessibilityLabel(bloqueada ? "Desbloquear evaluación" : "Finalizar y bloquear evaluación")
+                .accessibilityHint(bloqueada ? "Permite seguir editando los registros." : "Deja la evaluación en modo solo lectura.")
             }
         }
         .confirmationDialog(
@@ -572,7 +574,8 @@ struct ListaEvaluacionView: View {
             lista = listaCargada
 
             let snapshot = try await dashboardRepository.fetchDashboard()
-            let alumnos = (snapshot.studentsByCourse[listaCargada.curso] ?? []).sorted { $0.orden < $1.orden }
+            let alumnos = snapshot.students(forCourseID: nil, name: listaCargada.curso)
+                .sorted { $0.orden < $1.orden }
 
             var evaluacionActual = try await repository.cargarEvaluacionLista(listaId: listaId)
                 ?? .nueva(lista: listaCargada, estudiantes: [])

@@ -38,7 +38,7 @@ struct RubricaEvaluacionView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
-            .padding(.bottom, 24)
+            .tabBarPageBottomPadding()
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Evaluar r\u{00FA}brica")
@@ -55,6 +55,8 @@ struct RubricaEvaluacionView: View {
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(bloqueada ? .orange : EPTheme.primary)
                 }
+                .accessibilityLabel(bloqueada ? "Desbloquear evaluación" : "Finalizar y bloquear evaluación")
+                .accessibilityHint(bloqueada ? "Permite seguir editando los registros." : "Deja la evaluación en modo solo lectura.")
             }
         }
         .confirmationDialog(
@@ -481,7 +483,8 @@ struct RubricaEvaluacionView: View {
             rubrica = rubricaCargada
 
             let snapshot = try await dashboardRepository.fetchDashboard()
-            let alumnos = (snapshot.studentsByCourse[rubricaCargada.curso] ?? []).sorted { $0.orden < $1.orden }
+            let alumnos = snapshot.students(forCourseID: nil, name: rubricaCargada.curso)
+                .sorted { $0.orden < $1.orden }
 
             var evaluacionActual = try await repository.cargarEvaluacionRubrica(rubricaId: rubricaId)
                 ?? .nueva(rubrica: rubricaCargada)

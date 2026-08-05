@@ -4,18 +4,22 @@ struct SettingsView: View {
     let user: AuthenticatedUser
     let repository: DashboardRepository
 
+    @Environment(\.displayMode) private var displayMode
+
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
                 SettingsAppearanceSection()
-                SettingsTabBarSection()
+                if !displayMode.isSimple {
+                    SettingsTabBarSection()
+                }
                 SettingsAccountSection(user: user)
                 SettingsDataSection(repository: repository)
                 SettingsInfoSection()
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
-            .padding(.bottom, 28)
+            .tabBarPageBottomPadding()
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Configuración")
@@ -35,17 +39,17 @@ struct SettingsRow<Trailing: View>: View {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(tint)
-                .frame(width: 30, height: 30)
-                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .frame(width: 44, height: 44)
+                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.footnote.weight(.bold))
+                    .font(.body.weight(.bold))
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.caption.weight(.medium))
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
@@ -54,6 +58,7 @@ struct SettingsRow<Trailing: View>: View {
             trailing
         }
         .padding(11)
+        .frame(minHeight: 44)
         .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }

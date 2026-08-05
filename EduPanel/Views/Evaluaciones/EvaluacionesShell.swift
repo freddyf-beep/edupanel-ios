@@ -10,13 +10,15 @@ struct EvaluacionesShell: View {
 
     init(
         dashboardRepository: DashboardRepository,
-        evaluacionesRepository: EvaluacionesRepository = EvaluacionesRepository()
+        evaluacionesRepository: EvaluacionesRepository = EvaluacionesRepository(),
+        apiClient: APIClient? = nil
     ) {
         self.dashboardRepository = dashboardRepository
         self.evaluacionesRepository = evaluacionesRepository
         _viewModel = State(initialValue: EvaluacionesViewModel(
             dashboardRepository: dashboardRepository,
-            evaluacionesRepository: evaluacionesRepository
+            evaluacionesRepository: evaluacionesRepository,
+            apiClient: apiClient
         ))
     }
 
@@ -33,6 +35,9 @@ struct EvaluacionesShell: View {
                 header
 
                 selectorCurso
+
+                Text("Elige cómo evaluar")
+                    .font(.headline.weight(.black))
 
                 EvaluacionesInstrumentSwitcher(tabs: tabs, selected: $selectedTab)
 
@@ -67,7 +72,7 @@ struct EvaluacionesShell: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
-            .padding(.bottom, 24)
+            .tabBarPageBottomPadding()
         }
         .reportsTabBarScroll()
         .background(EPTheme.background)
@@ -79,15 +84,24 @@ struct EvaluacionesShell: View {
         }
         .onAppear {
             guard hasLoaded, !viewModel.isLoading else { return }
-            Task { await viewModel.loadContenido() }
+            Task {
+                async let classicContent: Void = viewModel.loadContenido()
+                async let newEngineContent: Void = viewModel.refreshExamForge()
+                _ = await (classicContent, newEngineContent)
+            }
+        }
+        .refreshable {
+            async let classicContent: Void = viewModel.loadContenido()
+            async let newEngineContent: Void = viewModel.refreshExamForge()
+            _ = await (classicContent, newEngineContent)
         }
     }
 
     private var header: some View {
         EPPageHeader(
             eyebrow: "Evaluaciones",
-            title: "Todo lo que necesitas para evaluar",
-            subtitle: "Elige un instrumento y continúa exactamente donde lo dejaste.",
+            title: "Evaluar con claridad",
+            subtitle: "Primero elige el curso. Después abre el instrumento que necesitas preparar o aplicar.",
             icon: "checkmark.seal.fill"
         )
     }
@@ -95,36 +109,77 @@ struct EvaluacionesShell: View {
     @ViewBuilder
     private var selectorCurso: some View {
         if !viewModel.cursos.isEmpty {
-            HStack(spacing: 10) {
-                EvaluacionesCursoPicker(
-                    cursos: viewModel.cursos,
-                    seleccionado: Binding(
-                        get: { viewModel.selectedCurso },
-                        set: { nuevo in
-                            Task { await viewModel.seleccionarCurso(nuevo) }
-                        }
+            EPWebCard(padding: 14) {
+                VStack(alignment: .leading, spacing: 12) {
+                    EPSectionHeader(
+                        title: "Contexto de trabajo",
+                        subtitle: "Todo lo que veas abajo corresponde a esta selección.",
+                        icon: "person.text.rectangle.fill"
                     )
-                )
 
-                Menu {
-                    ForEach(viewModel.availableSubjects, id: \.self) { subject in
-                        Button {
-                            Task { await viewModel.seleccionarAsignatura(subject) }
-                        } label: {
-                            if subject == viewModel.activeSubject {
-                                Label(subject, systemImage: "checkmark")
-                            } else {
-                                Text(subject)
-                            }
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 10) {
+                            coursePicker
+                            subjectPicker
+                        }
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            coursePicker
+                            subjectPicker
                         }
                     }
-                } label: {
-                    EPStatusPill(text: viewModel.activeSubject, icon: "book.closed.fill")
-                }
 
-                Spacer()
+                    if viewModel.isLoadingContenido {
+                        Label("Actualizando instrumentos…", systemImage: "arrow.triangle.2.circlepath")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
+    }
+
+    private var coursePicker: some View {
+        EvaluacionesCursoPicker(
+            cursos: viewModel.cursos,
+            seleccionado: Binding(
+                get: { viewModel.selectedCurso },
+                set: { nuevo in
+                    Task { await viewModel.seleccionarCurso(nuevo) }
+                }
+            )
+        )
+    }
+
+    private var subjectPicker: some View {
+        Menu {
+            ForEach(viewModel.availableSubjects, id: \.self) { subject in
+                Button {
+                    Task { await viewModel.seleccionarAsignatura(subject) }
+                } label: {
+                    if subject == viewModel.activeSubject {
+                        Label(subject, systemImage: "checkmark")
+                    } else {
+                        Text(subject)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: "book.closed.fill")
+                Text(viewModel.activeSubject)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.black))
+            }
+            .font(.subheadline.weight(.bold))
+            .foregroundStyle(EPTheme.primary)
+            .padding(.horizontal, 13)
+            .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
+            .background(EPTheme.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .accessibilityLabel("Asignatura: \(viewModel.activeSubject)")
     }
 }
 
@@ -133,47 +188,81 @@ private struct EvaluacionesInstrumentSwitcher: View {
     @Binding var selected: String
 
     var body: some View {
-        HStack(spacing: 8) {
-            ForEach(tabs) { tab in
-                let isSelected = selected == tab.id
-                Button {
-                    withAnimation(EPTheme.spring) {
-                        selected = tab.id
-                    }
-                } label: {
-                    VStack(spacing: 9) {
-                        Image(systemName: tab.icon)
-                            .font(.system(size: 18, weight: .bold))
-                            .symbolVariant(isSelected ? .fill : .none)
-                            .frame(width: 38, height: 38)
-                            .background(
-                                isSelected ? AnyShapeStyle(.white.opacity(0.18)) : AnyShapeStyle(EPTheme.subtle),
-                                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            )
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(tabs) { tab in
+                        let isSelected = selected == tab.id
+                        Button {
+                            withAnimation(EPTheme.spring) {
+                                selected = tab.id
+                            }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: tab.icon)
+                                    .font(.system(size: 19, weight: .bold))
+                                    .symbolVariant(isSelected ? .fill : .none)
+                                    .frame(width: 42, height: 42)
+                                    .background(
+                                        isSelected ? Color.white.opacity(0.18) : EPTheme.subtle,
+                                        in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                    )
 
-                        Text(tab.title)
-                            .font(.system(size: 10, weight: .black))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(tab.title)
+                                        .font(.subheadline.weight(.black))
+                                    Text(description(for: tab.id))
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(isSelected ? .white.opacity(0.82) : .secondary)
+                                        .lineLimit(2)
+                                }
+
+                                Spacer(minLength: 0)
+
+                                if isSelected {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.body.weight(.bold))
+                                }
+                            }
+                        }
+                        .foregroundStyle(isSelected ? .white : .primary)
+                        .frame(width: 210, alignment: .leading)
+                        .frame(minHeight: 72, alignment: .leading)
+                        .padding(12)
+                        .background(
+                            isSelected ? EPTheme.primary : EPTheme.card,
+                            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(isSelected ? Color.clear : EPTheme.border, lineWidth: 0.75)
+                        }
+                        .shadow(color: isSelected ? EPTheme.primary.opacity(0.18) : .clear, radius: 10, y: 5)
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
+                        .id(tab.id)
                     }
-                    .foregroundStyle(isSelected ? .white : .secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(
-                        isSelected ? AnyShapeStyle(EPTheme.primary) : AnyShapeStyle(EPTheme.card),
-                        in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(isSelected ? Color.clear : EPTheme.border, lineWidth: 0.75)
-                    }
-                    .shadow(color: isSelected ? EPTheme.primary.opacity(0.2) : .clear, radius: 10, y: 5)
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+            // A selected instrument must be brought fully into view. Without this,
+            // switching after a horizontal swipe leaves the previous card clipped.
+            .onChange(of: selected) { _, newValue in
+                withAnimation(EPTheme.spring) {
+                    proxy.scrollTo(newValue, anchor: .center)
+                }
             }
         }
         .sensoryFeedback(.selection, trigger: selected)
+    }
+
+    private func description(for id: String) -> String {
+        switch id {
+        case "pruebas": return "Preparar y corregir"
+        case "guias": return "Practicar y acompañar"
+        case "rubricas": return "Valorar desempeño"
+        case "listas": return "Observar criterios"
+        default: return "Abrir instrumentos"
+        }
     }
 }
 
@@ -242,9 +331,10 @@ struct EvaluacionesCursoPicker: View {
             }
             .foregroundStyle(EPTheme.primary)
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(EPTheme.primary.opacity(0.1), in: Capsule())
+            .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
+            .background(EPTheme.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
+        .accessibilityLabel("Curso: \(seleccionado)")
     }
 }
 

@@ -9,6 +9,8 @@ struct RubricaEditorView: View {
     @State private var rubrica: RubricaTemplate?
     @State private var cursos: [String] = []
     @State private var nivelMapping: [String: String] = [:]
+    @State private var subjectLevelMapping: [String: [String: String]] = [:]
+    @State private var courseLevels: [String: String] = [:]
     @State private var isLoading = true
     @State private var isSaving = false
     @State private var saveOk = false
@@ -29,7 +31,7 @@ struct RubricaEditorView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
-            .padding(.bottom, 24)
+            .tabBarPageBottomPadding()
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle(rubricaId == nil ? "Nueva r\u{00FA}brica" : "Editar r\u{00FA}brica")
@@ -80,7 +82,13 @@ struct RubricaEditorView: View {
                         cursos: cursos,
                         seleccionado: Binding(
                             get: { rubrica?.curso ?? "" },
-                            set: { rubrica?.curso = $0 }
+                            set: { value in
+                                guard value != rubrica?.curso else { return }
+                                rubrica?.curso = value
+                                rubrica?.unidadId = nil
+                                rubrica?.unidadNombre = nil
+                                rubrica?.oas = []
+                            }
                         )
                     )
                 }
@@ -119,6 +127,8 @@ struct RubricaEditorView: View {
                 asignatura: actual.asignatura,
                 curso: actual.curso,
                 nivelMapping: nivelMapping,
+                subjectLevelMapping: subjectLevelMapping,
+                catalogLevel: courseLevels[actual.curso],
                 unidadId: Binding(get: { rubrica?.unidadId }, set: { rubrica?.unidadId = $0 }),
                 unidadNombre: Binding(get: { rubrica?.unidadNombre }, set: { rubrica?.unidadNombre = $0 }),
                 oas: Binding(get: { rubrica?.oas }, set: { rubrica?.oas = $0 })
@@ -341,6 +351,14 @@ struct RubricaEditorView: View {
             let snapshot = try await dashboardRepository.fetchDashboard()
             cursos = snapshot.courses
             nivelMapping = snapshot.nivelMapping
+            subjectLevelMapping = snapshot.subjectLevelMapping
+            courseLevels = Dictionary(
+                snapshot.activeCourses.compactMap { course in
+                    guard let level = course.level, !level.isEmpty else { return nil }
+                    return (course.name, level)
+                },
+                uniquingKeysWith: { current, _ in current }
+            )
 
             if let rubricaId {
                 guard let existente = try await repository.cargarRubrica(id: rubricaId) else {

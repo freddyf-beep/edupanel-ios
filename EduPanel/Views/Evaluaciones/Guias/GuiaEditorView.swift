@@ -22,6 +22,8 @@ struct GuiaEditorView: View {
     @State private var errorMessage: String?
     @State private var showDiscardConfirmation = false
     @State private var nivelMapping: [String: String] = [:]
+    @State private var subjectLevelMapping: [String: [String: String]] = [:]
+    @State private var courseLevels: [String: String] = [:]
     @State private var school: InfoColegio = .empty
     @State private var sourceGuide: GuiaTemplate?
     @State private var exportArtifact: GuiaPDFArtifact?
@@ -80,6 +82,8 @@ struct GuiaEditorView: View {
                         asignatura: draft.asignatura,
                         curso: draft.curso,
                         nivelMapping: nivelMapping,
+                        subjectLevelMapping: subjectLevelMapping,
+                        catalogLevel: courseLevels[draft.curso],
                         unidadId: optionalStringBinding(\.unidadId),
                         unidadNombre: optionalStringBinding(\.unidadNombre),
                         oas: $draft.oas
@@ -214,13 +218,37 @@ struct GuiaEditorView: View {
                 field("Número", placeholder: "Guía N° 1", text: $draft.numeroGuia)
                 field("Docente", placeholder: "Nombre docente", text: $draft.docenteNombre)
             }
-            field("Asignatura", placeholder: "Asignatura", text: $draft.asignatura)
-            field("Curso", placeholder: "Curso", text: $draft.curso)
-            HStack(alignment: .top, spacing: 10) {
-                field("ID unidad", placeholder: "unidad_1", text: $draft.unidadId)
-                field("Unidad", placeholder: "Unidad 1", text: $draft.unidadNombre)
-            }
+            field("Asignatura", placeholder: "Asignatura", text: subjectBinding)
+            field("Curso", placeholder: "Curso", text: courseBinding)
         }
+    }
+
+    private var courseBinding: Binding<String> {
+        Binding(
+            get: { draft.curso },
+            set: { value in
+                guard value != draft.curso else { return }
+                draft.curso = value
+                clearCurriculumSelection()
+            }
+        )
+    }
+
+    private var subjectBinding: Binding<String> {
+        Binding(
+            get: { draft.asignatura },
+            set: { value in
+                guard value != draft.asignatura else { return }
+                draft.asignatura = value
+                clearCurriculumSelection()
+            }
+        )
+    }
+
+    private func clearCurriculumSelection() {
+        draft.unidadId = ""
+        draft.unidadNombre = ""
+        draft.oas = []
     }
 
     private var teachingCard: some View {
@@ -364,6 +392,14 @@ struct GuiaEditorView: View {
             if let snapshot = try? await dashboardRepository.fetchDashboard() {
                 guard !Task.isCancelled else { return }
                 nivelMapping = snapshot.nivelMapping
+                subjectLevelMapping = snapshot.subjectLevelMapping
+                courseLevels = Dictionary(
+                    snapshot.activeCourses.compactMap { course in
+                        guard let level = course.level, !level.isEmpty else { return nil }
+                        return (course.name, level)
+                    },
+                    uniquingKeysWith: { current, _ in current }
+                )
             }
 
             if let exportSchool = try? await dashboardRepository.fetchExportSchool(scope: scope) {

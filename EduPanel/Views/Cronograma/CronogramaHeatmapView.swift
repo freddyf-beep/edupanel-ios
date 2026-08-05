@@ -86,7 +86,7 @@ struct CronogramaHeatmapView: View {
 
     private var conteoPorFecha: [String: Int] {
         var resultado: [String: Int] = [:]
-        for actividad in viewModel.actividadesFiltradas {
+        for actividad in viewModel.actividadesDelMes {
             let fecha = viewModel.fecha(de: actividad)
             resultado[DateHelpers.dateKey(for: fecha), default: 0] += 1
         }
@@ -94,7 +94,7 @@ struct CronogramaHeatmapView: View {
     }
 
     private var diasDelMes: [Date?] {
-        let calendar = Calendar.current
+        let calendar = CronoDateHelpers.civilCalendar
         var comps = calendar.dateComponents([.year, .month], from: viewModel.currentDate)
         comps.day = 1
         guard let primerDia = calendar.date(from: comps),
@@ -123,7 +123,7 @@ struct CronogramaHeatmapView: View {
                 : AnyShapeStyle(EPTheme.primary.opacity(0.15 + intensidad * 0.85))
 
             VStack {
-                Text("\(Calendar.current.component(.day, from: date))")
+                Text("\(CronoDateHelpers.civilCalendar.component(.day, from: date))")
                     .font(.system(size: 10, weight: .black))
                     .foregroundStyle(intensidad > 0.55 ? .white : .primary)
                 Spacer(minLength: 0)

@@ -172,7 +172,7 @@ struct AttendanceView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
-            .padding(.bottom, 18)
+            .tabBarPageBottomPadding()
         }
         .refreshable { await model.refresh() }
     }

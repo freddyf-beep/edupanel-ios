@@ -21,6 +21,9 @@ La app debe mostrarlas como **Próximamente**, sin navegaciones o acciones ficti
 
 ## Incluido en el cierre
 
+> La lista siguiente describe el motor **legacy Firestore**. No debe
+> interpretarse como soporte de edición o exportación para ExamForge.
+
 ### Pruebas
 
 - Hub, detalle, CRUD, duplicación y editor de los siete tipos.
@@ -49,7 +52,7 @@ La app debe mostrarlas como **Próximamente**, sin navegaciones o acciones ficti
 - Verificar PDF/DOCX, impresión, PhotosPicker y Firebase Storage.
 - Confirmar el IPA y el flujo completo de navegación.
 
-## Estado del cierre en Windows
+## Estado previo del cierre en Windows
 
 Implementado en código y sincronizado con el proyecto Xcode:
 
@@ -62,6 +65,25 @@ Implementado en código y sincronizado con el proyecto Xcode:
 - Limpieza post-guardado de medios propios reemplazados que ya no están referenciados.
 - Las cuatro funciones excluidas aparecen como **Próximamente** y no navegan a flujos falsos.
 
-La compilación y la prueba de SDK real quedan conscientemente diferidas porque este
-entorno Windows no dispone de Swift, Xcode ni Simulator. La secuencia exacta está en
-`docs/MAC_PRUEBAS_GUIAS_CHECKLIST.md`.
+La validación que originalmente quedó diferida en Windows se ejecutó después en
+macOS; el estado vigente y las limitaciones reales se describen a continuación y
+en `docs/UI_AUDIT_2026-08-03.md`.
+
+## Actualización iOS — motor ExamForge
+
+La app incorpora compatibilidad de lectura con el contrato vigente del backend:
+
+- consulta disponibilidad y documentos con Firebase ID Token;
+- separa pruebas y guías mediante el contexto de integración;
+- filtra por curso, unidad, tipo, estado y búsqueda;
+- abre el detalle en iPhone y representa encabezado, pie, texto enriquecido,
+  secciones, numeración de preguntas, alternativas, justificación, rúbrica,
+  imágenes autenticadas, separadores y espacios de respuesta;
+- respeta curso, asignatura y unidad del contexto al filtrar;
+- conserva una advertencia visible para bloques futuros no soportados;
+- si el motor o la red no están disponibles, mantiene visibles los documentos
+  legacy y ofrece reintento.
+
+La edición y exportación ExamForge quedan deliberadamente pendientes porque el
+motor aún está evolucionando. No se muestran como capacidades terminadas y no
+bloquean la lectura de documentos ya creados.

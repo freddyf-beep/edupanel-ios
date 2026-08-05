@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 enum AttendanceStatus: Equatable, Hashable, Sendable {
@@ -221,9 +222,71 @@ struct AttendanceBlock: Identifiable, Equatable, Hashable, Sendable {
     var reopenedAt: String?
     var reopenedByUID: String?
     var reopeningReason: String?
+    /// Identificadores estables de notas de voz ya aplicadas. Se persisten con
+    /// el bloque para que un reintento, una reapertura o una recarga no vuelva
+    /// a anexar el mismo contenido al leccionario.
+    var voiceNoteIDs: [String] = []
+    /// Huellas SHA-256 por UUID de nota de voz. La pareja UUID+huella permite
+    /// detectar un reintento seguro y rechazar un UUID reutilizado con texto
+    /// diferente sin alterar el registro docente.
+    var voiceNoteHashes: [String: String] = [:]
+    /// Contexto estructurado de una nota por UUID. Se mantiene fuera del texto
+    /// del leccionario para que el cliente pueda presentarlo o exportarlo sin
+    /// volver a inferir datos desde una cadena libre.
+    var voiceNoteMetadata: [String: AttendanceVoiceNoteMetadata] = [:]
 
     var timeRange: String {
         "\(String(startTime.prefix(5)))–\(String(endTime.prefix(5)))"
+    }
+}
+
+struct AttendanceVoiceNoteMetadata: Equatable, Hashable, Sendable {
+    var observationScope: String
+    var studentIDs: [String]
+    var topic: String?
+    var observationType: String?
+    var outcome: String?
+    var nextStep: String?
+    var summary: String?
+
+    init(
+        observationScope: String = "general",
+        studentIDs: [String] = [],
+        topic: String? = nil,
+        observationType: String? = nil,
+        outcome: String? = nil,
+        nextStep: String? = nil,
+        summary: String? = nil
+    ) {
+        self.observationScope = observationScope
+        self.studentIDs = studentIDs
+        self.topic = topic
+        self.observationType = observationType
+        self.outcome = outcome
+        self.nextStep = nextStep
+        self.summary = summary
+    }
+}
+
+enum AttendanceVoiceNoteAppendResult: Equatable, Sendable {
+    case appended
+    case metadataUpdated
+    case duplicate
+    case contentChanged
+    case signedBlock
+    case unavailableBlock
+    case emptyContent
+}
+
+enum AttendanceVoiceNoteIdentity {
+    static func id(for noteID: UUID) -> String {
+        noteID.uuidString.lowercased()
+    }
+
+    static func contentHash(for content: String) -> String {
+        SHA256.hash(data: Data(content.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
     }
 }
 
@@ -270,6 +333,28 @@ struct AttendanceScheduleBlock: Identifiable, Equatable, Hashable, Sendable {
     let startTime: String
     let endTime: String
     let isFree: Bool
+    let courseID: String?
+    let subjectID: String?
+
+    init(
+        id: String,
+        course: String,
+        weekday: String,
+        startTime: String,
+        endTime: String,
+        isFree: Bool,
+        courseID: String? = nil,
+        subjectID: String? = nil
+    ) {
+        self.id = id
+        self.course = course
+        self.weekday = weekday
+        self.startTime = startTime
+        self.endTime = endTime
+        self.isFree = isFree
+        self.courseID = courseID
+        self.subjectID = subjectID
+    }
 }
 
 struct AttendanceRosterStudent: Identifiable, Equatable, Hashable, Sendable {

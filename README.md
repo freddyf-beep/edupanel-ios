@@ -1,6 +1,6 @@
 # EduPanel iOS
 
-App iOS nativa en SwiftUI para replicar gradualmente la experiencia docente de EduPanel.
+App iOS nativa en SwiftUI para llevar los flujos docentes de EduPanel a una experiencia diseñada para iPhone.
 
 ## Estado
 
@@ -17,19 +17,23 @@ Antes de compilar en Xcode:
 1. Crea una app iOS en Firebase con bundle id `cl.edupanel.app`.
 2. Descarga `GoogleService-Info.plist`.
 3. Agrega ese archivo a `EduPanel/Resources/` con target membership `EduPanel`.
-4. Para desarrollo local, `Config/Shared.xcconfig` apunta al backend en
+4. Para desarrollo local en Simulator, `Config/Debug.xcconfig` apunta al backend en
    `http://127.0.0.1:3000` y contiene el `REVERSED_CLIENT_ID` de esta app de
-   Firebase. Inicia el proyecto web vecino con `npm run dev` antes de probar
+   Firebase mediante `Shared.xcconfig`. Inicia el proyecto web vecino con `npm run dev` antes de probar
    funciones que llamen a la API.
 
-Los builds de CI/TestFlight sobrescriben `EDUPANEL_API_BASE_URL` con la URL de
-produccion, por lo que la configuracion local no afecta la distribucion.
+`Config/Release.xcconfig` deja `EDUPANEL_API_BASE_URL` vacío a propósito. Los
+builds de CI/TestFlight deben sobrescribirla con una URL HTTPS de producción;
+así nunca se distribuye `localhost` por accidente.
 
 `GoogleService-Info.plist` queda ignorado por git para evitar subir credenciales de cliente.
 
 ## Desarrollo en Windows
 
 Puedes editar todo el codigo SwiftUI desde Windows. Para compilar, firmar e instalar en un iPhone real sigue siendo necesario Xcode/macOS o un servicio cloud con macOS. No existe un Simulator iOS oficial local para Windows.
+
+El relevo completo, la preparación del equipo y el helper seguro para ejecutar CI están
+documentados en [`docs/WINDOWS_HANDOFF.md`](docs/WINDOWS_HANDOFF.md).
 
 ## Pruebas en iPhone real
 
@@ -46,13 +50,19 @@ Para distribucion a otros telefonos, usa TestFlight o un flujo cloud que genere 
 
 El workflow `.github/workflows/testflight.yml` permite compilar en macOS, firmar, exportar `.ipa` y subir a TestFlight desde GitHub Actions.
 
+Los workflows son manuales para evitar builds remotos inesperados:
+
+- `iOS 26 smoke test`: compila, ejecuta los tests y lanza un preview en Simulator con Xcode 26.
+- `Build IPA for verification (unsigned)`: genera una IPA de dispositivo sin firma.
+- `Build iOS and Upload to TestFlight`: requiere firma y aprovisionamiento válidos.
+
 Importante: esta carpeta `edupanel_IOS` debe estar subida a un repositorio de GitHub para que el workflow aparezca en la pestaña Actions. Puede ser un repo separado del proyecto web.
 
 ## Prueba gratis sin Apple Developer pago
 
 Para validar el primer hito en un iPhone real sin Mac y sin pagar Apple Developer todavia, usa el workflow `.github/workflows/unsigned-ipa.yml`.
 
-Ese workflow genera un `.ipa` sin firma para instalarlo manualmente con Sideloadly o AltStore desde Windows. Requiere solo estos secrets:
+Ese workflow genera un `.ipa` sin firma para inspección. Sideloadly, AltStore u otra herramienta solo podrán usarlo si realizan una firma válida para el dispositivo; el archivo descargado no es instalable por sí mismo. Requiere solo estos secrets:
 
 - `GOOGLE_SERVICE_INFO_PLIST_BASE64`
 - `EDUPANEL_API_BASE_URL`
@@ -66,7 +76,7 @@ Ese workflow genera un `.ipa` sin firma para instalarlo manualmente con Sideload
 4. Cuando termine en verde, abre la ejecución y descarga el artefacto `EduPanel-unsigned-ipa` desde **Artifacts**.
 5. El artefacto contiene `EduPanel-unsigned.ipa` y su checksum SHA-256.
 
-La IPA de verificación es deliberadamente sin firma. Para instalarla en un iPhone se necesita Sideloadly/AltStore u otra herramienta compatible; para una IPA firmada usa `testflight.yml` y configura los secretos de Apple indicados más abajo.
+La IPA de verificación es deliberadamente sin firma y no es instalable directamente. Para usarla en un iPhone debe volver a firmarse con certificado y aprovisionamiento válidos; para una entrega firmada y distribuible usa `testflight.yml` y configura los secretos de Apple indicados más abajo.
 
 Guia paso a paso: `docs/FREE_IOS_TESTING.md`.
 

@@ -5,9 +5,14 @@ struct PlanificacionesDetailView: View {
     let asignatura: String?
     let dashboardRepository: DashboardRepository
     let planificacionRepository: PlanificacionRepository
+    private let curriculoRepository = CurriculoRepository()
 
     @State private var units: [UnidadPlan] = []
     @State private var cronogramasByUnit: [String: CronogramaUnidadData] = [:]
+    @State private var curriculumUnits: [UnidadCurricular] = []
+    @State private var availableCurriculumLevels: [String] = []
+    @State private var curriculumLevel: String?
+    @State private var curriculumMessage: String?
     @State private var isLoading = false
     @State private var activeSubject = "M\u{00FA}sica"
     @State private var saveStatus = ""
@@ -91,10 +96,10 @@ struct PlanificacionesDetailView: View {
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
             case .newUnit:
-                NewUnitSheet { name, type in
-                    addUnit(name: name, type: type)
+                NewUnitSheet(curriculumUnits: curriculumUnits) { name, type, curriculumUnitID in
+                    addUnit(name: name, type: type, curriculumUnitID: curriculumUnitID)
                 }
-                .presentationDetents([.height(360)])
+                .presentationDetents([.height(curriculumUnits.isEmpty ? 390 : 500), .large])
                 .presentationDragIndicator(.visible)
             }
         }
@@ -116,10 +121,10 @@ struct PlanificacionesDetailView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
-            .padding(.bottom, 28)
+            .tabBarPageBottomPadding()
         }
         .refreshable {
-            await loadData()
+            await loadData(forceRefresh: true)
         }
     }
 
@@ -156,6 +161,43 @@ struct PlanificacionesDetailView: View {
                         tint: driveConnected ? .green : .red
                     )
                     Spacer(minLength: 0)
+                }
+
+                if !availableCurriculumLevels.isEmpty {
+                    Menu {
+                        ForEach(availableCurriculumLevels, id: \.self) { level in
+                            Button {
+                                selectCurriculumLevel(level)
+                            } label: {
+                                if level == curriculumLevel {
+                                    Label(level, systemImage: "checkmark")
+                                } else {
+                                    Text(level)
+                                }
+                            }
+                        }
+                    } label: {
+                        Label(
+                            curriculumLevel.map { "Bases curriculares: \($0)" } ?? "Elegir nivel curricular",
+                            systemImage: "link"
+                        )
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(curriculumLevel == nil ? .orange : EPTheme.primary)
+                    }
+                } else if let curriculumLevel {
+                    Label(
+                        "Bases curriculares: \(curriculumLevel)",
+                        systemImage: "link"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(EPTheme.primary)
+                } else {
+                    Label(
+                        "Define el nivel curricular del curso para vincular sus unidades.",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.orange)
                 }
             }
         }
@@ -227,6 +269,8 @@ struct PlanificacionesDetailView: View {
                              : "Sin fechas · \(unit.hours) horas")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
+
+                        curriculumPicker(for: unit)
                     }
 
                     Spacer(minLength: 8)
@@ -299,6 +343,45 @@ struct PlanificacionesDetailView: View {
             }
     }
 
+    @ViewBuilder
+    private func curriculumPicker(for unit: UnidadPlan) -> some View {
+        if !curriculumUnits.isEmpty {
+            Menu {
+                Button {
+                    updateCurriculumLink(unitID: unit.id, curriculumUnitID: nil)
+                } label: {
+                    Label("Sin vincular", systemImage: unit.unidadCurricularId == nil ? "checkmark" : "link.badge.plus")
+                }
+
+                ForEach(curriculumUnits) { curriculumUnit in
+                    Button {
+                        updateCurriculumLink(unitID: unit.id, curriculumUnitID: curriculumUnit.id)
+                    } label: {
+                        if unit.unidadCurricularId == curriculumUnit.id {
+                            Label(curriculumUnit.displayName, systemImage: "checkmark")
+                        } else {
+                            Text(curriculumUnit.displayName)
+                        }
+                    }
+                }
+            } label: {
+                Label(
+                    curriculumLabel(for: unit),
+                    systemImage: unit.unidadCurricularId == nil ? "link.badge.plus" : "link.circle.fill"
+                )
+                .font(.caption.weight(.bold))
+                .foregroundStyle(unit.unidadCurricularId == nil ? .orange : EPTheme.primary)
+                .lineLimit(2)
+            }
+            .accessibilityLabel("Unidad curricular vinculada")
+            .accessibilityHint("Permite elegir la unidad oficial correspondiente")
+        } else if let curriculumMessage {
+            Label(curriculumMessage, systemImage: "exclamationmark.triangle")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.orange)
+        }
+    }
+
     private func barraCobertura(_ pct: Int) -> Color {
         pct == 100 ? .green : pct >= 50 ? .orange : pct > 0 ? .red : .gray
     }
@@ -331,11 +414,10 @@ struct PlanificacionesDetailView: View {
 
     // MARK: - Acciones
 
-    private func addUnit(name rawName: String, type: String) {
+    private func addUnit(name rawName: String, type: String, curriculumUnitID: String?) {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, units.count < Self.maxUnidades else { return }
 
-        let nextIndex = units.count + 1
         let nextId = (units.map(\.id).max() ?? 0) + 1
 
         units.append(UnidadPlan(
@@ -346,7 +428,7 @@ struct PlanificacionesDetailView: View {
             start: "",
             end: "",
             type: type,
-            unidadCurricularId: "unidad_\(nextIndex)"
+            unidadCurricularId: curriculumUnitID
         ))
 
         Task { await savePlan() }
@@ -367,7 +449,11 @@ struct PlanificacionesDetailView: View {
     private func performDelete(unit: UnidadPlan) async {
         saveStatus = "Eliminando…"
         do {
-            try await planificacionRepository.eliminarUnidadCompleta(asignatura: activeSubject, curso: curso, unidadId: String(unit.id))
+            try await planificacionRepository.eliminarUnidadCompleta(
+                asignatura: activeSubject,
+                curso: curso,
+                unidadIds: PlanificacionRepository.unidadIdCandidates(unit: unit)
+            )
             units.removeAll { $0.id == unit.id }
             cronogramasByUnit.removeValue(forKey: PlanificacionRepository.cronogramaKey(asignatura: activeSubject, curso: curso, unidadId: String(unit.id)))
             cronogramasByUnit.removeValue(forKey: PlanificacionRepository.cronogramaKey(curso: curso, unidadId: String(unit.id)))
@@ -390,17 +476,84 @@ struct PlanificacionesDetailView: View {
         renamingName = ""
     }
 
+    private func updateCurriculumLink(unitID: Int, curriculumUnitID: String?) {
+        guard let index = units.firstIndex(where: { $0.id == unitID }) else { return }
+        units[index].unidadCurricularId = curriculumUnitID
+        Task { await savePlan() }
+    }
+
+    private func curriculumLabel(for unit: UnidadPlan) -> String {
+        guard let id = unit.unidadCurricularId else { return "Vincular con currículum" }
+        return curriculumUnits.first(where: { $0.id == id })?.displayName ?? "Vinculada a \(id)"
+    }
+
+    private func selectCurriculumLevel(_ level: String) {
+        curriculumLevel = level
+        Task {
+            do {
+                try await dashboardRepository.saveSubjectLevelMapping(
+                    course: curso,
+                    subject: activeSubject,
+                    level: level
+                )
+                await loadCurriculum(level: level)
+            } catch {
+                curriculumMessage = "No se pudo guardar el nivel curricular."
+            }
+        }
+    }
+
+    private func loadCurriculum(level: String) async {
+        do {
+            curriculumUnits = try await curriculoRepository.getUnidades(
+                asignatura: activeSubject,
+                nivel: level
+            )
+            curriculumMessage = curriculumUnits.isEmpty
+                ? "No hay unidades curriculares publicadas para este nivel."
+                : nil
+        } catch {
+            curriculumUnits = []
+            curriculumMessage = "No se pudo cargar el currículum. Reintenta más tarde."
+        }
+    }
+
     // MARK: - Carga
 
-    private func loadData() async {
+    private func loadData(forceRefresh: Bool = false) async {
         isLoading = true
         defer { isLoading = false }
 
         do {
-            let snap = try await dashboardRepository.fetchDashboard()
+            let snap = try await dashboardRepository.fetchDashboard(forceRefresh: forceRefresh)
             driveConnected = snap.preferences.googleDriveConnected
             let providedSubject = asignatura?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             activeSubject = providedSubject.isEmpty ? subject(from: snap) : providedSubject
+            let catalogLevel = snap.course(id: nil, named: curso)?
+                .level?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            curriculumLevel = CurriculoNivel.resolver(
+                curso: curso,
+                asignatura: activeSubject,
+                catalogLevel: catalogLevel,
+                mapping: snap.nivelMapping,
+                subjectMapping: snap.subjectLevelMapping
+            )
+
+            do {
+                availableCurriculumLevels = try await curriculoRepository.getNivelesDisponibles(
+                    asignatura: activeSubject
+                )
+            } catch {
+                availableCurriculumLevels = []
+            }
+
+            if let curriculumLevel {
+                await loadCurriculum(level: curriculumLevel)
+            } else {
+                curriculumUnits = []
+                curriculumMessage = "Falta asociar un nivel curricular al curso."
+            }
 
             if let plan = try await planificacionRepository.cargarPlanCurso(asignatura: activeSubject, curso: curso) {
                 units = plan.units
@@ -420,13 +573,14 @@ struct PlanificacionesDetailView: View {
                 return next
             }
         } catch {
-            units = []
-            cronogramasByUnit = [:]
             saveStatus = "Error al cargar"
         }
     }
 
     private func subject(from snapshot: DashboardSnapshot) -> String {
+        if let subject = snapshot.course(id: nil, named: curso)?.subjects.first?.label {
+            return subject
+        }
         if let subject = snapshot.preferences.asignaturasHabilitadas
             .map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) })
             .first(where: { !$0.isEmpty }) {
@@ -448,11 +602,13 @@ struct PlanificacionesDetailView: View {
 }
 
 private struct NewUnitSheet: View {
-    let onAdd: (String, String) -> Void
+    let curriculumUnits: [UnidadCurricular]
+    let onAdd: (String, String, String?) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var type = "tradicional"
+    @State private var curriculumUnitID: String?
 
     private var canAdd: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -499,6 +655,24 @@ private struct NewUnitSheet: View {
                     .accessibilityIdentifier("new-unit-name")
             }
 
+            if !curriculumUnits.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("VINCULAR CON EL CURRÍCULUM")
+                        .font(.caption.weight(.black))
+                        .foregroundStyle(.secondary)
+                    Picker("Unidad curricular", selection: $curriculumUnitID) {
+                        Text("Elegir después").tag(String?.none)
+                        ForEach(curriculumUnits) { unit in
+                            Text(unit.displayName).tag(Optional(unit.id))
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+            }
+
             VStack(alignment: .leading, spacing: 8) {
                 Text("Tipo")
                     .font(.caption.weight(.black))
@@ -534,7 +708,14 @@ private struct NewUnitSheet: View {
 
     private func addUnit() {
         guard canAdd else { return }
-        onAdd(name, type)
+        onAdd(name, type, curriculumUnitID)
         dismiss()
+    }
+}
+
+private extension UnidadCurricular {
+    var displayName: String {
+        let name = nombreUnidad.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "Unidad \(numeroUnidad)" : name
     }
 }

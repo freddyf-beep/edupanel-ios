@@ -19,15 +19,17 @@ struct CronogramaGanttView: View {
 
     private var rangos: [RangoUnidad] {
         var mapa: [String: (min: Int, max: Int, count: Int)] = [:]
+        let maxWeek = CronoDateHelpers.numeroSemanasISO(en: viewModel.anioActual)
         for actividad in viewModel.actividadesFiltradas {
+            let safeWeek = max(1, min(maxWeek, actividad.semana))
             let clave = actividad.unidad.isEmpty ? "(sin unidad)" : actividad.unidad
             if var actual = mapa[clave] {
-                actual.min = min(actual.min, actividad.semana)
-                actual.max = max(actual.max, actividad.semana)
+                actual.min = min(actual.min, safeWeek)
+                actual.max = max(actual.max, safeWeek)
                 actual.count += 1
                 mapa[clave] = actual
             } else {
-                mapa[clave] = (actividad.semana, actividad.semana, 1)
+                mapa[clave] = (safeWeek, safeWeek, 1)
             }
         }
         return mapa.map { clave, rango in
@@ -66,9 +68,13 @@ struct CronogramaGanttView: View {
     }
 
     private var gantt: some View {
-        let semanaMin = max(1, rangos.map(\.semanaMin).min() ?? 1)
-        let semanaMax = min(53, max(rangos.map(\.semanaMax).max() ?? 52, semanaMin + 3))
-        let totalSemanas = semanaMax - semanaMin + 1
+        let maxWeek = CronoDateHelpers.numeroSemanasISO(en: viewModel.anioActual)
+        let semanaMin = min(maxWeek, max(1, rangos.map(\.semanaMin).min() ?? 1))
+        let semanaMax = max(
+            semanaMin,
+            min(maxWeek, max(rangos.map(\.semanaMax).max() ?? maxWeek, semanaMin + 3))
+        )
+        let totalSemanas = max(1, semanaMax - semanaMin + 1)
 
         return ScrollView(.horizontal, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 10) {

@@ -20,8 +20,37 @@ enum AttendanceRepositoryError: LocalizedError {
 }
 
 enum AttendanceDocumentPath {
+    private static let parvulariaSubjects: Set<String> = [
+        "identidad_y_autonomia",
+        "convivencia_y_ciudadania",
+        "corporalidad_y_movimiento",
+        "lenguaje_verbal",
+        "lenguajes_artisticos",
+        "entorno_natural",
+        "comprension_del_entorno_sociocultural",
+        "pensamiento_matematico"
+    ]
+
     static func documentID(subject: String, course: String, dateKey: String) -> String {
-        "libro_\(slug("\(subject)_\(course)"))_\(dateKey)"
+        "libro_\(contextID(subject: subject, course: course))_\(dateKey)"
+    }
+
+    /// Replica `buildDocId` del panel para que ambos clientes compartan el
+    /// mismo leccionario, incluidos los núcleos de NT1 y NT2.
+    static func contextID(subject: String, course: String) -> String {
+        let normalizedSubject = slug(subject)
+        let normalizedCourse = slug(course)
+        let isParvularia = parvulariaSubjects.contains(normalizedSubject)
+            || normalizedCourse.contains("nt1")
+            || normalizedCourse.contains("nt2")
+            || normalizedCourse.contains("transicion")
+
+        guard isParvularia else { return slug("\(subject)_\(course)") }
+        let isNT2 = normalizedCourse.contains("2")
+            || normalizedCourse.contains("segundo")
+            || normalizedCourse.contains("nt2")
+            || normalizedCourse.contains("kinder")
+        return "parvularia_\(normalizedSubject)_\(isNT2 ? "nt2" : "nt1")"
     }
 
     static func path(
@@ -159,7 +188,9 @@ struct AttendanceContextRepository: AttendanceContextRepositoryProtocol {
             weekday: item.dia,
             startTime: item.horaInicio,
             endTime: item.horaFin,
-            isFree: item.tipo == .libre
+            isFree: item.tipo.isFreeBlock,
+            courseID: item.courseID,
+            subjectID: item.subjectID
         )
     }
 
@@ -296,13 +327,23 @@ struct AttendanceRepository: AttendanceRepositoryProtocol {
         return AttendanceBook(subject: subject, course: course, dateKey: dateKey, blocks: blocks)
     }
 
-    private static func parseBlock(_ data: [String: Any]) -> AttendanceBlock? {
+    static func parseBlock(_ data: [String: Any]) -> AttendanceBlock? {
         guard let id = data["id"] as? String,
               let startTime = data["horaInicio"] as? String,
               let endTime = data["horaFin"] as? String,
               let rawAttendance = data["asistencia"] as? [[String: Any]] else { return nil }
         let attendance = rawAttendance.compactMap(parseAttendance)
         guard attendance.count == rawAttendance.count else { return nil }
+
+        let voiceNoteHashes = sanitizedVoiceNoteHashes(data["notasVozHashes"] as? [String: String] ?? [:])
+        let voiceNoteMetadata = parseVoiceNoteMetadata(data["notasVozMetadatos"])
+        var voiceNoteIDs = uniqueNonEmptyStrings(data["notasVozIds"] as? [String] ?? [])
+        for noteID in voiceNoteHashes.keys.sorted() where !voiceNoteIDs.contains(noteID) {
+            voiceNoteIDs.append(noteID)
+        }
+        for noteID in voiceNoteMetadata.keys.sorted() where !voiceNoteIDs.contains(noteID) {
+            voiceNoteIDs.append(noteID)
+        }
 
         return AttendanceBlock(
             id: id,
@@ -318,7 +359,10 @@ struct AttendanceRepository: AttendanceRepositoryProtocol {
             signedByUID: data["firmadoPorUid"] as? String,
             reopenedAt: data["reabiertoAt"] as? String,
             reopenedByUID: data["reabiertoPorUid"] as? String,
-            reopeningReason: data["motivoReapertura"] as? String
+            reopeningReason: data["motivoReapertura"] as? String,
+            voiceNoteIDs: voiceNoteIDs,
+            voiceNoteHashes: voiceNoteHashes,
+            voiceNoteMetadata: voiceNoteMetadata
         )
     }
 
@@ -338,7 +382,7 @@ struct AttendanceRepository: AttendanceRepositoryProtocol {
         )
     }
 
-    private static func blockDictionary(_ block: AttendanceBlock) -> [String: Any] {
+    static func blockDictionary(_ block: AttendanceBlock) -> [String: Any] {
         var data: [String: Any] = [
             "id": block.id,
             "bloque": block.label,
@@ -355,7 +399,129 @@ struct AttendanceRepository: AttendanceRepositoryProtocol {
         data.setOptional(block.reopenedAt, for: "reabiertoAt")
         data.setOptional(block.reopenedByUID, for: "reabiertoPorUid")
         data.setOptional(block.reopeningReason, for: "motivoReapertura")
+        let voiceNoteHashes = sanitizedVoiceNoteHashes(block.voiceNoteHashes)
+        let voiceNoteMetadata = sanitizedVoiceNoteMetadata(block.voiceNoteMetadata)
+        var voiceNoteIDs = uniqueNonEmptyStrings(block.voiceNoteIDs)
+        for noteID in voiceNoteHashes.keys.sorted() where !voiceNoteIDs.contains(noteID) {
+            voiceNoteIDs.append(noteID)
+        }
+        for noteID in voiceNoteMetadata.keys.sorted() where !voiceNoteIDs.contains(noteID) {
+            voiceNoteIDs.append(noteID)
+        }
+        if !voiceNoteIDs.isEmpty {
+            data["notasVozIds"] = voiceNoteIDs
+        }
+        if !voiceNoteHashes.isEmpty {
+            data["notasVozHashes"] = voiceNoteHashes
+        }
+        if !voiceNoteMetadata.isEmpty {
+            data["notasVozMetadatos"] = voiceNoteMetadata.mapValues(voiceNoteMetadataDictionary)
+        }
         return data
+    }
+
+    private static func uniqueNonEmptyStrings(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.compactMap { value in
+            let clean = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !clean.isEmpty, seen.insert(clean).inserted else { return nil }
+            return clean
+        }
+    }
+
+    private static func sanitizedVoiceNoteHashes(_ values: [String: String]) -> [String: String] {
+        var result: [String: String] = [:]
+        for (rawID, rawHash) in values {
+            let noteID = rawID.trimmingCharacters(in: .whitespacesAndNewlines)
+            let hash = rawHash.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !noteID.isEmpty, hash.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else {
+                continue
+            }
+            result[noteID] = hash
+        }
+        return result
+    }
+
+    private static func parseVoiceNoteMetadata(_ rawValue: Any?) -> [String: AttendanceVoiceNoteMetadata] {
+        if let map = rawValue as? [String: [String: Any]] {
+            return sanitizedVoiceNoteMetadata(map.compactMapValues(voiceNoteMetadata(from:)))
+        }
+        if let map = rawValue as? [String: Any] {
+            var result: [String: AttendanceVoiceNoteMetadata] = [:]
+            for (noteID, rawMetadata) in map {
+                guard let dictionary = rawMetadata as? [String: Any],
+                      let metadata = voiceNoteMetadata(from: dictionary) else { continue }
+                result[noteID] = metadata
+            }
+            return sanitizedVoiceNoteMetadata(result)
+        }
+        if let array = rawValue as? [[String: Any]] {
+            var result: [String: AttendanceVoiceNoteMetadata] = [:]
+            for item in array {
+                guard let noteID = item["id"] as? String,
+                      let metadata = voiceNoteMetadata(from: item) else { continue }
+                result[noteID] = metadata
+            }
+            return sanitizedVoiceNoteMetadata(result)
+        }
+        return [:]
+    }
+
+    private static func voiceNoteMetadata(from data: [String: Any]) -> AttendanceVoiceNoteMetadata? {
+        let scope = cleanString(data["scope"] as? String)
+            ?? cleanString(data["observationScope"] as? String)
+            ?? "general"
+        let studentIDs = uniqueNonEmptyStrings(
+            (data["studentIDs"] as? [String]) ?? (data["estudiantesIds"] as? [String]) ?? []
+        )
+        return AttendanceVoiceNoteMetadata(
+            observationScope: scope,
+            studentIDs: studentIDs,
+            topic: cleanString(data["topic"] as? String) ?? cleanString(data["tema"] as? String),
+            observationType: cleanString(data["observationType"] as? String) ?? cleanString(data["tipo"] as? String),
+            outcome: cleanString(data["outcome"] as? String) ?? cleanString(data["resultado"] as? String),
+            nextStep: cleanString(data["nextStep"] as? String) ?? cleanString(data["proximoPaso"] as? String),
+            summary: cleanString(data["summary"] as? String) ?? cleanString(data["resumen"] as? String)
+        )
+    }
+
+    private static func sanitizedVoiceNoteMetadata(
+        _ values: [String: AttendanceVoiceNoteMetadata]
+    ) -> [String: AttendanceVoiceNoteMetadata] {
+        var result: [String: AttendanceVoiceNoteMetadata] = [:]
+        for (rawID, rawMetadata) in values {
+            let noteID = rawID.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !noteID.isEmpty else { continue }
+            result[noteID] = AttendanceVoiceNoteMetadata(
+                observationScope: cleanString(rawMetadata.observationScope) ?? "general",
+                studentIDs: uniqueNonEmptyStrings(rawMetadata.studentIDs),
+                topic: cleanString(rawMetadata.topic),
+                observationType: cleanString(rawMetadata.observationType),
+                outcome: cleanString(rawMetadata.outcome),
+                nextStep: cleanString(rawMetadata.nextStep),
+                summary: cleanString(rawMetadata.summary)
+            )
+        }
+        return result
+    }
+
+    private static func voiceNoteMetadataDictionary(_ metadata: AttendanceVoiceNoteMetadata) -> [String: Any] {
+        var value: [String: Any] = [
+            "scope": metadata.observationScope,
+            "studentIDs": metadata.studentIDs
+        ]
+        value.setOptional(metadata.topic, for: "topic")
+        value.setOptional(metadata.observationType, for: "observationType")
+        value.setOptional(metadata.outcome, for: "outcome")
+        value.setOptional(metadata.nextStep, for: "nextStep")
+        value.setOptional(metadata.summary, for: "summary")
+        return value
+    }
+
+    private static func cleanString(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let clean = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return clean.isEmpty ? nil : clean
     }
 
     static func attendanceDictionary(_ attendance: StudentAttendance) -> [String: Any] {

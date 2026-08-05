@@ -40,6 +40,7 @@ struct PruebaTemplate: Identifiable {
     let tipoEvaluacion: String
     let ponderacion: Double?
     let tiempoMinutos: Int?
+    let objetivoEvaluacion: String
     let exigencia: Double
     let instruccionesGenerales: [String]
     let metadatosCurriculares: PruebaMetadatosCurriculares
@@ -383,6 +384,7 @@ enum PruebaDocumentParser {
             tipoEvaluacion: Read.optionalString(dictionary["tipoEvaluacion"]) ?? "sumativa",
             ponderacion: Read.double(dictionary["ponderacion"]),
             tiempoMinutos: Read.int(dictionary["tiempoMinutos"]),
+            objetivoEvaluacion: Read.string(dictionary["objetivoEvaluacion"]),
             exigencia: Read.double(dictionary["exigencia"]) ?? 0.6,
             instruccionesGenerales: Read.stringArray(dictionary["instruccionesGenerales"]),
             metadatosCurriculares: metadata.map {

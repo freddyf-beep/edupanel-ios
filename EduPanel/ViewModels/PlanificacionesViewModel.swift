@@ -10,6 +10,8 @@ final class PlanificacionesViewModel {
     var isLoading = false
     var errorMessage: String? = nil
     var selectedSubject: String? = nil
+    var selectedCourseID: String?
+    var selectedSubjectID: String?
     
     private let dashboardRepository: DashboardRepository
     private let planificacionRepository: PlanificacionRepository
@@ -20,19 +22,19 @@ final class PlanificacionesViewModel {
         self.planificacionRepository = planificacionRepository
     }
     
-    func load() async {
+    func load(forceRefresh: Bool = false) async {
         guard !isLoading else { return }
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
 
         do {
-            let snap = try await dashboardRepository.fetchDashboard()
+            let snap = try await dashboardRepository.fetchDashboard(forceRefresh: forceRefresh)
             self.snapshot = snap
 
             do {
                 let profileSubjects = subjects(from: snap)
-                let posiblesCursos = Array(Set(snap.courses + Array(snap.studentsByCourse.keys)))
+                let posiblesCursos = snap.courses
                 let loadedPlanes = try await planificacionRepository.listarTodosPlanesCurso(
                     posiblesCursos: posiblesCursos,
                     posiblesAsignaturas: profileSubjects
@@ -64,7 +66,7 @@ final class PlanificacionesViewModel {
     }
     
     func refresh() async {
-        await load()
+        await load(forceRefresh: true)
     }
     
     var activeSubject: String {
@@ -72,23 +74,90 @@ final class PlanificacionesViewModel {
     }
 
     var availableSubjects: [String] {
-        subjects(from: snapshot)
+        var values: [String] = []
+        var seen = Set<String>()
+        for subject in subjects(from: snapshot) + planes.map(\.asignatura) {
+            let trimmed = subject.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            let key = Self.subjectKey(trimmed)
+            guard seen.insert(key).inserted else { continue }
+            values.append(trimmed)
+        }
+        let preferredKey = preferredSubjectKey
+        return values.sorted { lhs, rhs in
+            let lhsKey = Self.subjectKey(lhs)
+            let rhsKey = Self.subjectKey(rhs)
+            if lhsKey == preferredKey { return true }
+            if rhsKey == preferredKey { return false }
+            return lhsKey.localizedStandardCompare(rhsKey) == .orderedAscending
+        }
+    }
+
+    private var preferredSubjectKey: String {
+        if let selectedSubject, !selectedSubject.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return Self.subjectKey(selectedSubject)
+        }
+        if let subjectWithUnits = planes
+            .filter({ !$0.units.isEmpty })
+            .sorted(by: { $0.units.count > $1.units.count })
+            .first?.asignatura {
+            return Self.subjectKey(subjectWithUnits)
+        }
+        return Self.subjectKey(Self.defaultSubject)
     }
 
     private var defaultSubjectFromSnapshot: String {
-        subjects(from: snapshot).first ?? Self.defaultSubject
+        let disponibles = availableSubjects
+
+        // Prioriza la materia base del docente cuando existe en el alcance
+        // activo. Si no está disponible, muestra primero la que realmente
+        // tiene unidades guardadas para evitar un hub aparentemente vacío.
+        if let preferred = disponibles.first(where: {
+            Self.subjectKey($0) == Self.subjectKey(Self.defaultSubject)
+        }) {
+            return preferred
+        }
+
+        if let subjectWithUnits = planes
+            .filter({ !$0.units.isEmpty })
+            .sorted(by: { $0.units.count > $1.units.count })
+            .first?.asignatura {
+            return subjectWithUnits
+        }
+
+        return subjects(from: snapshot).first ?? Self.defaultSubject
     }
 
     private func subjects(from snapshot: DashboardSnapshot?) -> [String] {
+        if let catalogSubjects = snapshot?.activeCourses.flatMap(\.subjects).map(\.label), !catalogSubjects.isEmpty {
+            return dedupeSubjects(catalogSubjects)
+        }
         if let subject = snapshot?.preferences.asignaturasHabilitadas
             .map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) })
             .filter({ !$0.isEmpty }),
            !subject.isEmpty {
-            return subject
+            return dedupeSubjects(subject)
         }
 
         let specialty = snapshot?.profile.especialidad.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return [specialty.isEmpty ? Self.defaultSubject : specialty]
+    }
+
+    private func dedupeSubjects(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.compactMap { raw in
+            let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty, seen.insert(Self.subjectKey(value)).inserted else { return nil }
+            return value
+        }
+    }
+
+    private static func subjectKey(_ value: String) -> String {
+        value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL"))
+            .lowercased()
+            .split { !$0.isLetter && !$0.isNumber }
+            .joined(separator: "_")
     }
 
     private static func enrichPlansWithCronogramaDates(

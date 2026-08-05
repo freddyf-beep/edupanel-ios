@@ -4,20 +4,16 @@ struct GoogleConnectionView: View {
     let connectionType: String // "calendar" or "drive"
     let repository: DashboardRepository
 
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var isConnected = false
+    @State private var hasSavedConnectionPreference = false
     @State private var isLoading = false
-    @State private var isSyncing = false
     @State private var errorMessage: String?
-    @State private var actionStatus: ProfileSaveStatus = .idle
 
     var body: some View {
         VStack(spacing: 0) {
             if isLoading {
                 VStack(spacing: 12) {
                     ProgressView()
-                    Text("Cargando estado de la conexión...")
+                    Text("Cargando configuración de la vista previa...")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -37,66 +33,64 @@ struct GoogleConnectionView: View {
                             Text(connectionType == "calendar" ? "Google Calendar" : "Google Drive")
                                 .font(.title3.weight(.black))
                             
-                            Text(isConnected ? "Cuenta vinculada" : "Servicio no conectado")
+                            Text("Vista previa · próximamente")
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(isConnected ? .green : .secondary)
+                                .foregroundStyle(.secondary)
                         }
                     }
                     .padding(.top, 36)
 
                     // Description text
                     Text(connectionType == "calendar"
-                         ? "Al conectar Google Calendar, EduPanel creará eventos correspondientes a tus bloques lectivos y registrará las actividades de tus planificaciones nativas."
-                         : "Al vincular Google Drive, EduPanel organizará carpetas dedicadas para tus cursos donde podrás almacenar planificaciones, recursos y material de apoyo."
+                         ? "Estamos preparando la integración con Google Calendar. Esta vista previa no inicia sesión, no vincula una cuenta y no crea ni sincroniza eventos."
+                         : "Estamos preparando la integración con Google Drive. Esta vista previa no inicia sesión, no vincula una cuenta y no crea carpetas ni guarda archivos."
                     )
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
 
+                    if hasSavedConnectionPreference {
+                        Label(
+                            "Hay una preferencia anterior guardada; no representa una cuenta de Google vinculada.",
+                            systemImage: "info.circle.fill"
+                        )
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                    }
+
                     Spacer()
 
                     // Action buttons
                     VStack(spacing: 12) {
-                        if !isConnected {
-                            Button {
-                                performConnect()
-                            } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: "g.circle.fill")
-                                        .font(.title3)
-                                    Text("Iniciar sesión con Google")
-                                        .font(.footnote.weight(.black))
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
+                        Button {} label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "g.circle.fill")
+                                    .font(.title3)
+                                Text("Conexión con Google próximamente")
+                                    .font(.footnote.weight(.black))
                             }
-                            .buttonStyle(.borderedProminent)
-                            .tint(EPTheme.primary)
-                        } else {
-                            if connectionType == "calendar" {
-                                Button {
-                                    performSync()
-                                } label: {
-                                    Label(isSyncing ? "Sincronizando..." : "Sincronizar ahora", systemImage: "arrow.triangle.2.circlepath")
-                                        .font(.footnote.weight(.black))
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 12)
-                                }
-                                .buttonStyle(.bordered)
-                                .tint(EPTheme.primary)
-                                .disabled(isSyncing)
-                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(EPTheme.primary)
+                        .disabled(true)
+                        .accessibilityHint("La conexión aún no está disponible y no inicia sesión ni vincula una cuenta.")
 
-                            Button(role: .destructive) {
-                                performDisconnect()
-                            } label: {
-                                Label("Desvincular cuenta", systemImage: "link.badge.minus")
-                                    .font(.footnote.weight(.bold))
+                        if connectionType == "calendar" {
+                            Button {} label: {
+                                Label("Sincronización disponible próximamente", systemImage: "arrow.triangle.2.circlepath")
+                                    .font(.footnote.weight(.black))
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 12)
                             }
                             .buttonStyle(.bordered)
+                            .tint(EPTheme.primary)
+                            .disabled(true)
+                            .accessibilityHint("La sincronización aún no está disponible y no crea ni actualiza eventos.")
                         }
                     }
                     .padding(.horizontal, 24)
@@ -109,109 +103,27 @@ struct GoogleConnectionView: View {
                     .padding()
             }
 
-            if actionStatus != .idle {
-                HStack {
-                    ProfileSaveBadge(status: actionStatus)
-                    Spacer()
-                }
-                .padding()
-                .background(Color(.secondarySystemGroupedBackground))
-            }
         }
+        .tabBarPageBottomPadding()
         .navigationTitle(connectionType == "calendar" ? "Google Calendar" : "Google Drive")
         .task {
-            await loadConnectionState()
+            await loadPreviewPreference()
         }
     }
 
-    private func loadConnectionState() async {
+    private func loadPreviewPreference() async {
         isLoading = true
         errorMessage = nil
         do {
             let next = try await repository.fetchDashboard()
             if connectionType == "calendar" {
-                isConnected = next.preferences.googleCalendarConnected
+                hasSavedConnectionPreference = next.preferences.googleCalendarConnected
             } else {
-                isConnected = next.preferences.googleDriveConnected
+                hasSavedConnectionPreference = next.preferences.googleDriveConnected
             }
         } catch {
             errorMessage = error.localizedDescription
         }
         isLoading = false
-    }
-
-    private func performConnect() {
-        actionStatus = .saving
-        errorMessage = nil
-        // Simulate OAuth load delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            Task {
-                do {
-                    let next = try await repository.fetchDashboard()
-                    var cal = next.preferences.googleCalendarConnected
-                    var drv = next.preferences.googleDriveConnected
-
-                    if connectionType == "calendar" {
-                        cal = true
-                    } else {
-                        drv = true
-                    }
-
-                    try await repository.saveConnections(googleCalendarConnected: cal, googleDriveConnected: drv)
-                    isConnected = true
-                    actionStatus = .saved
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        actionStatus = .idle
-                        dismiss()
-                    }
-                } catch {
-                    errorMessage = error.localizedDescription
-                    actionStatus = .error
-                }
-            }
-        }
-    }
-
-    private func performDisconnect() {
-        actionStatus = .saving
-        errorMessage = nil
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            Task {
-                do {
-                    let next = try await repository.fetchDashboard()
-                    var cal = next.preferences.googleCalendarConnected
-                    var drv = next.preferences.googleDriveConnected
-
-                    if connectionType == "calendar" {
-                        cal = false
-                    } else {
-                        drv = false
-                    }
-
-                    try await repository.saveConnections(googleCalendarConnected: cal, googleDriveConnected: drv)
-                    isConnected = false
-                    actionStatus = .saved
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        actionStatus = .idle
-                        dismiss()
-                    }
-                } catch {
-                    errorMessage = error.localizedDescription
-                    actionStatus = .error
-                }
-            }
-        }
-    }
-
-    private func performSync() {
-        isSyncing = true
-        actionStatus = .saving
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            isSyncing = false
-            actionStatus = .saved
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                actionStatus = .idle
-            }
-        }
     }
 }

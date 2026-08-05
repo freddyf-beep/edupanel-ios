@@ -88,9 +88,11 @@ struct OAEditorView: View {
                                 Circle().fill(.white).frame(width: 5, height: 5)
                             }
                         }
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .padding(.top, 2)
+                .accessibilityLabel(oa.seleccionado ? "Deseleccionar \(etiquetaOA(oa))" : "Seleccionar \(etiquetaOA(oa))")
 
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 6) {
@@ -192,9 +194,11 @@ struct OAEditorView: View {
                             Image(systemName: "checkmark").font(.system(size: 8, weight: .black)).foregroundStyle(.white)
                         }
                     }
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .padding(.top, 2)
+            .accessibilityLabel(indicador.seleccionado ? "Deseleccionar indicador" : "Seleccionar indicador")
 
             TextField("Indicador", text: bindingIndicadorTexto(oaId: oaId, indicadorId: indicador.id), axis: .vertical)
                 .font(.system(size: 11.5))

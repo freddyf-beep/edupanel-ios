@@ -47,7 +47,7 @@ struct Perfil360View: View {
             }
             .padding(.horizontal, 18)
             .padding(.top, 16)
-            .padding(.bottom, 96)
+            .tabBarPageBottomPadding()
         }
         .background(EPTheme.background.ignoresSafeArea())
         .navigationTitle("Perfil 360")
@@ -215,7 +215,7 @@ struct Perfil360View: View {
 
     private func cursoRow(curso: String, snapshot: DashboardSnapshot) -> some View {
         let asignaturas = asignaturasDeCurso(curso, snapshot: snapshot)
-        let estudiantes = snapshot.studentsByCourse[curso] ?? []
+        let estudiantes = snapshot.students(forCourseID: nil, name: curso)
         let pie = estudiantes.filter(\.pie).count
         let nivel = snapshot.nivelMapping[curso]
 

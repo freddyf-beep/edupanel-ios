@@ -5,7 +5,6 @@ IPHONEOS_DEPLOYMENT_TARGET = 17.0
 DEVELOPMENT_TEAM =
 
 // Xcode .xcconfig trata // como comentario. Para URLs usa https:/$()/dominio.
-// Desarrollo local: el Simulator comparte localhost con este Mac.
-// CI/TestFlight puede sobrescribir este valor desde xcodebuild.
-EDUPANEL_API_BASE_URL = http:/$()/127.0.0.1:3000
+// Cada configuración define explícitamente el backend; CI/TestFlight lo
+// sobrescribe desde xcodebuild y nunca usa localhost.
 GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.1091516333641-8ia9eli6f7m0sb080brbg9n4domb4at4

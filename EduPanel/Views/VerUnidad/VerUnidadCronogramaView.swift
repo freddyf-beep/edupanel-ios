@@ -28,6 +28,7 @@ struct VerUnidadCronogramaView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)
+                .tabBarPageBottomPadding()
             }
             .reportsTabBarScroll()
             .sheet(item: $classToEditOas) { selectedClass in
@@ -185,6 +186,7 @@ struct VerUnidadCronogramaView: View {
                         }
 
                         Button {
+                            viewModel.selectedClassNumber = clase.numero
                             selectedTab = "clases"
                         } label: {
                             actionLabel("Planificar", icon: "chevron.right")

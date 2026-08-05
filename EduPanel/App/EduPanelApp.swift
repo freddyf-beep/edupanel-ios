@@ -5,11 +5,13 @@ import GoogleSignIn
 struct EduPanelApp: App {
     @State private var authSession = AuthSession()
     @AppStorage(AppTheme.storageKey) private var appThemeRaw = AppTheme.auto.rawValue
+    @AppStorage(DisplayMode.storageKey) private var displayModeRaw = DisplayMode.simple.rawValue
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(authSession)
+                .environment(\.displayMode, DisplayMode(rawValue: displayModeRaw) ?? .simple)
                 .preferredColorScheme((AppTheme(rawValue: appThemeRaw) ?? .auto).colorScheme)
                 .task {
                     await authSession.start()

@@ -30,6 +30,7 @@ enum AppRoute: Hashable {
     case pruebaDetalle(pruebaId: String, scope: EvaluacionScope)
     case pruebaEditor(pruebaId: String?, curso: String, asignatura: String, scope: EvaluacionScope)
     case pruebaResultados(pruebaId: String, scope: EvaluacionScope)
+    case examForgeDocument(id: String, kind: ExamForgeDocumentKind, schoolID: String?)
     case guiaDetalle(guiaId: String, scope: EvaluacionScope)
     case guiaEditor(guiaId: String?, curso: String, asignatura: String, scope: EvaluacionScope)
     case attendance(course: String, subject: String, dateKey: String, blockID: String)
@@ -65,6 +66,7 @@ enum AppRoute: Hashable {
         case .pruebaDetalle: return "Detalle de prueba"
         case .pruebaEditor(let pruebaId, _, _, _): return pruebaId == nil ? "Nueva prueba" : "Editar prueba"
         case .pruebaResultados: return "Aplicar y corregir"
+        case .examForgeDocument(_, let kind, _): return kind == .guia ? "Guía" : "Prueba"
         case .guiaDetalle: return "Detalle de guía"
         case .guiaEditor(let guiaId, _, _, _): return guiaId == nil ? "Nueva guía" : "Editar guía"
         case .attendance: return "Asistencia"
@@ -102,6 +104,7 @@ enum AppRoute: Hashable {
         case .pruebaDetalle: return "doc.text.fill"
         case .pruebaEditor: return "square.and.pencil"
         case .pruebaResultados: return "checkmark.rectangle.stack.fill"
+        case .examForgeDocument(_, let kind, _): return kind == .guia ? "book.pages.fill" : "doc.text.fill"
         case .guiaDetalle: return "book.pages.fill"
         case .guiaEditor: return "square.and.pencil"
         case .attendance: return "person.3.sequence.fill"
@@ -124,6 +127,7 @@ struct AppShell: View {
     @State private var tabBadges: [AppTab: Int] = [:]
     @State private var isTabBarCompact = false
     @State private var isTabBarHidden = false
+    @State private var routeDrivenTabChange = false
 
     @State private var inicioPath = NavigationPath()
     @State private var planificacionesPath = NavigationPath()
@@ -167,20 +171,27 @@ struct AppShell: View {
                     tabBarControls
                 }
                 .environment(\.tabBarScrollReporter, updateTabBarForScrollPosition)
+                .environment(\.tabBarPageBottomPadding, tabBarPageBottomSpacing)
                 .onChange(of: selectedTab) { _, newTab in
                     isTabBarCompact = false
-                    if case .coursePlanificaciones = selectedRoute, newTab == .planificaciones {
+                    if routeDrivenTabChange {
+                        routeDrivenTabChange = false
                         return
                     }
+                    resetNavigationPath(for: newTab)
                     selectedRoute = .module(newTab)
                 }
                 .onChange(of: selectedRoute) { _, newRoute in
                     switch newRoute {
                     case .coursePlanificaciones(let course, let asignatura):
+                        routeDrivenTabChange = true
                         selectedTab = .planificaciones
                         planificacionesPath = NavigationPath([AppRoute.coursePlanificaciones(curso: course, asignatura: asignatura)])
                     case .module(let tab):
                         selectedTab = tab
+                    case .cronograma:
+                        resetNavigationPath(for: selectedTab)
+                        selectedTab = .cronograma
                     default:
                         break
                     }
@@ -230,7 +241,7 @@ struct AppShell: View {
             Image(systemName: isTabBarHidden ? "chevron.up" : "chevron.down")
                 .font(.system(size: 13, weight: .black))
                 .foregroundStyle(.secondary)
-                .frame(width: 34, height: 34)
+                .frame(width: 44, height: 44)
                 .background(.regularMaterial, in: Circle())
                 .overlay {
                     Circle()
@@ -283,7 +294,8 @@ struct AppShell: View {
             tabStack(path: $evaluacionesPath) {
                 EvaluacionesShell(
                     dashboardRepository: dashboardRepository,
-                    evaluacionesRepository: evaluacionesRepository
+                    evaluacionesRepository: evaluacionesRepository,
+                    apiClient: authSession.apiClient
                 )
             }
         case .clases:
@@ -322,7 +334,7 @@ struct AppShell: View {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.primary)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 44, height: 44)
             }
             .accessibilityLabel("Abrir herramientas")
         }
@@ -337,6 +349,27 @@ struct AppShell: View {
     private func updateTabBarForScrollPosition(_ isAwayFromTop: Bool) {
         withAnimation(EPTheme.spring) {
             isTabBarCompact = isAwayFromTop
+        }
+    }
+
+    private var tabBarPageBottomSpacing: CGFloat {
+        isTabBarHidden ? 46 : 72
+    }
+
+    private func resetNavigationPath(for tab: AppTab) {
+        switch tab {
+        case .inicio:
+            inicioPath = NavigationPath()
+        case .planificaciones:
+            planificacionesPath = NavigationPath()
+        case .cronograma:
+            cronogramaPath = NavigationPath()
+        case .evaluaciones:
+            evaluacionesPath = NavigationPath()
+        case .clases:
+            clasesPath = NavigationPath()
+        case .perfil:
+            perfilPath = NavigationPath()
         }
     }
 
@@ -384,7 +417,8 @@ struct AppShell: View {
         case .module(.evaluaciones), .evaluacionNueva:
             EvaluacionesShell(
                 dashboardRepository: dashboardRepository,
-                evaluacionesRepository: evaluacionesRepository
+                evaluacionesRepository: evaluacionesRepository,
+                apiClient: authSession.apiClient
             )
         case .module(.clases):
             ClasesView(
@@ -479,6 +513,21 @@ struct AppShell: View {
                 scope: scope,
                 repository: evaluacionesRepository
             )
+        case .examForgeDocument(let id, let kind, let schoolID):
+            if let apiClient = authSession.apiClient {
+                ExamForgeDocumentDetailView(
+                    documentID: id,
+                    expectedKind: kind,
+                    schoolID: schoolID,
+                    repository: ExamForgeRepository(apiClient: apiClient)
+                )
+            } else {
+                ContentUnavailableView(
+                    "Servicio no configurado",
+                    systemImage: "doc.text.magnifyingglass",
+                    description: Text("No es posible abrir este documento en este momento.")
+                )
+            }
         case .guiaDetalle(let guiaId, let scope):
             GuiaDetalleView(
                 guiaId: guiaId,

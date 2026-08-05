@@ -58,6 +58,53 @@ struct EvaluacionesRepository {
         }
     }
 
+    private func resolvedScope(uid: String, explicit scope: EvaluacionScope?) -> EvaluacionScope {
+        scope ?? EvaluacionScope.resolve(ActiveSchoolScope.schoolID(for: uid))
+    }
+
+    private func documentosEnScopeConFallback(
+        col nombre: String,
+        scope explicitScope: EvaluacionScope? = nil
+    ) async throws -> [QueryDocumentSnapshot] {
+        let uid = try getUid()
+        let scope = resolvedScope(uid: uid, explicit: explicitScope)
+        try validate(scope: scope)
+        let propios = try await getDocuments(scopedCol(uid: uid, scope: scope, name: nombre)).documents
+        if !propios.isEmpty { return propios }
+        guard scope == .principal else { return [] }
+        let invitado = try? await getDocuments(col(uid: Self.invitadoUid, col: nombre)).documents
+        return invitado ?? []
+    }
+
+    private func documentoEnScopeConFallback(
+        col nombre: String,
+        id: String,
+        scope explicitScope: EvaluacionScope? = nil
+    ) async throws -> DocumentSnapshot? {
+        let uid = try getUid()
+        let scope = resolvedScope(uid: uid, explicit: explicitScope)
+        try validate(scope: scope)
+        let propio = try await getDocument(scopedDoc(uid: uid, scope: scope, collection: nombre, id: id))
+        if propio.exists { return propio }
+        guard scope == .principal else { return nil }
+        if let invitado = try? await getDocument(doc(uid: Self.invitadoUid, col: nombre, id: id)),
+           invitado.exists {
+            return invitado
+        }
+        return nil
+    }
+
+    private func activeScopedDoc(
+        collection: String,
+        id: String,
+        scope explicitScope: EvaluacionScope? = nil
+    ) throws -> DocumentReference {
+        let uid = try getUid()
+        let scope = resolvedScope(uid: uid, explicit: explicitScope)
+        try validate(scope: scope)
+        return scopedDoc(uid: uid, scope: scope, collection: collection, id: id)
+    }
+
     /// Documentos de la colección propia; si está totalmente vacía, intenta la del invitado.
     private func documentosConFallback(col nombre: String) async throws -> [QueryDocumentSnapshot] {
         let propios = try await getDocuments(try userCol(col: nombre)).documents
@@ -89,8 +136,12 @@ struct EvaluacionesRepository {
 
     // MARK: - Listas de Cotejo
 
-    func cargarListasCotejo(asignatura: String?, curso: String) async throws -> [ListaCotejoTemplate] {
-        let documentos = try await documentosConFallback(col: "listas_cotejo")
+    func cargarListasCotejo(
+        asignatura: String?,
+        curso: String,
+        scope: EvaluacionScope? = nil
+    ) async throws -> [ListaCotejoTemplate] {
+        let documentos = try await documentosEnScopeConFallback(col: "listas_cotejo", scope: scope)
         return documentos
             .compactMap { decode(ListaCotejoTemplate.self, from: $0) }
             .filter { lista in
@@ -100,12 +151,16 @@ struct EvaluacionesRepository {
             .sorted { ($0.fechaActualizacion ?? .distantPast) > ($1.fechaActualizacion ?? .distantPast) }
     }
 
-    func cargarListaCotejo(id: String) async throws -> ListaCotejoTemplate? {
-        guard let snapshot = try await documentoConFallback(col: "listas_cotejo", id: id) else { return nil }
+    func cargarListaCotejo(id: String, scope: EvaluacionScope? = nil) async throws -> ListaCotejoTemplate? {
+        guard let snapshot = try await documentoEnScopeConFallback(
+            col: "listas_cotejo",
+            id: id,
+            scope: scope
+        ) else { return nil }
         return decode(ListaCotejoTemplate.self, from: snapshot)
     }
 
-    func guardarListaCotejo(_ lista: ListaCotejoTemplate) async throws {
+    func guardarListaCotejo(_ lista: ListaCotejoTemplate, scope: EvaluacionScope? = nil) async throws {
         var normalizada = lista
         normalizada.normalizar()
         if let meta = ListaCotejoMetadatos.desde(oas: normalizada.oas) {
@@ -115,26 +170,48 @@ struct EvaluacionesRepository {
             throw EvaluacionesRepositoryError.encoding
         }
         dict.removeValue(forKey: "id")
+        if let unidadId = normalizada.unidadId { dict["unidadId"] = unidadId }
+        else { dict["unidadId"] = FieldValue.delete() }
+        if let unidadNombre = normalizada.unidadNombre { dict["unidadNombre"] = unidadNombre }
+        else { dict["unidadNombre"] = FieldValue.delete() }
+        if let oas = normalizada.oas { dict["oas"] = oas.compactMap(\.dictionary) }
+        else { dict["oas"] = FieldValue.delete() }
         dict["updatedAt"] = FieldValue.serverTimestamp()
         if lista.fechaActualizacion == nil {
             dict["createdAt"] = FieldValue.serverTimestamp()
         }
-        try await setData(dict, at: try userDoc(col: "listas_cotejo", id: normalizada.id), merge: true)
+        try await setData(
+            dict,
+            at: try activeScopedDoc(collection: "listas_cotejo", id: normalizada.id, scope: scope),
+            merge: true
+        )
     }
 
-    func eliminarListaCotejo(id: String) async throws {
-        try await deleteDocument(try userDoc(col: "listas_cotejo", id: id))
+    func eliminarListaCotejo(id: String, scope: EvaluacionScope? = nil) async throws {
+        try await deleteDocument(try activeScopedDoc(collection: "listas_cotejo", id: id, scope: scope))
         let evalId = EvaluacionesIDs.buildListaEvaluacionId(listaId: id)
-        try? await deleteDocument(try userDoc(col: "listas_cotejo_evaluaciones", id: evalId))
+        try? await deleteDocument(
+            try activeScopedDoc(collection: "listas_cotejo_evaluaciones", id: evalId, scope: scope)
+        )
     }
 
-    func cargarEvaluacionLista(listaId: String) async throws -> ListaCotejoEvaluacion? {
+    func cargarEvaluacionLista(
+        listaId: String,
+        scope: EvaluacionScope? = nil
+    ) async throws -> ListaCotejoEvaluacion? {
         let id = EvaluacionesIDs.buildListaEvaluacionId(listaId: listaId)
-        guard let snapshot = try await documentoConFallback(col: "listas_cotejo_evaluaciones", id: id) else { return nil }
+        guard let snapshot = try await documentoEnScopeConFallback(
+            col: "listas_cotejo_evaluaciones",
+            id: id,
+            scope: scope
+        ) else { return nil }
         return decode(ListaCotejoEvaluacion.self, from: snapshot)
     }
 
-    func guardarEvaluacionLista(_ evaluacion: ListaCotejoEvaluacion) async throws {
+    func guardarEvaluacionLista(
+        _ evaluacion: ListaCotejoEvaluacion,
+        scope: EvaluacionScope? = nil
+    ) async throws {
         guard var dict = evaluacion.dictionary else {
             throw EvaluacionesRepositoryError.encoding
         }
@@ -145,13 +222,25 @@ struct EvaluacionesRepository {
         } else {
             dict["bloqueadaEn"] = FieldValue.delete()
         }
-        try await setData(dict, at: try userDoc(col: "listas_cotejo_evaluaciones", id: evaluacion.id), merge: true)
+        try await setData(
+            dict,
+            at: try activeScopedDoc(
+                collection: "listas_cotejo_evaluaciones",
+                id: evaluacion.id,
+                scope: scope
+            ),
+            merge: true
+        )
     }
 
     // MARK: - Rúbricas
 
-    func cargarRubricas(asignatura: String?, curso: String) async throws -> [RubricaTemplate] {
-        let documentos = try await documentosConFallback(col: "rubricas")
+    func cargarRubricas(
+        asignatura: String?,
+        curso: String,
+        scope: EvaluacionScope? = nil
+    ) async throws -> [RubricaTemplate] {
+        let documentos = try await documentosEnScopeConFallback(col: "rubricas", scope: scope)
         return documentos
             .compactMap { decode(RubricaTemplate.self, from: $0) }
             .filter { rubrica in
@@ -161,12 +250,16 @@ struct EvaluacionesRepository {
             .sorted { ($0.fechaActualizacion ?? .distantPast) > ($1.fechaActualizacion ?? .distantPast) }
     }
 
-    func cargarRubrica(id: String) async throws -> RubricaTemplate? {
-        guard let snapshot = try await documentoConFallback(col: "rubricas", id: id) else { return nil }
+    func cargarRubrica(id: String, scope: EvaluacionScope? = nil) async throws -> RubricaTemplate? {
+        guard let snapshot = try await documentoEnScopeConFallback(
+            col: "rubricas",
+            id: id,
+            scope: scope
+        ) else { return nil }
         return decode(RubricaTemplate.self, from: snapshot)
     }
 
-    func guardarRubrica(_ rubrica: RubricaTemplate) async throws {
+    func guardarRubrica(_ rubrica: RubricaTemplate, scope: EvaluacionScope? = nil) async throws {
         var normalizada = rubrica
         normalizada.normalizar()
         if let meta = ListaCotejoMetadatos.desde(oas: normalizada.oas) {
@@ -180,22 +273,38 @@ struct EvaluacionesRepository {
         if rubrica.fechaActualizacion == nil {
             dict["createdAt"] = FieldValue.serverTimestamp()
         }
-        try await setData(dict, at: try userDoc(col: "rubricas", id: normalizada.id), merge: true)
+        try await setData(
+            dict,
+            at: try activeScopedDoc(collection: "rubricas", id: normalizada.id, scope: scope),
+            merge: true
+        )
     }
 
-    func eliminarRubrica(id: String) async throws {
-        try await deleteDocument(try userDoc(col: "rubricas", id: id))
+    func eliminarRubrica(id: String, scope: EvaluacionScope? = nil) async throws {
+        try await deleteDocument(try activeScopedDoc(collection: "rubricas", id: id, scope: scope))
         let evalId = EvaluacionesIDs.buildRubricaEvaluacionId(rubricaId: id)
-        try? await deleteDocument(try userDoc(col: "rubricas_evaluaciones", id: evalId))
+        try? await deleteDocument(
+            try activeScopedDoc(collection: "rubricas_evaluaciones", id: evalId, scope: scope)
+        )
     }
 
-    func cargarEvaluacionRubrica(rubricaId: String) async throws -> EvaluacionRubrica? {
+    func cargarEvaluacionRubrica(
+        rubricaId: String,
+        scope: EvaluacionScope? = nil
+    ) async throws -> EvaluacionRubrica? {
         let id = EvaluacionesIDs.buildRubricaEvaluacionId(rubricaId: rubricaId)
-        guard let snapshot = try await documentoConFallback(col: "rubricas_evaluaciones", id: id) else { return nil }
+        guard let snapshot = try await documentoEnScopeConFallback(
+            col: "rubricas_evaluaciones",
+            id: id,
+            scope: scope
+        ) else { return nil }
         return decode(EvaluacionRubrica.self, from: snapshot)
     }
 
-    func guardarEvaluacionRubrica(_ evaluacion: EvaluacionRubrica) async throws {
+    func guardarEvaluacionRubrica(
+        _ evaluacion: EvaluacionRubrica,
+        scope: EvaluacionScope? = nil
+    ) async throws {
         guard var dict = evaluacion.dictionary else {
             throw EvaluacionesRepositoryError.encoding
         }
@@ -206,7 +315,11 @@ struct EvaluacionesRepository {
         } else {
             dict["bloqueadaEn"] = FieldValue.delete()
         }
-        try await setData(dict, at: try userDoc(col: "rubricas_evaluaciones", id: evaluacion.id), merge: true)
+        try await setData(
+            dict,
+            at: try activeScopedDoc(collection: "rubricas_evaluaciones", id: evaluacion.id, scope: scope),
+            merge: true
+        )
     }
 
     // MARK: - Pruebas (lectura lossless)
@@ -352,6 +465,16 @@ struct EvaluacionesRepository {
                 guard testSnapshot.exists, var testPayload = testSnapshot.data() else {
                     throw EvaluacionesRepositoryError.invalidDocument(collection: "pruebas", id: prueba.id)
                 }
+                let remoteTest = PruebaDocumentParser.prueba(
+                    id: prueba.id,
+                    scope: scope,
+                    isFromCache: false,
+                    dictionary: testPayload
+                )
+                guard self.applicationStructureFingerprint(remoteTest) ==
+                        self.applicationStructureFingerprint(prueba) else {
+                    throw EvaluacionesRepositoryError.editConflict(path: "pruebas/\(prueba.id)")
+                }
 
                 var applicationPayload: [String: Any]
                 if draft.isNew {
@@ -405,6 +528,28 @@ struct EvaluacionesRepository {
             }
         }
         return draft.id
+    }
+
+    /// La corrección y el cálculo de notas dependen de exigencia, preguntas,
+    /// alternativas y puntajes. Si esa estructura cambió desde que se abrió la
+    /// pantalla, se obliga a recargar antes de escribir resultados antiguos.
+    private func applicationStructureFingerprint(_ prueba: PruebaTemplate) -> String {
+        let draft = PruebaEditorDraft.from(prueba)
+        let requirement = String(
+            format: "%.8f",
+            locale: Locale(identifier: "en_US_POSIX"),
+            draft.exigencia
+        )
+        let maximumScore = String(
+            format: "%.8f",
+            locale: Locale(identifier: "en_US_POSIX"),
+            prueba.puntajeMaximo
+        )
+        let identity = [prueba.nombre, prueba.asignatura, prueba.curso].map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return (identity + [requirement, maximumScore] + draft.secciones.map(\.contentFingerprint))
+            .joined(separator: "\u{1C}")
     }
 
     private func applyApplicationRootFields(
@@ -2051,8 +2196,12 @@ struct EvaluacionesRepository {
         rubrica: RubricaTemplate,
         evaluacion: EvaluacionRubrica,
         roster: [EstudiantePerfil],
-        sobrescribir: Bool
+        sobrescribir: Bool,
+        scope explicitScope: EvaluacionScope? = nil
     ) async throws -> SyncCalificacionesResultado {
+        let uid = try getUid()
+        let scope = resolvedScope(uid: uid, explicit: explicitScope)
+        try validate(scope: scope)
         let evaluacionId = EvaluacionesIDs.buildRubricaEvaluacionId(rubricaId: rubrica.id)
         var notasCalculadas: [String: (nombre: String, nota: String)] = [:]
         var estudiantesSinNota = 0
@@ -2078,7 +2227,8 @@ struct EvaluacionesRepository {
             notasCalculadas: notasCalculadas,
             estudiantesSinNota: estudiantesSinNota,
             roster: roster,
-            sobrescribir: sobrescribir
+            sobrescribir: sobrescribir,
+            scope: scope
         )
     }
 
@@ -2086,7 +2236,8 @@ struct EvaluacionesRepository {
         lista: ListaCotejoTemplate,
         evaluacion: ListaCotejoEvaluacion,
         roster: [EstudiantePerfil],
-        sobrescribir: Bool
+        sobrescribir: Bool,
+        scope explicitScope: EvaluacionScope? = nil
     ) async throws -> SyncCalificacionesResultado {
         let evaluacionId = EvaluacionesIDs.buildListaEvaluacionId(listaId: lista.id)
         var notasCalculadas: [String: (nombre: String, nota: String)] = [:]
@@ -2104,6 +2255,8 @@ struct EvaluacionesRepository {
             notasCalculadas[est.estudianteId] = (est.nombre, String(format: "%.1f", nota))
         }
 
+        let uid = try getUid()
+        let scope = resolvedScope(uid: uid, explicit: explicitScope)
         return try await aplicarSincronizacion(
             asignatura: lista.asignatura,
             curso: lista.curso,
@@ -2114,7 +2267,8 @@ struct EvaluacionesRepository {
             notasCalculadas: notasCalculadas,
             estudiantesSinNota: estudiantesSinNota,
             roster: roster,
-            sobrescribir: sobrescribir
+            sobrescribir: sobrescribir,
+            scope: scope
         )
     }
 

@@ -18,7 +18,16 @@ struct SettingsInfoSection: View {
                     }
 
                     enlace(icon: "doc.text.fill", title: "Términos de uso", url: "https://edupanel.cl/terminos", tint: .blue)
-                    enlace(icon: "hand.raised.fill", title: "Política de privacidad", url: "https://edupanel.cl/terminos", tint: .purple)
+                    SettingsRow(
+                        icon: "hand.raised.fill",
+                        title: "Política de privacidad",
+                        subtitle: "Aún no está publicada. Puedes solicitarla a soporte.",
+                        tint: .purple
+                    ) {
+                        Text("Pendiente")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 

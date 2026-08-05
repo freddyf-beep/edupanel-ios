@@ -2,11 +2,6 @@ name: iOS 26 smoke test
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - agent/**
-      - codex/**
 
 jobs:
   build-and-smoke-test:
@@ -46,7 +41,11 @@ jobs:
 
       - name: Boot an iOS 26 simulator
         run: |
-          SIMULATOR_UDID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone 17 \(/ {print $2; exit}')"
+          SIMULATOR_UDID="$(xcrun simctl list devices available | awk -F '[()]' '
+            /-- iOS 26([.]| --)/ { in_ios26=1; next }
+            /^-- / { in_ios26=0 }
+            in_ios26 && /iPhone/ { print $2; exit }
+          ')"
           test -n "$SIMULATOR_UDID"
           echo "SIMULATOR_UDID=$SIMULATOR_UDID" >> "$GITHUB_ENV"
           xcrun simctl boot "$SIMULATOR_UDID" 2>/dev/null || true
@@ -69,7 +68,7 @@ jobs:
             CODE_SIGN_IDENTITY='' \
             2>&1 | tee build/ios26-xcodebuild.log
 
-      - name: Run attendance and QR tests
+      - name: Run complete test suite
         run: |
           set -o pipefail
           xcodebuild \

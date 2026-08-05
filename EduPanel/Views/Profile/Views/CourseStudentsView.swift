@@ -34,7 +34,7 @@ struct CourseStudentsView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List {
+                    List {
                     Section {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
@@ -258,7 +258,7 @@ struct CourseStudentsView: View {
         errorMessage = nil
         do {
             let next = try await repository.fetchDashboard()
-            students = next.studentsByCourse[courseName] ?? []
+            students = next.students(forCourseID: nil, name: courseName)
         } catch {
             errorMessage = error.localizedDescription
         }

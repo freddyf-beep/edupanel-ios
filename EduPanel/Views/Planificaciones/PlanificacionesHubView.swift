@@ -38,7 +38,7 @@ struct PlanificacionesHubView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                if viewModel.isLoading && viewModel.snapshot == nil {
+                if viewModel.isLoading && (viewModel.snapshot == nil || viewModel.planes.isEmpty) {
                     loadingState
                 } else if viewModel.snapshot != nil {
                     hubContent
@@ -48,7 +48,7 @@ struct PlanificacionesHubView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
-            .padding(.bottom, 28)
+            .tabBarPageBottomPadding()
         }
         .reportsTabBarScroll()
         .background(EPTheme.background)
@@ -111,10 +111,23 @@ struct PlanificacionesHubView: View {
 
             heroCard
 
-            if cursosInfo.isEmpty {
-                emptyCoursesState
+            if !viewModel.availableSubjects.isEmpty {
+                subjectSelector
+            }
+
+            if !cursosInfo.isEmpty {
+                kpiGrid
+                searchAndFilters
+                EPWebTabBar(
+                    tabs: tabs,
+                    selected: Binding(
+                        get: { selectedVista },
+                        set: { selectedVista = $0 }
+                    )
+                )
+                vistaSeleccionada
             } else {
-                CoursePlanningGrid(groups: courseGroups, onOpen: openCourse)
+                emptyCoursesState
             }
         }
     }
@@ -133,6 +146,72 @@ struct PlanificacionesHubView: View {
             Label("\(courseGroups.count) cursos", systemImage: "rectangle.grid.2x2.fill")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private var searchAndFilters: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 9) {
+                Image(systemName: "magnifyingglass")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                TextField("Buscar curso o unidad", text: $searchQuery)
+                    .font(.subheadline.weight(.semibold))
+                    .textInputAutocapitalization(.sentences)
+                    .autocorrectionDisabled()
+                    .accessibilityLabel("Buscar en planificaciones")
+                if !searchQuery.isEmpty {
+                    Button {
+                        searchQuery = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Limpiar búsqueda")
+                }
+            }
+            .padding(.horizontal, 13)
+            .frame(minHeight: 46)
+            .background(EPTheme.card, in: RoundedRectangle(cornerRadius: EPTheme.controlRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: EPTheme.controlRadius, style: .continuous)
+                    .stroke(EPTheme.border, lineWidth: 0.75)
+            )
+
+            filtrosCard
+        }
+    }
+
+    @ViewBuilder
+    private var vistaSeleccionada: some View {
+        switch selectedVista {
+        case "cursos":
+            if visibleCourseGroups.isEmpty {
+                filteredEmptyState
+            } else {
+                CoursePlanningGrid(groups: visibleCourseGroups, onOpen: openCourse)
+            }
+        case "calendario":
+            CalendarioMensualView(mes: $mesActual, unidades: unidadesFiltradas)
+        case "insights":
+            InsightsReplicaView(cursos: visibleCourseInfos, unidades: unidadesFiltradas, stats: visibleStats)
+        default:
+            TimelineAnualView(
+                cursos: visibleCourseInfos,
+                unidades: unidadesFiltradas,
+                cronogramasByUnit: viewModel.cronogramasByUnit
+            )
+        }
+    }
+
+    private var filteredEmptyState: some View {
+        EPWebCard {
+            EPEmptyState(
+                icon: "line.3.horizontal.decrease.circle",
+                title: "No hay resultados",
+                message: "Prueba con otra búsqueda o limpia los filtros para volver a ver tus cursos."
+            )
         }
     }
 
@@ -175,17 +254,17 @@ struct PlanificacionesHubView: View {
     private var kpiGrid: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
-                EPKPIBox(title: "Total unidades", value: "\(stats.total)", subtitle: "\(stats.totalHoras)h totales", icon: "square.stack.3d.up.fill", tint: EPTheme.primary)
+                EPKPIBox(title: "Total unidades", value: "\(visibleStats.total)", subtitle: "\(visibleStats.totalHoras)h totales", icon: "square.stack.3d.up.fill", tint: EPTheme.primary)
                     .frame(width: 145)
-                EPKPIBox(title: "En curso", value: "\(stats.enCurso)", subtitle: "ahora", icon: "play.circle.fill", tint: stats.enCurso > 0 ? .green : .gray)
+                EPKPIBox(title: "En curso", value: "\(visibleStats.enCurso)", subtitle: "ahora", icon: "play.circle.fill", tint: visibleStats.enCurso > 0 ? .green : .gray)
                     .frame(width: 145)
-                EPKPIBox(title: "Cobertura", value: "\(stats.cobertura)%", subtitle: "con fechas", icon: "checkmark.seal.fill", tint: coberturaTint(stats.cobertura))
+                EPKPIBox(title: "Cobertura", value: "\(visibleStats.cobertura)%", subtitle: "con fechas", icon: "checkmark.seal.fill", tint: coberturaTint(visibleStats.cobertura))
                     .frame(width: 145)
-                EPKPIBox(title: "Próximas", value: "\(stats.proximas)", subtitle: "planificadas", icon: "calendar.badge.clock", tint: .blue)
+                EPKPIBox(title: "Próximas", value: "\(visibleStats.proximas)", subtitle: "planificadas", icon: "calendar.badge.clock", tint: .blue)
                     .frame(width: 145)
-                EPKPIBox(title: "Sin fechas", value: "\(stats.incompletas)", subtitle: "por completar", icon: "exclamationmark.triangle.fill", tint: stats.incompletas == 0 ? .green : .orange)
+                EPKPIBox(title: "Sin fechas", value: "\(visibleStats.incompletas)", subtitle: "por completar", icon: "exclamationmark.triangle.fill", tint: visibleStats.incompletas == 0 ? .green : .orange)
                     .frame(width: 145)
-                EPKPIBox(title: "Cursos", value: "\(cursosInfo.count)", subtitle: "activos", icon: "person.3.fill", tint: EPTheme.primary)
+                EPKPIBox(title: "Cursos", value: "\(visibleCourseInfos.count)", subtitle: "activos", icon: "person.3.fill", tint: EPTheme.primary)
                     .frame(width: 145)
             }
         }
@@ -345,7 +424,10 @@ struct PlanificacionesHubView: View {
     }
 
     private var cursosInfo: [CursoInfo] {
-        mergedPlanes.enumerated().map { index, plan in
+        mergedPlanes
+            .filter { normalizeSubject($0.asignatura) == normalizeSubject(viewModel.activeSubject) }
+            .enumerated()
+            .map { index, plan in
             let completas = plan.units.filter(\.hasDates).count
             return CursoInfo(
                 curso: plan.curso,
@@ -363,14 +445,19 @@ struct PlanificacionesHubView: View {
         guard !query.isEmpty else { return cursosInfo }
         return cursosInfo.filter {
             $0.curso.localizedCaseInsensitiveContains(query) ||
-            $0.asignatura.localizedCaseInsensitiveContains(query)
+            $0.asignatura.localizedCaseInsensitiveContains(query) ||
+            $0.unidades.contains { $0.name.localizedCaseInsensitiveContains(query) }
         }
+    }
+
+    private var visibleCourseInfos: [CursoInfo] {
+        filteredCursos.filter { filtroCurso.isEmpty || filtroCurso.contains($0.curso) }
     }
 
     private var courseGroups: [CoursePlanningGroup] {
         var groups: [CoursePlanningGroup] = []
 
-        for plan in cursosInfo {
+        for plan in visibleCourseInfos {
             let id = normalizeCourseName(plan.curso)
             if let index = groups.firstIndex(where: { $0.id == id }) {
                 groups[index].plans.append(plan)
@@ -380,6 +467,10 @@ struct PlanificacionesHubView: View {
         }
 
         return groups
+    }
+
+    private var visibleCourseGroups: [CoursePlanningGroup] {
+        courseGroups
     }
 
     private func openCourse(_ group: CoursePlanningGroup) {
@@ -446,6 +537,31 @@ struct PlanificacionesHubView: View {
         )
     }
 
+    private var visibleStats: HubStats {
+        let unidades = unidadesFiltradas.map(\.unit)
+        let conFechas = unidades.filter(\.hasDates).count
+        var enCurso = 0
+        var proximas = 0
+        var incompletas = 0
+        for unit in unidades {
+            switch UnitPlanningState.state(for: unit) {
+            case .actual: enCurso += 1
+            case .futura: proximas += 1
+            case .incompleta: incompletas += 1
+            case .pasada: break
+            }
+        }
+        return HubStats(
+            total: unidades.count,
+            conFechas: conFechas,
+            enCurso: enCurso,
+            proximas: proximas,
+            incompletas: incompletas,
+            cobertura: unidades.isEmpty ? 0 : Int(round(Double(conFechas) / Double(unidades.count) * 100)),
+            totalHoras: unidades.reduce(0) { $0 + $1.hours }
+        )
+    }
+
     private var mergedPlanes: [PlanificacionCurso] {
         var merged: [PlanificacionCurso] = []
         var seenRoutes = Set<String>()
@@ -459,8 +575,18 @@ struct PlanificacionesHubView: View {
         let fallbackSubject = viewModel.availableSubjects.first ?? "Música"
         for course in uniqueNormalizedCourses(viewModel.snapshot?.courses ?? []) {
             let normalizedCourse = normalizeCourseName(course)
-            guard !merged.contains(where: { normalizeCourseName($0.curso) == normalizedCourse }) else { continue }
-            merged.append(PlanificacionCurso(curso: course, asignatura: fallbackSubject, units: []))
+            let configuredSubjects = viewModel.snapshot?
+                .course(id: nil, named: course)?
+                .subjects
+                .map(\.label)
+                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? []
+            let subjects = configuredSubjects.isEmpty ? [fallbackSubject] : configuredSubjects
+            for subject in subjects {
+                let routeKey = "\(normalizedCourse)::\(normalizeCourseName(subject))"
+                guard !seenRoutes.contains(routeKey) else { continue }
+                seenRoutes.insert(routeKey)
+                merged.append(PlanificacionCurso(curso: course, asignatura: subject, units: []))
+            }
         }
 
         return merged.sorted {
@@ -473,6 +599,13 @@ struct PlanificacionesHubView: View {
     }
 
     private func normalizeCourseName(_ name: String) -> String {
+        name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL"))
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+    }
+
+    private func normalizeSubject(_ name: String) -> String {
         name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es_CL"))
             .lowercased()
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -690,18 +823,6 @@ enum UnitCoverage {
 
 enum UnitRouteID {
     static func routeId(for unit: UnidadPlan, asignatura: String?, course: String, cronogramasByUnit: [String: CronogramaUnidadData]) -> String {
-        let oldKey = PlanificacionRepository.cronogramaKey(curso: course, unidadId: String(unit.id))
-        let subjectKey = asignatura.map { PlanificacionRepository.cronogramaKey(asignatura: $0, curso: course, unidadId: String(unit.id)) }
-        if let savedId = (subjectKey.flatMap { cronogramasByUnit[$0] } ?? cronogramasByUnit[oldKey])?.unidadId.trimmingCharacters(in: .whitespacesAndNewlines),
-           !savedId.isEmpty {
-            return savedId
-        }
-
-        if let curricularId = unit.unidadCurricularId?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !curricularId.isEmpty {
-            return curricularId
-        }
-
         return String(unit.id)
     }
 }

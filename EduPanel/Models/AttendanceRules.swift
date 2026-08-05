@@ -17,13 +17,19 @@ enum AttendanceRulesError: LocalizedError, Equatable {
 enum AttendanceRules {
     static func newBlocks(
         course: String,
+        courseID: String? = nil,
+        subjectID: String? = nil,
         dateKey: String,
         schedule: [AttendanceScheduleBlock],
         students: [AttendanceRosterStudent]
     ) -> [AttendanceBlock] {
         let weekday = weekdayName(for: dateKey)
         let scheduled = schedule
-            .filter { $0.course == course && $0.weekday == weekday && !$0.isFree }
+            .filter { item in
+                let courseMatches = courseID.flatMap { id in item.courseID.map { $0 == id } } ?? (item.course == course)
+                let subjectMatches = subjectID.flatMap { id in item.subjectID.map { $0 == id } } ?? true
+                return courseMatches && subjectMatches && item.weekday == weekday && !item.isFree
+            }
             .sorted { lhs, rhs in
                 lhs.startTime == rhs.startTime ? lhs.id < rhs.id : lhs.startTime < rhs.startTime
             }
@@ -167,11 +173,13 @@ enum AttendanceRules {
     static func reconcileBlocks(
         saved: [AttendanceBlock]?,
         course: String,
+        courseID: String? = nil,
+        subjectID: String? = nil,
         dateKey: String,
         schedule: [AttendanceScheduleBlock],
         students: [AttendanceRosterStudent]
     ) -> [AttendanceBlock] {
-        let planned = newBlocks(course: course, dateKey: dateKey, schedule: schedule, students: students)
+        let planned = newBlocks(course: course, courseID: courseID, subjectID: subjectID, dateKey: dateKey, schedule: schedule, students: students)
         guard let saved, !saved.isEmpty else { return planned }
 
         let plannedByID = Dictionary(uniqueKeysWithValues: planned.map { ($0.id, $0) })

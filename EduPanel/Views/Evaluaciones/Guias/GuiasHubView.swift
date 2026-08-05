@@ -26,14 +26,47 @@ struct GuiasHubView: View {
         }
     }
 
+    private var examForgeGuidesForCourse: [ExamForgeExamSummary] {
+        viewModel.examForgeGuides.filter {
+            $0.matches(courseID: viewModel.selectedCourseID, courseName: viewModel.selectedCurso)
+                && $0.matches(subjectID: viewModel.selectedSubjectID, subjectName: viewModel.activeSubject)
+        }
+    }
+
+    private var filteredExamForgeGuides: [ExamForgeExamSummary] {
+        examForgeGuidesForCourse.filter { guide in
+            let query = normalized(searchText)
+            let matchesSearch = query.isEmpty || normalized(guide.searchableText).contains(query)
+            let matchesType = typeFilter == "todas" || guide.integration?.guideType == typeFilter
+            let matchesStatus: Bool
+            switch statusFilter {
+            case "borrador": matchesStatus = guide.status == .draft
+            case "lista": matchesStatus = guide.status == .ready
+            case "archivada": matchesStatus = guide.status == .archived
+            default: matchesStatus = true
+            }
+            let unitName = units.first { $0.id == unitFilter }?.name
+            let matchesUnit = unitFilter == "todas" || guide.matches(unitID: unitFilter, unitName: unitName)
+            return matchesSearch && matchesType && matchesStatus && matchesUnit
+        }
+    }
+
     private var units: [GuiaUnitOption] {
         var seen = Set<String>()
-        return viewModel.guias.compactMap { guide in
+        var result: [GuiaUnitOption] = viewModel.guias.compactMap { guide in
             guard let id = guide.unidadId?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !id.isEmpty, seen.insert(id).inserted else { return nil }
             let name = guide.unidadNombre.flatMap { $0.isEmpty ? nil : $0 } ?? id
             return GuiaUnitOption(id: id, name: name)
         }
+        for document in examForgeGuidesForCourse {
+            guard let integration = document.integration,
+                  let id = integration.unitId?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !id.isEmpty, seen.insert(id).inserted else { continue }
+            let name = integration.unitLabel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            result.append(GuiaUnitOption(id: id, name: name.isEmpty ? id : name))
+        }
+        return result.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     var body: some View {
@@ -54,7 +87,6 @@ struct GuiasHubView: View {
             }
 
             metrics
-            PruebasUpcomingCard()
 
             if viewModel.guiasDesdeCache {
                 banner(icon: "icloud.slash.fill", title: "Guías desde caché", message: "Puede faltar algún cambio reciente.", tint: .orange)
@@ -66,6 +98,21 @@ struct GuiasHubView: View {
 
             filters
 
+            if viewModel.isLoadingExamForge {
+                EvaluacionesLoadingCard(texto: "Consultando el nuevo motor...")
+            } else if let error = viewModel.examForgeErrorMessage {
+                ExamForgeEngineErrorCard(message: error) {
+                    Task { await viewModel.refreshExamForge() }
+                }
+            } else if !filteredExamForgeGuides.isEmpty {
+                ExamForgeDocumentsSection(
+                    title: "Guías del nuevo motor",
+                    subtitle: "Formato ExamForge · lectura compatible en iPhone",
+                    documents: filteredExamForgeGuides,
+                    schoolID: viewModel.evaluacionScope.colegioId
+                )
+            }
+
             if let error = viewModel.guiasErrorMessage {
                 EvaluacionesRetryCard(title: "No se pudieron cargar las guías", message: error,
                                       isLoading: viewModel.isLoadingContenido) {
@@ -73,17 +120,18 @@ struct GuiasHubView: View {
                 }
             } else if viewModel.isLoadingContenido && viewModel.guias.isEmpty {
                 EvaluacionesLoadingCard(texto: "Cargando guías...")
-            } else if viewModel.guias.isEmpty {
+            } else if viewModel.guias.isEmpty && examForgeGuidesForCourse.isEmpty {
                 EPWebCard {
                     EPEmptyState(icon: "book.pages.fill", title: "Aún no hay guías para \(viewModel.selectedCurso)",
                                  message: "Las guías creadas en EduPanel web aparecerán aquí con su contenido y actividades.")
                 }
-            } else if filteredGuides.isEmpty {
+            } else if filteredGuides.isEmpty && filteredExamForgeGuides.isEmpty
+                        && !(viewModel.guias.isEmpty && examForgeGuidesForCourse.isEmpty) {
                 EPWebCard {
                     EPEmptyState(icon: "line.3.horizontal.decrease.circle", title: "Sin coincidencias",
                                  message: "Prueba otra búsqueda o limpia los filtros.")
                 }
-            } else {
+            } else if !filteredGuides.isEmpty {
                 LazyVStack(spacing: 11) {
                     ForEach(filteredGuides) { guide in
                         GuiaCard(
@@ -121,14 +169,15 @@ struct GuiasHubView: View {
             }
             Button("Cancelar", role: .cancel) { guideToDuplicate = nil }
         }
+        .onChange(of: viewModel.selectedCurso) { _, _ in unitFilter = "todas" }
     }
 
     private var metrics: some View {
         HStack(spacing: 8) {
-            metric("Total", "\(viewModel.guias.count)", .blue)
-            metric("Con contenido", "\(viewModel.guias.filter { $0.totalBloques > 0 }.count)", .purple)
+            metric("Total", "\(viewModel.guias.count + examForgeGuidesForCourse.count)", .blue)
+            metric("Nuevo motor", "\(examForgeGuidesForCourse.count)", .purple)
             metric("Actividades", "\(viewModel.guias.reduce(0) { $0 + $1.totalActividades })", .orange)
-            metric("Listas", "\(viewModel.guias.filter { $0.estado == "lista" }.count)", .green)
+            metric("Listas", "\(viewModel.guias.filter { $0.estado == "lista" }.count + examForgeGuidesForCourse.filter { $0.status == .ready }.count)", .green)
         }
     }
 

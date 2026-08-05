@@ -22,6 +22,10 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>EduPanel usa la cámara para escanear las tarjetas QR de asistencia de tus estudiantes.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>EduPanel utiliza el micrófono para dictar notas y observaciones por voz.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>EduPanel utiliza el reconocimiento de voz para transcribir tus notas docentes en tiempo real.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIApplicationSceneManifest</key>
