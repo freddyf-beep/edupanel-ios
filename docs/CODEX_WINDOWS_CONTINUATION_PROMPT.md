@@ -32,8 +32,8 @@ Este es un relevo desde Mac. Antes de modificar cualquier archivo:
 
 Estado que debes verificar, no asumir ciegamente:
 
-- `edupanel_IOS`: rama `codex/paridad-academica-ipa`; la base validada antes del
-  relevo fue `748ff49f83533b1c13b6070115e85c5ce26c33cb`. La build remota Xcode 26.6
+- `edupanel_IOS`: rama `codex/paridad-academica-ipa`; el último commit publicado es
+  `595ef046b8886914ff97c4b775cbcb9864b1f778`. La build remota Xcode 26.6
   `30959173058` aprobó 75 tests. El paquete puede contener un commit posterior de
   cierre: usa Git como fuente de verdad.
 - `edupanel_local`: rama `local/20260801-phase-8-examforge-integration`, HEAD base

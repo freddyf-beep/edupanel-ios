@@ -8,7 +8,7 @@ la firma siguen ejecutándose en un runner macOS mediante GitHub Actions.
 
 - Repositorio: `freddyf-beep/edupanel-ios`.
 - Rama de trabajo: `codex/paridad-academica-ipa`.
-- Base validada: commit `748ff49f83533b1c13b6070115e85c5ce26c33cb`.
+- Último commit publicado: `595ef046b8886914ff97c4b775cbcb9864b1f778`.
 - CI validada: `iOS 26 smoke test`, ejecución `30959173058`.
 - Runner validado: Xcode 26.6, build 17F113, Simulator iPhone 17 Pro con iOS 26.
 - Resultado validado: build, instalación, lanzamiento y 75 tests correctos.
